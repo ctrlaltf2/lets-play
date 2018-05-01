@@ -6,7 +6,6 @@ project(letsplay
 
 add_executable(letsplay
     # src/
-        src/GBAController.cpp
         src/RetroCore.cpp
         src/Main.cpp
 )
@@ -36,4 +35,10 @@ target_compile_options(letsplay
         -O3
         -g
         -ggdb
+)
+
+target_link_libraries(letsplay
+    PUBLIC
+        dl
+        pthread
 )

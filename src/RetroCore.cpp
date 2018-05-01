@@ -44,9 +44,6 @@ void RetroCore::Init(void* hCore) {
     RetroCore::Load(this->m_hCore, fRun, "retro_run");
     RetroCore::Load(this->m_hCore, fLoadGame, "retro_load_game");
     RetroCore::Load(this->m_hCore, fUnloadGame, "retro_unload_game");
-
-    std::cout << "fInit is null: " << (fInit == nullptr) << '\n';
-    //(*fInit)();
 }
 
 RetroCore::~RetroCore() {
