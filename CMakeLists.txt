@@ -8,8 +8,7 @@ add_executable(letsplay
     # src/
         src/RetroCore.cpp
         src/Main.cpp
-        # Controllers/
-            src/Controllers/GBAController.cpp
+        src/EmulatorController.cpp
 )
 
 set_target_properties(letsplay

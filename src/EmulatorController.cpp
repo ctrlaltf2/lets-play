@@ -4,7 +4,7 @@
 
 #include "RetroCore.h"
 
-void GBAController(const char* corePath, const char* romPath) {
+void EmulatorController(const char* corePath, const char* romPath) {
     RetroCore Core(corePath);
 
     std::cout << "Done Loading" << '\n';
