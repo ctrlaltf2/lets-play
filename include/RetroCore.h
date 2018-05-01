@@ -35,26 +35,27 @@ class RetroCore {
 
    public:
     // Callback registerers
-    void (*fSetEnvironment)(retro_environment_t);
-    void (*fSetVideoRefresh)(retro_video_refresh_t);
-    void (*fSetInputPoll)(retro_input_poll_t);
-    void (*fSetInputState)(retro_input_state_t);
-    void (*fSetAudioSample)(retro_audio_sample_t);
-    void (*fSetAudioSampleBatch)(retro_audio_sample_batch_t);
+    void (*fSetEnvironment)(retro_environment_t) = nullptr;
+    void (*fSetVideoRefresh)(retro_video_refresh_t) = nullptr;
+    void (*fSetInputPoll)(retro_input_poll_t) = nullptr;
+    void (*fSetInputState)(retro_input_state_t) = nullptr;
+    void (*fSetAudioSample)(retro_audio_sample_t) = nullptr;
+    void (*fSetAudioSampleBatch)(retro_audio_sample_batch_t) = nullptr;
 
     // libretro functions that do things
 
-    void (*fInit)();
-    void (*fDeinit)();
-    void (*fReset)();
-    void (*fRun)();
-    void (*fUnloadGame)();
-    unsigned (*fRetroAPIVersion)();
-    void (*fGetSystemInfo)(retro_system_info*);
-    void (*fGetAudioVideoInfo)(retro_system_av_info);
-    void (*fSetControllerPortDevice)(unsigned, unsigned);
-    bool (*fLoadGame)(const retro_game_info*);
+    void (*fInit)() = nullptr;
+    void (*fDeinit)() = nullptr;
+    void (*fReset)() = nullptr;
+    void (*fRun)() = nullptr;
+    void (*fUnloadGame)() = nullptr;
+    unsigned (*fRetroAPIVersion)() = nullptr;
+    void (*fGetSystemInfo)(retro_system_info*) = nullptr;
+    void (*fGetAudioVideoInfo)(retro_system_av_info) = nullptr;
+    void (*fSetControllerPortDevice)(unsigned, unsigned) = nullptr;
+    bool (*fLoadGame)(const retro_game_info*) = nullptr;
 
+    RetroCore();
     /**
      * Create a RetroCore object based on a core path
      * @param corePath Path to the core to load
