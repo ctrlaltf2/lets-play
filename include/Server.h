@@ -1,10 +1,12 @@
 #pragma once
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -18,7 +20,9 @@
 #include <websocketpp/server.hpp>
 
 constexpr int c_syncInterval{5 /* seconds */};
-constexpr int c_maxMsgSize{100 /* characters */};
+constexpr unsigned c_maxMsgSize{100 /* characters */};
+constexpr unsigned c_maxUserName{15 /* characters */};
+constexpr unsigned c_minUserName{3 /* characters */};
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
 
@@ -27,6 +31,7 @@ using websocketpp::lib::placeholders::_2;
 
 enum class kCommandType {
     Chat,
+    Username,
     Button,
     Turn,
     Shutdown,
@@ -47,9 +52,11 @@ struct LetsPlayUser {
 class LetsPlayServer {
     std::queue<Command> m_WorkQueue;
 
-    std::vector<wcpp_server::connection_ptr> m_Connections;
+    std::map<websocketpp::connection_hdl, std::string,
+             std::owner_less<websocketpp::connection_hdl>>
+        m_Users;
 
-    std::mutex m_ConnectionsMutex;
+    std::mutex m_UsersMutex;
 
     std::thread m_QueueThread;
 
@@ -75,13 +82,17 @@ class LetsPlayServer {
 
     void QueueThread();
 
-    void BroadcastAll(const std::string& params);
+    void BroadcastAll(const std::string& message);
 
-    void BroadcastOne(const std::string& params,
+    void BroadcastOne(const std::string& message,
                       websocketpp::connection_hdl hdl);
 
    private:
     static std::string encode(const std::vector<std::string>& input);
 
     static std::vector<std::string> decode(const std::string& input);
+
+    static bool isAsciiStr(const std::string& str);
+
+    static size_t escapedSize(const std::string& str);
 };

@@ -44,8 +44,8 @@ void LetsPlayServer::Run(std::uint16_t port) {
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     {
-        std::unique_lock<std::mutex> lk((m_ConnectionsMutex));
-        m_Connections.push_back(server->get_con_from_hdl(hdl, err));
+        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        m_Users[hdl] = "";
     }
 }
 
@@ -54,10 +54,15 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
 
     {
-        std::unique_lock<std::mutex> lk((m_ConnectionsMutex));
-        for (std::size_t i = 0; i < m_Connections.size(); ++i)
-            if (m_Connections[i].get() == cptr.get())
-                m_Connections.erase(m_Connections.begin() + i);
+        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        auto search = m_Users.find(hdl);
+        if (search == m_Users.end()) {
+            std::clog << "Couldn't find left user in list" << '\n';
+            return;
+        }
+        auto username = search->second;
+        m_Users.erase(search);
+        BroadcastAll(username + " has left.");
     }
 }
 
@@ -71,10 +76,12 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
 
     // TODO: that switch case hash thing, its faster
     const auto& command = decoded.at(0);
-    kCommandType t;
+    kCommandType t = kCommandType::Unknown;
 
     if (command == "chat")  // user, message
         t = kCommandType::Chat;
+    else if (command == "username")  // new name
+        t = kCommandType::Username;
     else if (command == "button")  // mask
         t = kCommandType::Button;
     //    else if (command == "screen")
@@ -138,12 +145,10 @@ void LetsPlayServer::Shutdown() {
     // Close every connection
     {
         std::clog << "Closing every connection..." << '\n';
-        std::unique_lock<std::mutex> lk((m_ConnectionsMutex));
-        std::for_each(m_Connections.begin(), m_Connections.end(),
-                      [&](auto& hdl) {
-                          server->close(hdl, websocketpp::close::status::normal,
-                                        "Closing", err);
-                      });
+        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        for (const auto& [hdl, username] : m_Users)
+            server->close(hdl, websocketpp::close::status::normal, "Closing",
+                          err);
     }
 }
 
@@ -160,31 +165,65 @@ void LetsPlayServer::QueueThread() {
 
                 switch (command.type) {
                     case kCommandType::Chat: {
-                        // Chat has only two params
+                        // Chat has only one param, the message
                         if (command.params.size() > 1) break;
 
-                        if (command.params[0].size() > c_maxMsgSize) break;
-
-                        // TODO: Remove when user system
-                        websocketpp::lib::error_code err;
-                        std::ostringstream oss;
+                        std::string username;
                         {
-                            wcpp_server::connection_ptr cptr =
-                                server->get_con_from_hdl(command.hdl, err);
-
-                            oss << cptr.get();
+                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            username = m_Users[command.hdl];
                         }
+                        if (username == "") break;
+
+                        // Message only has values in the range of typeable
+                        // ascii characters excluding \n and \t
+                        if (!LetsPlayServer::isAsciiStr(command.params[0]))
+                            break;
+
+                        if (LetsPlayServer::escapedSize(command.params[0]) >
+                            c_maxMsgSize)
+                            break;
 
                         BroadcastAll(
                             LetsPlayServer::encode(std::vector<std::string>{
-                                "chat", oss.str(), command.params[0]}));
+                                "chat", username, command.params[0]}));
                         break;
                     }
+                    case kCommandType::Username: {
+                        // Username has only one param, the username
+                        if (command.params.size() > 1) break;
+                        if (command.params[0].size() > c_maxUserName ||
+                            command.params[0].size() < c_minUserName)
+                            break;
+                        if (!LetsPlayServer::isAsciiStr(command.params[0]))
+                            break;
+                        if (command.params[0].front() == ' ' ||
+                            command.params[0].back() == ' ' ||
+                            (command.params[0].find("  ") != std::string::npos))
+                            break;
+
+                        std::string oldUsername;
+                        {
+                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            oldUsername = m_Users[command.hdl];
+                            m_Users[command.hdl] = command.params[0];
+                        }
+
+                        if (oldUsername == "")
+                            // TODO: Send as a join
+                            BroadcastAll(command.params[0] + " has joined!");
+                        else
+                            BroadcastAll(
+                                LetsPlayServer::encode(std::vector<std::string>{
+                                    "username", oldUsername,
+                                    command.params[0]}));
+                    } break;
                     case kCommandType::Button:
-                        // Broadcast one
-                    case kCommandType::Turn:
+                        // Broadcast none
                         break;
+                    case kCommandType::Turn:
                         // Broadcast all
+                        break;
                     case kCommandType::Shutdown:
                         break;
                 }
@@ -197,9 +236,11 @@ void LetsPlayServer::QueueThread() {
 
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::clog << "BroadcastAll()" << '\n';
-    std::unique_lock<std::mutex> lk((m_ConnectionsMutex));
-    for (const auto& hdl : m_Connections)
+    std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
+    std::clog << "Lock gotten" << '\n';
+    for (const auto& [hdl, username] : m_Users)
         server->send(hdl, data, websocketpp::frame::opcode::text);
+    std::clog << "Exit BroadcastAll()" << '\n';
 }
 
 void LetsPlayServer::BroadcastOne(const std::string& data,
@@ -234,10 +275,11 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
     std::istringstream iss{input};
     while (iss) {
         unsigned long long length{0};
+        // if length is greater than -1ull then length will just be equal to
+        // -1ull, no overflows here
         iss >> length;
 
-        if (length == -1ull) {
-            std::cout << "Overflow detected" << '\n';
+        if (length >= 1'000) {
             return std::vector<std::string>();
         }
 
@@ -258,4 +300,19 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
         iss.get();
     }
     return std::vector<std::string>();
+}
+
+bool LetsPlayServer::isAsciiStr(const std::string& str) {
+    return std::all_of(str.begin(), str.end(),
+                       [](const char c) { return (c >= ' ') && (c <= '~'); });
+}
+
+size_t LetsPlayServer::escapedSize(const std::string& str) {
+    // matches \uXXXX, \xXX, and \u{1XXXX}
+    static const std::regex re{
+        R"((\\x[\da-f]{2}|\\u[\da-f]{4}|\\u\{1[\da-f]{4}\}))"};
+    std::cout << '\'' << str << "'\n";
+    const std::string output = std::regex_replace(str, re, "X");
+    std::cout << '\'' << output << "'\n";
+    return output.size();
 }
