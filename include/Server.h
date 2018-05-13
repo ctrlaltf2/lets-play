@@ -32,6 +32,7 @@ using websocketpp::lib::placeholders::_2;
 enum class kCommandType {
     Chat,
     Username,
+    List,
     Button,
     Turn,
     Shutdown,

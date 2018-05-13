@@ -82,6 +82,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         t = kCommandType::Chat;
     else if (command == "username")  // new name
         t = kCommandType::Username;
+    else if (command == "list")
+        t = kCommandType::List;
     else if (command == "button")  // mask
         t = kCommandType::Button;
     //    else if (command == "screen")
@@ -218,6 +220,19 @@ void LetsPlayServer::QueueThread() {
                                     "username", oldUsername,
                                     command.params[0]}));
                     } break;
+                    case kCommandType::List: {
+                        if (command.params.size() > 0) break;
+                        std::vector<std::string> message;
+                        message.push_back("list");
+
+                        {
+                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            for (const auto [hdl, username] : m_Users)
+                                message.push_back(username);
+                        }
+                        BroadcastOne(LetsPlayServer::encode(message),
+                                     command.hdl);
+                    }
                     case kCommandType::Button:
                         // Broadcast none
                         break;
@@ -237,10 +252,10 @@ void LetsPlayServer::QueueThread() {
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::clog << "BroadcastAll()" << '\n';
     std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
-    std::clog << "Lock gotten" << '\n';
-    for (const auto& [hdl, username] : m_Users)
-        server->send(hdl, data, websocketpp::frame::opcode::text);
-    std::clog << "Exit BroadcastAll()" << '\n';
+    for (const auto& [hdl, username] : m_Users) {
+        if (username != "")
+            server->send(hdl, data, websocketpp::frame::opcode::text);
+    }
 }
 
 void LetsPlayServer::BroadcastOne(const std::string& data,
