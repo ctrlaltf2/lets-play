@@ -19,6 +19,8 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
+#include "Scheduler.h"
+
 constexpr int c_syncInterval{5 /* seconds */};
 constexpr unsigned c_maxMsgSize{100 /* characters */};
 constexpr unsigned c_maxUserName{15 /* characters */};
@@ -48,12 +50,13 @@ struct Command {
 struct LetsPlayUser {
     websocketpp::connection_hdl hdl;
     std::string username;
+    bool hasTurn;
 };
 
 class LetsPlayServer {
     std::queue<Command> m_WorkQueue;
 
-    std::map<websocketpp::connection_hdl, std::string,
+    std::map<websocketpp::connection_hdl, LetsPlayUser,
              std::owner_less<websocketpp::connection_hdl>>
         m_Users;
 
@@ -66,6 +69,8 @@ class LetsPlayServer {
     std::mutex m_QueueMutex;
 
     std::condition_variable m_QueueNotifier;
+
+    Scheduler scheduler;
 
    public:
     std::shared_ptr<wcpp_server> server;

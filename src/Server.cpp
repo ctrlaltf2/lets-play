@@ -34,6 +34,8 @@ void LetsPlayServer::Run(std::uint16_t port) {
         server->start_accept();
         server->run();
 
+        this->Shutdown();
+
     } catch (websocketpp::exception const& e) {
         std::cerr << e.what() << '\n';
     } catch (...) {
@@ -45,7 +47,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     {
         std::unique_lock<std::mutex> lk((m_UsersMutex));
-        m_Users[hdl] = "";
+        m_Users[hdl].username = "";
     }
 }
 
@@ -60,7 +62,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
             std::clog << "Couldn't find left user in list" << '\n';
             return;
         }
-        auto username = search->second;
+        auto username = search->second.username;
         m_Users.erase(search);
         BroadcastAll(username + " has left.");
     }
@@ -148,7 +150,7 @@ void LetsPlayServer::Shutdown() {
     {
         std::clog << "Closing every connection..." << '\n';
         std::unique_lock<std::mutex> lk((m_UsersMutex));
-        for (const auto& [hdl, username] : m_Users)
+        for (const auto& [hdl, user] : m_Users)
             server->close(hdl, websocketpp::close::status::normal, "Closing",
                           err);
     }
@@ -173,7 +175,7 @@ void LetsPlayServer::QueueThread() {
                         std::string username;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            username = m_Users[command.hdl];
+                            username = m_Users[command.hdl].username;
                         }
                         if (username == "") break;
 
@@ -207,8 +209,8 @@ void LetsPlayServer::QueueThread() {
                         std::string oldUsername;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            oldUsername = m_Users[command.hdl];
-                            m_Users[command.hdl] = command.params[0];
+                            oldUsername = m_Users[command.hdl].username;
+                            m_Users[command.hdl].username = command.params[0];
                         }
 
                         if (oldUsername == "")
@@ -227,8 +229,8 @@ void LetsPlayServer::QueueThread() {
 
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            for (const auto [hdl, username] : m_Users)
-                                message.push_back(username);
+                            for (const auto [hdl, user] : m_Users)
+                                message.push_back(user.username);
                         }
                         BroadcastOne(LetsPlayServer::encode(message),
                                      command.hdl);
@@ -252,8 +254,8 @@ void LetsPlayServer::QueueThread() {
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::clog << "BroadcastAll()" << '\n';
     std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
-    for (const auto& [hdl, username] : m_Users) {
-        if (username != "" && !hdl.expired())
+    for (const auto& [hdl, user] : m_Users) {
+        if (user.username != "" && !hdl.expired())
             server->send(hdl, data, websocketpp::frame::opcode::text);
     }
 }
