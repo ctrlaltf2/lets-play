@@ -46,4 +46,5 @@ target_link_libraries(letsplay
     PUBLIC
         dl
         pthread
+        boost_system
 )
