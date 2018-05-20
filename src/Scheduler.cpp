@@ -1,5 +1,7 @@
 #include "Scheduler.h"
 
+Task::Task() {}
+
 bool Task::ready(
     const std::chrono::time_point<std::chrono::steady_clock>& now) const {
     return now > nextRun;
@@ -16,33 +18,43 @@ Scheduler::Scheduler() {
 }
 
 void Scheduler::RunnerThread() {
+    using std::chrono::steady_clock;
+    using std::chrono::time_point;
+
+    time_point<steady_clock> nextGarbageCollection = steady_clock::now();
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        // Add new tasks
+        std::vector<Task>::iterator nextTask;
+        time_point<steady_clock> nextRun;
         {
             std::unique_lock<std::mutex> lk(m_TaskMutex);
-            auto now = std::chrono::steady_clock::now();
-            for (Task& t : m_Tasks) {
-                if (t.ready(now)) {
-                    {
-                        std::unique_lock<std::mutex> llk(m_FutureMutex);
-                        m_FuturePool.emplace_back(
-                            std::async(std::launch::async, t.task));
-                    }
-                    t.update();
-                }
-            }
+            nextTask = std::min_element(m_Tasks.begin(), m_Tasks.end(),
+                                        [](const Task& a, const Task& b) {
+                                            return a.nextRun < b.nextRun;
+                                        });
+            nextRun = nextTask->nextRun;
         }
-        // Erase old ones
+
+        std::this_thread::sleep_until(nextRun);
+
         {
             std::unique_lock<std::mutex> lk(m_FutureMutex);
+            m_FuturePool.emplace_back(
+                std::async(std::launch::async, nextTask->task));
+            nextTask->update();
+        }
+
+        // Cleanup done futures every 10 seconds
+        auto now = steady_clock::now();
+        if (now > nextGarbageCollection) {
+            // Update garbage collection timepoint
+            nextGarbageCollection = now + std::chrono::seconds(10);
+            std::unique_lock<std::mutex> lk(m_FutureMutex);
+            // Remove done futures
             auto erasePoint = std::remove_if(
                 m_FuturePool.begin(), m_FuturePool.end(),
                 [](auto& future) { return Scheduler::isReady(future); });
             m_FuturePool.erase(erasePoint, m_FuturePool.end());
         }
-        // std::cout << m_Tasks.size() << ' ' << m_FuturePool.size() <<
-        // '\n';
     }
 }
 
