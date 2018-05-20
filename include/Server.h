@@ -13,7 +13,6 @@
 #include <vector>
 
 #define _WEBSOCKETPP_CPP11_THREAD_
-#define ASIO_STANDALONE
 
 #include <websocketpp/common/connection_hdl.hpp>
 #include <websocketpp/config/asio_no_tls.hpp>
@@ -51,6 +50,7 @@ struct LetsPlayUser {
     websocketpp::connection_hdl hdl;
     std::string username;
     bool hasTurn;
+    std::chrono::time_point<std::chrono::steady_clock> lastHeartbeat;
 };
 
 class LetsPlayServer {
@@ -77,9 +77,19 @@ class LetsPlayServer {
     std::thread m_QueueThread;
 
     /*
+     * Thread that manages turns
+     */
+    std::thread m_TurnThread;
+
+    /*
      * If true, the m_QueueThread member's thread will keep running
      */
     std::atomic<bool> m_QueueThreadRunning;
+
+    /*
+     * If true, the m_TurnThread will keep running
+     */
+    std::atomic<bool> m_TurnThreadRunning;
 
     /*
      * Mutex for accessing m_WorkQueue
@@ -140,6 +150,11 @@ class LetsPlayServer {
      * incoming commands
      */
     void QueueThread();
+
+    /*
+     * Function (to be run in a thread) that manages the turns
+     */
+    void TurnThread();
 
     /*
      * Send a message to all connected users

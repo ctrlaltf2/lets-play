@@ -109,8 +109,6 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
     m_QueueNotifier.notify_one();
 }
 
-// TODO: Fix the crash when this is run (should gracefully shutdown, not
-// shutdown and break the whole program)
 void LetsPlayServer::Shutdown() {
     std::clog << "Shutdown()" << '\n';
     // Run this function once
@@ -238,9 +236,12 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Button:
                         // Broadcast none
                         break;
-                    case kCommandType::Turn:
-                        // Broadcast all
-                        break;
+                    case kCommandType::Turn: {
+                        // Add to queue?
+                        // Notify thread?
+                    }
+                    // Broadcast all
+                    break;
                     case kCommandType::Shutdown:
                         break;
                 }
@@ -250,6 +251,8 @@ void LetsPlayServer::QueueThread() {
         }
     }
 }
+
+void TurnThread() {}
 
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::clog << "BroadcastAll()" << '\n';
