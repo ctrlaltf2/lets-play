@@ -2,11 +2,6 @@
 
 Task::Task() {}
 
-bool Task::ready(
-    const std::chrono::time_point<std::chrono::steady_clock>& now) const {
-    return now > nextRun;
-}
-
 void Task::update() {
     nextRun = std::chrono::time_point_cast<task_precision>(
                   std::chrono::steady_clock::now()) +
