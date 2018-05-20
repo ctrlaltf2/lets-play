@@ -19,6 +19,8 @@ struct Task {
         nextRun = std::chrono::steady_clock::now() + t_period;
     }
 
+    Task();
+
     bool ready(const std::chrono::time_point<std::chrono::steady_clock>&) const;
 
     void update();
