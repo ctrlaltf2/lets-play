@@ -24,6 +24,8 @@ constexpr int c_syncInterval{5 /* seconds */};
 constexpr unsigned c_maxMsgSize{100 /* characters */};
 constexpr unsigned c_maxUserName{15 /* characters */};
 constexpr unsigned c_minUserName{3 /* characters */};
+constexpr unsigned c_turnLength{10 /* seconds */};
+constexpr unsigned c_heartbeatTimeout{3 /* seconds */};
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
 
@@ -31,11 +33,13 @@ using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 
 enum class kCommandType {
+    // External -- only generated from clients sending messages
     Chat,
     Username,
     List,
     Button,
     Turn,
+    // Internal -- only generated inside program
     Shutdown,
     Unknown,
 };
@@ -47,10 +51,20 @@ struct Command {
 };
 
 struct LetsPlayUser {
-    websocketpp::connection_hdl hdl;
-    std::string username;
-    bool hasTurn;
     std::chrono::time_point<std::chrono::steady_clock> lastHeartbeat;
+    std::string username;
+    std::atomic<bool> hasTurn;
+    std::atomic<bool> requestedTurn;
+
+    LetsPlayUser()
+        : lastHeartbeat{std::chrono::steady_clock::now()},
+          hasTurn{false},
+          requestedTurn{false} {}
+
+    bool shouldDisconnect() const {
+        return std::chrono::steady_clock::now() >
+               (lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
+    }
 };
 
 class LetsPlayServer {
@@ -58,6 +72,11 @@ class LetsPlayServer {
      * Queue that holds the list of commands/actions to be executed
      */
     std::queue<Command> m_WorkQueue;
+
+    /*
+     * Queue for the turns
+     */
+    std::queue<LetsPlayUser*> m_TurnQueue;
 
     /*
      * Map that maps connection_hdls to LetsPlayUsers
@@ -75,6 +94,11 @@ class LetsPlayServer {
      * Thread that manages new commands/actions
      */
     std::thread m_QueueThread;
+
+    /*
+     * Mutex for accessing m_TurnQueue
+     */
+    std::mutex m_TurnMutex;
 
     /*
      * Thread that manages turns
@@ -100,6 +124,12 @@ class LetsPlayServer {
      * Condition variable that allows the queue to wait for new commands/actions
      */
     std::condition_variable m_QueueNotifier;
+
+    /*
+     * Condition variable that allows the turn thread to sleep/wake up for
+     * changes in turns
+     */
+    std::condition_variable m_TurnNotifier;
 
     /*
      * Scheduler to manage periodic tasks
