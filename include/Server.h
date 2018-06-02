@@ -18,8 +18,6 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-#include "Scheduler.h"
-
 constexpr int c_syncInterval{5 /* seconds */};
 constexpr unsigned c_maxMsgSize{100 /* characters */};
 constexpr unsigned c_maxUserName{15 /* characters */};
