@@ -8,6 +8,7 @@ add_executable(letsplay
     # src/
         src/Main.cpp
         src/Server.cpp
+        src/LetsPlayUser.cpp
         # Emulator/
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp

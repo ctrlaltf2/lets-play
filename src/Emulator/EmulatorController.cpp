@@ -1,31 +1,18 @@
 #include "EmulatorController.h"
 #include <memory>
 
-namespace EmulatorController {
+RetroCore EmulatorController::Core;
+LetsPlayServer* EmulatorController::m_server{nullptr};
+void EmulatorController::Run(const char* corePath, const char* romPath) {
+    Core.Init(corePath);
 
-thread_local RetroCore Core;
-thread_local bool initialized = false;
-void Run(const char* corePath, const char* romPath) {
-    Core = RetroCore(corePath);
-
-    std::cout << "setEnvironment: " << &(Core.fSetEnvironment) << '\n';
-    std::cout << "OnEnvironment: " << std::addressof(OnEnvironment) << '\n';
-    std::cout << __LINE__ << '\n';
     (*(Core.fSetEnvironment))(OnEnvironment);
-    std::cout << __LINE__ << '\n';
-    (*(Core.fSetVideoRefresh))(&OnVideoRefresh);
-    std::cout << __LINE__ << '\n';
+    (*(Core.fSetVideoRefresh))(OnVideoRefresh);
     (*(Core.fSetInputPoll))(OnPollInput);
-    std::cout << __LINE__ << '\n';
     (*(Core.fSetInputState))(OnGetInputState);
-    std::cout << __LINE__ << '\n';
     (*(Core.fSetAudioSample))(OnLRAudioSample);
-    std::cout << __LINE__ << '\n';
     (*(Core.fSetAudioSampleBatch))(OnBatchAudioSample);
-    std::cout << __LINE__ << '\n';
-
     (*(Core.fInit))();
-    std::cout << __LINE__ << '\n';
 
     // TODO: C++
     retro_system_info system = {0};
@@ -60,28 +47,29 @@ void Run(const char* corePath, const char* romPath) {
     while (true) (*(Core.fRun))();
 }
 
-bool OnEnvironment(unsigned cmd, void* data) {
+bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
     switch (cmd) {
         default:
             return false;
     }
 }
 
-void OnVideoRefresh(const void* data, unsigned width, unsigned height,
-                    size_t stride) {
+void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
+                                        unsigned height, size_t stride) {
     std::cout << width << ' ' << height << ' ' << stride << '\n';
 }
 
-void OnPollInput() {}
+void EmulatorController::OnPollInput() {}
 
-std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
-                             unsigned id) {
+std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
+                                                 unsigned index, unsigned id) {
     return 0;
 }
 
-void OnLRAudioSample(std::int16_t left, std::int16_t right) {}
+void EmulatorController::OnLRAudioSample(std::int16_t left,
+                                         std::int16_t right) {}
 
-size_t OnBatchAudioSample(const std::int16_t* data, size_t frames) {
+size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data,
+                                              size_t frames) {
     return frames;
 }
-}  // namespace EmulatorController

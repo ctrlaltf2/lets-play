@@ -60,18 +60,18 @@ class RetroCore {
      * Create a RetroCore object based on a core path
      * @param corePath Path to the core to load
      */
-    RetroCore(const char* corePath);
+    // RetroCore(const char* corePath);
 
     /**
      * Create a RetroCore object from an.already existing libretro.so handle
      * @param hCore Handle to the already loaded libretro core
      */
-    RetroCore(void* hCore);
+    // RetroCore(void* hCore);
 
     /**
      * Initialize the RetroCore object (merges the two constructors)
      */
-    void Init(void* hCore);
+    void Init(const char* hCore);
 
     /**
      * Properly shuts down the retro core by calling deinit and similar
