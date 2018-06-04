@@ -18,6 +18,8 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
+#include "LetsPlayUser.h"
+
 constexpr int c_syncInterval{5 /* seconds */};
 constexpr unsigned c_maxMsgSize{100 /* characters */};
 constexpr unsigned c_maxUserName{15 /* characters */};
@@ -26,6 +28,7 @@ constexpr unsigned c_turnLength{10 /* seconds */};
 constexpr unsigned c_heartbeatTimeout{3 /* seconds */};
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
+typedef std::string EmuID_t;
 
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
@@ -37,32 +40,41 @@ enum class kCommandType {
     List,
     Button,
     Turn,
-    // Internal -- only generated inside program
+    Connect,
+    // External -- requires admin
+    AddEmu,
+    RemoveEmu,
+    StopEmu,
     Shutdown,
+    // Internal -- only generated inside program
     Unknown,
 };
 
+/*
+ * POD class for the action queue
+ */
 struct Command {
+    /*
+     * Enum representing the type of commamd it is (chat, rename, screen,
+     * button, etc)
+     */
     kCommandType type;
+
+    /*
+     * Parameters to tbat command (new name, buttons pressed, etc)
+     */
     std::vector<std::string> params;
+
+    /*
+     * Handle to the connection / who sent it
+     */
     websocketpp::connection_hdl hdl;
-};
 
-struct LetsPlayUser {
-    std::chrono::time_point<std::chrono::steady_clock> lastHeartbeat;
-    std::string username;
-    std::atomic<bool> hasTurn;
-    std::atomic<bool> requestedTurn;
-
-    LetsPlayUser()
-        : lastHeartbeat{std::chrono::steady_clock::now()},
-          hasTurn{false},
-          requestedTurn{false} {}
-
-    bool shouldDisconnect() const {
-        return std::chrono::steady_clock::now() >
-               (lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
-    }
+    /*
+     * (User provided) ID of the emulator the user is connected to and
+     * (apparently) sending the message from
+     */
+    EmuID_t emuID;
 };
 
 class LetsPlayServer {
