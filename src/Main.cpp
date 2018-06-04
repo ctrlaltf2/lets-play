@@ -4,8 +4,8 @@
 #include <thread>
 
 #include "EmulatorController.h"
+#include "LetsPlayServer.h"
 #include "RetroCore.h"
-#include "Server.h"
 
 int main(int argc, char** argv) {
     std::thread runner(

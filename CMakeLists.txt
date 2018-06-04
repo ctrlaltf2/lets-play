@@ -7,7 +7,7 @@ project(letsplay
 add_executable(letsplay
     # src/
         src/Main.cpp
-        src/Server.cpp
+        src/LetsPlayServer.cpp
         src/LetsPlayUser.cpp
         # Emulator/
             src/Emulator/EmulatorController.cpp

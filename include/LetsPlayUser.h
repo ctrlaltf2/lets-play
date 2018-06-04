@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "Server.h"
+#include "LetsPlayServer.h"
 
 /*
  * Class representing a connected user (across all emulators)
