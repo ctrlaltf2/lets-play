@@ -3,8 +3,8 @@
 #include <iostream>
 #include <string>
 
+#include "LetsPlayServer.h"
 #include "RetroCore.h"
-#include "Server.h"
 
 /*
  * Class to be used once per thread, manages a libretro core and emulator, and
