@@ -1,42 +1,33 @@
-#include <cstdint>
-#include <cstdlib>
-#include <iostream>
+#include "EmulatorController.h"
+#include <memory>
 
-#include "RetroCore.h"
+namespace EmulatorController {
 
-void EmulatorController(const char* corePath, const char* romPath) {
-    RetroCore Core(corePath);
+thread_local RetroCore Core;
+thread_local bool initialized = false;
+void Run(const char* corePath, const char* romPath) {
+    Core = RetroCore(corePath);
 
-    std::cout << "Done Loading" << '\n';
-    (*(Core.fSetEnvironment))(
-        [](unsigned cmd, void* data) -> bool { return false; });
-
-    (*(Core.fSetVideoRefresh))([](const void* data, unsigned width,
-                                  unsigned height, size_t stride) -> void {
-        std::cout << width << 'x' << height << '@' << stride << '\n';
-    });
-
-    (*(Core.fSetInputPoll))([]() -> void {
-        //...
-    });
-
-    (*(Core.fSetInputState))([](unsigned port, unsigned device, unsigned index,
-                                unsigned id) -> std::int16_t { return 0; });
-
-    (*(Core.fSetAudioSample))(
-        [](std::int16_t left, std::int16_t right) -> void {
-            // ...
-        });
-
-    (*(Core.fSetAudioSampleBatch))(
-        [](const std::int16_t* data, size_t frames) -> size_t {
-            return frames;
-        });
+    std::cout << "setEnvironment: " << &(Core.fSetEnvironment) << '\n';
+    std::cout << "OnEnvironment: " << std::addressof(OnEnvironment) << '\n';
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetEnvironment))(OnEnvironment);
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetVideoRefresh))(&OnVideoRefresh);
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetInputPoll))(OnPollInput);
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetInputState))(OnGetInputState);
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetAudioSample))(OnLRAudioSample);
+    std::cout << __LINE__ << '\n';
+    (*(Core.fSetAudioSampleBatch))(OnBatchAudioSample);
+    std::cout << __LINE__ << '\n';
 
     (*(Core.fInit))();
-    std::cout << "Done and ready to load " << '\n';
+    std::cout << __LINE__ << '\n';
 
-    retro_system_av_info av = {0};
+    // TODO: C++
     retro_system_info system = {0};
     retro_game_info info = {romPath, 0};
     FILE* file = fopen(romPath, "rb");
@@ -57,6 +48,7 @@ void EmulatorController(const char* corePath, const char* romPath) {
 
         if (!info.data || !fread((void*)info.data, info.size, 1, file)) {
             std::cout << "Some error about sizing" << '\n';
+            fclose(file);
             return;
         }
     }
@@ -67,3 +59,29 @@ void EmulatorController(const char* corePath, const char* romPath) {
 
     while (true) (*(Core.fRun))();
 }
+
+bool OnEnvironment(unsigned cmd, void* data) {
+    switch (cmd) {
+        default:
+            return false;
+    }
+}
+
+void OnVideoRefresh(const void* data, unsigned width, unsigned height,
+                    size_t stride) {
+    std::cout << width << ' ' << height << ' ' << stride << '\n';
+}
+
+void OnPollInput() {}
+
+std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
+                             unsigned id) {
+    return 0;
+}
+
+void OnLRAudioSample(std::int16_t left, std::int16_t right) {}
+
+size_t OnBatchAudioSample(const std::int16_t* data, size_t frames) {
+    return frames;
+}
+}  // namespace EmulatorController

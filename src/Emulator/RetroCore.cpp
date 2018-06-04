@@ -1,5 +1,7 @@
 #include "RetroCore.h"
 
+RetroCore::RetroCore() {}
+
 RetroCore::RetroCore(const char* corePath) {
     void* hCore = dlopen(corePath, RTLD_NOW);
 
