@@ -2,6 +2,14 @@
 #include <memory>
 
 RetroCore EmulatorController::Core;
+LetsPlayServer* m_server;
+std::queue<LetsPlayUser*> m_TurnQueue;
+std::mutex m_TurnMutex;
+std::condition_variable m_TurnNotifier;
+std::atomic<bool> m_TurnThreadRunning;
+std::thread m_TurnThread;
+EmuID_t id;
+
 LetsPlayServer* EmulatorController::m_server{nullptr};
 void EmulatorController::Run(const char* corePath, const char* romPath) {
     Core.Init(corePath);
@@ -44,6 +52,8 @@ void EmulatorController::Run(const char* corePath, const char* romPath) {
         std::cout << "failed to do a thing" << '\n';
     }
 
+    m_TurnThread = std::thread(EmulatorController::TurnThread);
+
     while (true) (*(Core.fRun))();
 }
 
@@ -73,3 +83,63 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data,
                                               size_t frames) {
     return frames;
 }
+
+void EmulatorController::TurnThread() {
+    while (m_TurnThreadRunning) {
+        std::unique_lock<std::mutex> lk((m_TurnMutex));
+
+        // Wait for a nonempty queue
+        while (m_TurnQueue.empty()) m_TurnNotifier.wait(lk);
+
+        if (m_TurnThreadRunning == false) break;
+        // XXX: Unprotected access to top of the queue, only access
+        // threadsafe members
+        auto& currentUser = m_TurnQueue[0];
+        std::string username = currentUser->username();
+        currentUser->hasTurn = true;
+        m_server->BroadcastAll(id + ": " + username + " now has a turn!");
+        const auto turnEnd = std::chrono::steady_clock::now() +
+                             std::chrono::seconds(c_turnLength);
+
+        while (currentUser && currentUser->hasTurn &&
+               (std::chrono::steady_clock::now() < turnEnd)) {
+            // FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
+            // underflow or UB for the case where now() is greater than
+            // turnEnd?
+            m_TurnNotifier.wait_for(lk,
+                                    turnEnd - std::chrono::steady_clock::now());
+        }
+
+        if (currentUser) {
+            currentUser->hasTurn = false;
+            currentUser->requestedTurn = false;
+        }
+        m_server->BroadcastAll(id + ": " + username + "'s turn has ended!");
+        m_TurnQueue.erase(m_TurnQueue.begin());
+    }
+}
+
+void EmulatorController::addTurnRequest(LetsPlayUser* user) {
+    std::unique_lock<std::mutex> lk((m_TurnMutex));
+    m_TurnQueue.emplace_back(user);
+    m_TurnNotifier.notify_one();
+}
+
+void EmulatorController::userDisconnected(LetsPlayUser* user) {
+    std::unique_lock<std::mutex> lk((m_TurnMutex));
+    auto& currentUser = m_TurnQueue[0];
+
+    if (currentUser->hasTurn) {  // Current turn is user
+        m_TurnNotifier.notify_one();
+    } else if (currentUser->requestedTurn) {  // In the queue
+        m_TurnQueue.erase(
+            std::remove_if(m_TurnQueue.begin(), m_TurnQueue.end(), user),
+            m_TurnQueue.end());
+    };
+    // Set the current user to nullptr so turnqueue knows not to try to modify
+    // it, as it may be in an invalid state because the memory it points to
+    // (managed by a std::map) may be reallocated as part of an erase
+    currentUser = nullptr;
+}
+
+void EmulatorController::userConnected(LetsPlayUser* user) { return; }

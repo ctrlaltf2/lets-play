@@ -1,41 +1,26 @@
 #include "LetsPlayUser.h"
 
-bool LetsPlayUser::hasTurnOn(const EmuID_t& id) {
+bool LetsPlayUser::shouldDisconnect() const {
+    return std::chrono::steady_clock::now() >
+           (m_lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
+}
+
+EmuID_t LetsPlayUser::connectedEmu() {
     std::unique_lock<std::mutex> lk((m_access));
-    return m_hasTurn[id];
+    return m_connectedEmu;
 }
 
-bool LetsPlayUser::requestedTurnOn(const EmuID_t& id) {
+void LetsPlayUser::setConnectedEmu(const EmuID_t& id) {
     std::unique_lock<std::mutex> lk((m_access));
-    return m_requestedTurn[id];
+    m_connectedEmu = id;
 }
 
-bool LetsPlayUser::isConnectedTo(const EmuID_t& id) {
+std::string LetsPlayUser::username() {
     std::unique_lock<std::mutex> lk((m_access));
-    return std::find(m_connectedEmus.cbegin(), m_connectedEmus.cend(), id) !=
-           m_connectedEmus.cend();
+    return m_username;
 }
 
-void LetsPlayUser::connect(const EmuID_t& id) {
-    if (!this->isConnectedTo(id)) {
-        std::unique_lock<std::mutex> lk((m_access));
-        m_connectedEmus.emplace_back(id);
-    }
-}
-
-void LetsPlayUser::cleanupID(const EmuID_t& id) {
+void LetsPlayUser::setUsername(const std::string& name) {
     std::unique_lock<std::mutex> lk((m_access));
-    m_hasTurn.erase(id);
-    m_requestedTurn.erase(id);
-    auto connectedEmusSearch =
-        std::find(m_connectedEmus.begin(), m_connectedEmus.end(), id);
-    if (connectedEmusSearch != m_connectedEmus.end())
-        m_connectedEmus.erase(connectedEmusSearch);
-}
-
-void LetsPlayUser::disconnect(const EmuID_t& id) {
-    if (this->isConnectedTo(id)) {
-        std::unique_lock<std::mutex> lk((m_access));
-        m_connectedEmus.emplace_back(id);
-    }
+    m_username = name;
 }

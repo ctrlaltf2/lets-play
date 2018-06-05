@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 
+class LetsPlayServer;
+
+#include "Config.h"
 #include "LetsPlayServer.h"
 
 /*
@@ -24,68 +27,55 @@ class LetsPlayUser {
     std::string m_username;
 
     /*
-     * Lookup map of emulator ID to if the user has a turn on that emu
+     * The emulator the user is connected to
      */
-    std::map<EmuID_t, bool> m_hasTurn;
+    EmuID_t m_connectedEmu;
 
     /*
-     * Lookup map of emulator ID to if the user has requested a turn on that emu
-     */
-    std::map<EmuID_t, bool> m_requestedTurn;
-
-    /*
-     * List of the emulators the user is connected to
-     */
-    std::vector<EmuID_t> m_connectedEmus;
-
-    /*
-     * Mutex for accessing hasTurn, requestedTurn, or connectedEmus
+     * Mutex for accessing username or connectedEmu
      */
     std::mutex m_access;
 
    public:
+    /*
+     * if the user has a turn on the
+     */
+    std::atomic<bool> hasTurn;
+
+    /*
+     * Lookup map of emulator ID to if the user has requested a turn on that emu
+     */
+    std::atomic<bool> requestedTurn;
+
     LetsPlayUser() : m_lastHeartbeat{std::chrono::steady_clock::now()} {}
 
     /*
      * Returns true if the user's last heartbeat was over the limit for timeout
      * @return True if the user should be disconnected
      */
-    bool shouldDisconnect() const {
-        return std::chrono::steady_clock::now() >
-               (m_lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
-    }
+    bool shouldDisconnect() const;
+
+    // The reasoning behind the following redundant and
+    // cs-major-just-introduced-to-java-classes-esque getters and setters is for
+    // thread safe access / modification
 
     /*
-     * Returns true if the user currently has a turn on the specified emu
+     * Returns what emu (if any) the user if connected to
      */
-    bool hasTurnOn(const EmuID_t& id);
+    EmuID_t connectedEmu();
 
     /*
-     * Returns true if the user has currently requested a turn on the specified
-     * emu
-     * NOTE: id should be checked to be a valid emu before calling
+     * Set m_connectedEmu
      */
-    bool requestedTurnOn(const EmuID_t& id);
+    void setConnectedEmu(const EmuID_t& id);
 
     /*
-     * Returns true if the user is connected to the emulator specific by id
-     * NOTE: id should be checked to be a valid emu before calling
+     * Return the username
      */
-    bool isConnectedTo(const EmuID_t& id);
+    std::string username();
 
     /*
-     * Removes user's connected status on the specified emu id
+     * Set the username
      */
-    void disconnect(const EmuID_t& id);
-
-    /*
-     * Adds the connected status to the user for the specified emu id
-     */
-    void connect(const EmuID_t& id);
-
-    /*
-     * Removes any occurences of id from the turn, requested turn, and
-     * connection vector
-     */
-    void cleanupID(const EmuID_t& id);
+    void setUsername(const std::string& name);
 };
