@@ -51,7 +51,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     {
         std::unique_lock<std::mutex> lk((m_UsersMutex));
-        m_Users[hdl].username = "";
+        m_Users[hdl].setUsername("");
     }
 }
 
@@ -59,16 +59,28 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
 
+    LetsPlayUser* user{nullptr};
+    auto search = m_Users.end();
     {
         std::unique_lock<std::mutex> lk((m_UsersMutex));
-        auto search = m_Users.find(hdl);
+        search = m_Users.find(hdl);
         if (search == m_Users.end()) {
             std::clog << "Couldn't find left user in list" << '\n';
             return;
         }
-        auto username = search->second.username;
+        user = &search->second;
+    }
+
+    if (user && user->connectedEmu() != "") {
+        {
+            std::unique_lock<std::mutex> lk((m_EmusMutex));
+            m_Emus[user->connectedEmu()]->userDisconnected(user);
+        }
+    }
+
+    {
+        std::unique_lock<std::mutex> lk((m_UsersMutex));
         m_Users.erase(search);
-        BroadcastAll(username + " has left.");
     }
 }
 
@@ -84,19 +96,17 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
     const auto& command = decoded.at(0);
     kCommandType t = kCommandType::Unknown;
 
-    if (command == "chat")  // user, message
-        t = kCommandType::Chat;
-    else if (command == "username")  // new name
-        t = kCommandType::Username;
-    else if (command == "list")
+    if (command == "list")  // No params
         t = kCommandType::List;
-    else if (command == "button")  // mask
+    else if (command == "chat")  // message
+        t = kCommandType::Chat;
+    else if (command == "username")  // newname
+        t = kCommandType::Username;
+    else if (command == "button")  // button id, 0/1 for keyup/keydown
         t = kCommandType::Button;
-    //    else if (command == "screen")
-    //        t = kCommandType::Screen;
-    //    else if (command == "sync")
-    //        t = kCommandType::Sync;
-    else if (command == "turn")  // user
+    else if (command == "connect")  // emuid
+        t = kCommandType::Connect;
+    else if (command == "turn")  // No params
         t = kCommandType::Turn;
     else if (command == "shutdown")
         this->Shutdown();
@@ -104,9 +114,11 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         return;
 
     std::vector<std::string> params(decoded.begin() + 1, decoded.end());
-
     {
         std::unique_lock<std::mutex> lk((m_QueueMutex));
+        std::cout << command << '(';
+        for (const auto& param : params) std::cout << param << ", ";
+        std::cout << ')' << '\n';
         m_WorkQueue.push(Command{t, params, hdl});
     }
 
@@ -137,18 +149,6 @@ void LetsPlayServer::Shutdown() {
                                  websocketpp::connection_hdl()});
     }
 
-    // Stop the turn queue thread loop
-    m_QueueThreadRunning = false;
-    std::clog << "Stopping turn thread..." << '\n';
-    {
-        std::clog << "Emptying queue..." << '\n';
-        // Again, empty the queue...
-        std::unique_lock<std::mutex> lk((m_TurnMutex));
-        while (m_TurnQueue.size()) m_TurnQueue.pop();
-        // ... except for a nullptr this time
-        m_TurnQueue.push(nullptr);
-    }
-
     std::clog << "Stopping listen..." << '\n';
     // Stop listening so the queue doesn't grow any more
     websocketpp::lib::error_code err;
@@ -157,13 +157,9 @@ void LetsPlayServer::Shutdown() {
     // Wake up the turn and work threads
     std::clog << "Waking up work thread..." << '\n';
     m_QueueNotifier.notify_one();
-    std::clog << "Waking up turn thread..." << '\n';
-    m_TurnNotifier.notify_one();
     // Wait until they stop looping
     std::clog << "Waiting for work thread to stop..." << '\n';
     m_QueueThread.join();
-    std::clog << "Waiting for turn thread to stop..." << '\n';
-    m_TurnThread.join();
 
     // Close every connection
     {
@@ -187,14 +183,16 @@ void LetsPlayServer::QueueThread() {
 
                 switch (command.type) {
                     case kCommandType::Chat: {
-                        // Chat has only one param, the message
+                        // Chat has only one, the message
                         if (command.params.size() > 1) break;
-
                         std::string username;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            username = m_Users[command.hdl].username;
+                            LetsPlayUser* user = &(m_Users[command.hdl]);
+                            if (user && (user->connectedEmu() == "")) break;
+                            username = user->username();
                         }
+
                         if (username == "") break;
 
                         // Message only has values in the range of typeable
@@ -207,6 +205,7 @@ void LetsPlayServer::QueueThread() {
                             break;
 
                         BroadcastAll(
+                            command.emuID + ": " +
                             LetsPlayServer::encode(std::vector<std::string>{
                                 "chat", username, command.params[0]}));
                         break;
@@ -228,12 +227,12 @@ void LetsPlayServer::QueueThread() {
                         std::string oldUsername;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            oldUsername = m_Users[command.hdl].username;
-                            m_Users[command.hdl].username = newUsername;
+                            oldUsername = m_Users[command.hdl].username();
+                            m_Users[command.hdl].setUsername(newUsername);
                         }
 
                         if (oldUsername == "")
-                            // TODO: Send as a join
+                            // TODO: Join?
                             BroadcastAll(newUsername + " has joined!");
                         else
                             BroadcastAll(
@@ -247,8 +246,8 @@ void LetsPlayServer::QueueThread() {
 
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            for (const auto& [hdl, user] : m_Users)
-                                message.push_back(user.username);
+                            for (auto& [hdl, user] : m_Users)
+                                message.push_back(user.username());
                         }
 
                         BroadcastOne(LetsPlayServer::encode(message),
@@ -262,20 +261,48 @@ void LetsPlayServer::QueueThread() {
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
                             user = &(m_Users[command.hdl]);
-                            if (user->requestedTurn == true) break;
+                            if (user->connectedEmu() == "" ||
+                                user->requestedTurn)
+                                break;
 
                             user->requestedTurn = true;
                         }
 
                         {
-                            std::unique_lock<std::mutex> lk((m_TurnMutex));
-                            m_TurnQueue.push(user);
+                            std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            auto emu = m_Emus[user->connectedEmu()];
+                            if (emu) emu->addTurnRequest(user);
                         }
-
-                        m_TurnNotifier.notify_one();
                     } break;
                     case kCommandType::Shutdown:
                         break;
+                    case kCommandType::Connect: {
+                        if (command.params.size() != 1) break;
+
+                        // Check if the emu that the connect
+                        {
+                            std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            if (m_Emus.find(command.emuID) == m_Emus.end())
+                                break;
+                        }
+                        // NOTE: only allow switching emus if
+                        // emulatorcontrollers don't end up storing who's
+                        // connected, this will just make for a mess to update
+                        // the list
+                        LetsPlayUser* user{nullptr};
+                        {
+                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            user = &m_Users[command.hdl];
+                        }
+
+                        if (user->username() == "") break;
+
+                        user->setConnectedEmu(command.params[0]);
+                        {
+                            std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            m_Emus[user->connectedEmu()]->userConnected(user);
+                        }
+                    }
                 }
 
                 m_WorkQueue.pop();
@@ -284,47 +311,10 @@ void LetsPlayServer::QueueThread() {
     }
 }
 
-void LetsPlayServer::TurnThread() {
-    while (m_TurnThreadRunning) {
-        std::unique_lock<std::mutex> lk((m_TurnMutex));
-
-        // Wait for a nonempty queue
-        while (m_TurnQueue.empty()) m_TurnNotifier.wait(lk);
-
-        if (m_TurnThreadRunning == false) break;
-        // XXX: Unprotected access to top of the queue, only access threadsafe
-        // members
-        auto& currentUser = m_TurnQueue.front();
-        std::string username;
-        {
-            // currentUser is a reference to a member in m_Users
-            std::unique_lock<std::mutex> lk((m_UsersMutex));
-            username = currentUser->username;
-        }
-        currentUser->hasTurn = true;
-        BroadcastAll(username + " now has a turn!");
-        const auto turnEnd = std::chrono::steady_clock::now() +
-                             std::chrono::seconds(c_turnLength);
-
-        while (currentUser->hasTurn &&
-               (std::chrono::steady_clock::now() < turnEnd)) {
-            // FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
-            // underflow or UB for the case where now() is greater than turnEnd?
-            m_TurnNotifier.wait_for(lk,
-                                    turnEnd - std::chrono::steady_clock::now());
-        }
-
-        currentUser->hasTurn = false;
-        currentUser->requestedTurn = false;
-        BroadcastAll(username + "'s turn has ended!");
-        m_TurnQueue.pop();
-    }
-}
-
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
     for (const auto& [hdl, user] : m_Users) {
-        if (user.username != "" && !hdl.expired())
+        if (user.username() != "" && !hdl.expired())
             server->send(hdl, data, websocketpp::frame::opcode::text);
     }
 }

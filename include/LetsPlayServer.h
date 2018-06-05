@@ -18,17 +18,13 @@
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
+class LetsPlayUser;
+
+#include "Config.h"
+#include "EmulatorController.h"
 #include "LetsPlayUser.h"
 
-constexpr int c_syncInterval{5 /* seconds */};
-constexpr unsigned c_maxMsgSize{100 /* characters */};
-constexpr unsigned c_maxUserName{15 /* characters */};
-constexpr unsigned c_minUserName{3 /* characters */};
-constexpr unsigned c_turnLength{10 /* seconds */};
-constexpr unsigned c_heartbeatTimeout{3 /* seconds */};
-
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
-typedef std::string EmuID_t;
 
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
@@ -82,12 +78,6 @@ class LetsPlayServer {
      * Queue that holds the list of commands/actions to be executed
      */
     std::queue<Command> m_WorkQueue;
-
-    /*
-     * Queue for the turns
-     */
-    std::queue<LetsPlayUser*> m_TurnQueue;
-
     /*
      * Map that maps connection_hdls to LetsPlayUsers
      */
@@ -106,24 +96,9 @@ class LetsPlayServer {
     std::thread m_QueueThread;
 
     /*
-     * Mutex for accessing m_TurnQueue
-     */
-    std::mutex m_TurnMutex;
-
-    /*
-     * Thread that manages turns
-     */
-    std::thread m_TurnThread;
-
-    /*
      * If true, the m_QueueThread member's thread will keep running
      */
     std::atomic<bool> m_QueueThreadRunning;
-
-    /*
-     * If true, the m_TurnThread will keep running
-     */
-    std::atomic<bool> m_TurnThreadRunning;
 
     /*
      * Mutex for accessing m_WorkQueue
@@ -136,15 +111,12 @@ class LetsPlayServer {
     std::condition_variable m_QueueNotifier;
 
     /*
-     * Condition variable that allows the turn thread to sleep/wake up for
-     * changes in turns
+     * Map that stores the id -> emulatorcontroller relation, also how
+     * emulatorcontrollers are communicated with
      */
-    std::condition_variable m_TurnNotifier;
+    std::map<EmuID_t, EmulatorController*> m_Emus;
 
-    /*
-     * Scheduler to manage periodic tasks
-     */
-    // Scheduler scheduler;
+    std::mutex m_EmusMutex;
 
    public:
     /*
@@ -190,11 +162,6 @@ class LetsPlayServer {
      * incoming commands
      */
     void QueueThread();
-
-    /*
-     * Function (to be run in a thread) that manages the turns
-     */
-    void TurnThread();
 
     /*
      * Send a message to all connected users
