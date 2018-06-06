@@ -31,10 +31,6 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
-        m_TurnThreadRunning = true;
-
-        m_TurnThread = std::thread{[&]() { this->TurnThread(); }};
-
         server->start_accept();
         server->run();
 
@@ -108,6 +104,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         t = kCommandType::Connect;
     else if (command == "turn")  // No params
         t = kCommandType::Turn;
+    else if (command == "add")
+        t = kCommandType::AddEmu;
     else if (command == "shutdown")
         this->Shutdown();
     else
@@ -208,8 +206,7 @@ void LetsPlayServer::QueueThread() {
                             command.emuID + ": " +
                             LetsPlayServer::encode(std::vector<std::string>{
                                 "chat", username, command.params[0]}));
-                        break;
-                    }
+                    } break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
                         if (command.params.size() > 1) break;
@@ -302,7 +299,23 @@ void LetsPlayServer::QueueThread() {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
                             m_Emus[user->connectedEmu()]->userConnected(user);
                         }
-                    }
+                    } break;
+                    case kCommandType::AddEmu: {  // emu, libretro core path,
+                                                  // rom path
+                        // TODO:: Add file path checks and admin check
+                        if (command.params.size() != 3) break;
+
+                        auto& id = command.params[0];
+                        const auto& corePath = command.params[1];
+                        const auto& romPath = command.params[2];
+
+                        {
+                            std::unique_lock<std::mutex> lk((m_EmuThreadMutex));
+                            m_EmulatorThreads.emplace_back(
+                                std::thread(EmulatorController::Run, corePath,
+                                            romPath, this, id));
+                        }
+                    } break;
                 }
 
                 m_WorkQueue.pop();
@@ -313,7 +326,7 @@ void LetsPlayServer::QueueThread() {
 
 void LetsPlayServer::BroadcastAll(const std::string& data) {
     std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
-    for (const auto& [hdl, user] : m_Users) {
+    for (auto& [hdl, user] : m_Users) {
         if (user.username() != "" && !hdl.expired())
             server->send(hdl, data, websocketpp::frame::opcode::text);
     }
@@ -322,6 +335,11 @@ void LetsPlayServer::BroadcastAll(const std::string& data) {
 void LetsPlayServer::BroadcastOne(const std::string& data,
                                   websocketpp::connection_hdl hdl) {
     server->send(hdl, data, websocketpp::frame::opcode::text);
+}
+
+void LetsPlayServer::addEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
+    std::unique_lock<std::mutex> lk((m_EmusMutex));
+    m_Emus[id] = emu;
 }
 
 std::string LetsPlayServer::encode(const std::vector<std::string>& input) {

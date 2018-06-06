@@ -1,6 +1,9 @@
+class EmulatorController;
+struct EmulatorControllerProxy;
 #pragma once
 #include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <mutex>
 #include <queue>
@@ -8,7 +11,14 @@
 
 #include "Config.h"
 #include "LetsPlayServer.h"
+#include "LetsPlayUser.h"
 #include "RetroCore.h"
+
+// Because you can't pass a pointer to a static instance of a class...
+struct EmulatorControllerProxy {
+    std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
+        userConnected;
+};
 
 /*
  * Class to be used once per thread, manages a libretro core and emulator, and
@@ -52,6 +62,11 @@ class EmulatorController {
 
    public:
     /*
+     * Pointer to some functions that the managing server needs to call
+     */
+    static EmulatorControllerProxy proxy;
+
+    /*
      * The object that manages the libretro lower level functions. Used mostly
      * for loading symbols and storing function pointers.
      */
@@ -60,7 +75,8 @@ class EmulatorController {
     /*
      * Kind of the constructor. Blocks when called.
      */
-    static void Run(const char* corePath, const char* romPath);
+    static void Run(const std::string& corePath, const std::string& romPath,
+                    LetsPlayServer* server, EmuID_t t_id);
 
     // libretro_core -> Controller ?> Server
     /*

@@ -1,3 +1,4 @@
+class LetsPlayServer;
 #pragma once
 #include <algorithm>
 #include <atomic>
@@ -17,8 +18,6 @@
 #include <websocketpp/common/connection_hdl.hpp>
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
-
-class LetsPlayUser;
 
 #include "Config.h"
 #include "EmulatorController.h"
@@ -96,6 +95,16 @@ class LetsPlayServer {
     std::thread m_QueueThread;
 
     /*
+     * Thread with all of the emulator controllers
+     */
+    std::vector<std::thread> m_EmulatorThreads;
+
+    /*
+     * Mutex for accessing m_EmulatorThreads
+     */
+    std::mutex m_EmuThreadMutex;
+
+    /*
      * If true, the m_QueueThread member's thread will keep running
      */
     std::atomic<bool> m_QueueThreadRunning;
@@ -114,7 +123,7 @@ class LetsPlayServer {
      * Map that stores the id -> emulatorcontroller relation, also how
      * emulatorcontrollers are communicated with
      */
-    std::map<EmuID_t, EmulatorController*> m_Emus;
+    std::map<EmuID_t, EmulatorControllerProxy*> m_Emus;
 
     std::mutex m_EmusMutex;
 
@@ -175,6 +184,11 @@ class LetsPlayServer {
      */
     void BroadcastOne(const std::string& message,
                       websocketpp::connection_hdl hdl);
+
+    /*
+     * Callback when an emulator controller is spawned, updates m_Emus
+     */
+    void addEmu(const EmuID_t& id, EmulatorControllerProxy* emu);
 
    private:
     /*
