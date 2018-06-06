@@ -1,3 +1,4 @@
+class LetsPlayUser;
 #pragma once
 #include <algorithm>
 #include <chrono>
@@ -5,8 +6,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-class LetsPlayServer;
 
 #include "Config.h"
 #include "LetsPlayServer.h"

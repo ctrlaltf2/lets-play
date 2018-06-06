@@ -2,17 +2,24 @@
 #include <memory>
 
 RetroCore EmulatorController::Core;
-LetsPlayServer* m_server;
-std::queue<LetsPlayUser*> m_TurnQueue;
-std::mutex m_TurnMutex;
-std::condition_variable m_TurnNotifier;
-std::atomic<bool> m_TurnThreadRunning;
-std::thread m_TurnThread;
-EmuID_t id;
-
 LetsPlayServer* EmulatorController::m_server{nullptr};
-void EmulatorController::Run(const char* corePath, const char* romPath) {
-    Core.Init(corePath);
+std::vector<LetsPlayUser*> EmulatorController::m_TurnQueue;
+std::mutex EmulatorController::m_TurnMutex;
+std::condition_variable EmulatorController::m_TurnNotifier;
+std::atomic<bool> EmulatorController::m_TurnThreadRunning;
+std::thread EmulatorController::m_TurnThread;
+EmuID_t EmulatorController::id;
+EmulatorControllerProxy EmulatorController::proxy;
+
+void EmulatorController::Run(const std::string& corePath,
+                             const std::string& romPath, LetsPlayServer* server,
+                             EmuID_t t_id) {
+    Core.Init(corePath.c_str());
+    m_server = server;
+    id = t_id;
+    proxy = EmulatorControllerProxy{addTurnRequest, userDisconnected,
+                                    userConnected};
+    m_server->addEmu(id, &proxy);
 
     (*(Core.fSetEnvironment))(OnEnvironment);
     (*(Core.fSetVideoRefresh))(OnVideoRefresh);
@@ -24,8 +31,8 @@ void EmulatorController::Run(const char* corePath, const char* romPath) {
 
     // TODO: C++
     retro_system_info system = {0};
-    retro_game_info info = {romPath, 0};
-    FILE* file = fopen(romPath, "rb");
+    retro_game_info info = {romPath.c_str(), 0};
+    FILE* file = fopen(romPath.c_str(), "rb");
 
     if (!file) {
         std::cout << "invalid file" << '\n';
@@ -66,7 +73,7 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
 
 void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
                                         unsigned height, size_t stride) {
-    std::cout << width << ' ' << height << ' ' << stride << '\n';
+    // std::cout << width << ' ' << height << ' ' << stride << '\n';
 }
 
 void EmulatorController::OnPollInput() {}
@@ -133,12 +140,13 @@ void EmulatorController::userDisconnected(LetsPlayUser* user) {
         m_TurnNotifier.notify_one();
     } else if (currentUser->requestedTurn) {  // In the queue
         m_TurnQueue.erase(
-            std::remove_if(m_TurnQueue.begin(), m_TurnQueue.end(), user),
+            std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
             m_TurnQueue.end());
     };
-    // Set the current user to nullptr so turnqueue knows not to try to modify
-    // it, as it may be in an invalid state because the memory it points to
-    // (managed by a std::map) may be reallocated as part of an erase
+    // Set the current user to nullptr so turnqueue knows not to try to
+    // modify it, as it may be in an invalid state because the memory it
+    // points to (managed by a std::map) may be reallocated as part of an
+    // erase
     currentUser = nullptr;
 }
 

@@ -17,6 +17,7 @@ RetroCore::RetroCore() {}
 // RetroCore::RetroCore(void* hCore) { Init(hCore); }
 
 void RetroCore::Init(const char* corePath) {
+    std::clog << "Loading file from '" << corePath << "'\n";
     void* hCore = dlopen(corePath, RTLD_NOW);
 
     // TODO: Exception
