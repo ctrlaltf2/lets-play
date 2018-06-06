@@ -258,18 +258,29 @@ void LetsPlayServer::QueueThread() {
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
                             user = &(m_Users[command.hdl]);
-                            if (user->connectedEmu() == "" ||
-                                user->requestedTurn)
+                            std::cout << user->connectedEmu() << '\n';
+                            if ((user->connectedEmu() == "") ||
+                                user->requestedTurn) {
+                                std::cout << "User not connected to a vm or is "
+                                             "already in queue"
+                                          << '\n';
                                 break;
+                            }
 
                             user->requestedTurn = true;
                         }
-
+                        std::cout << "User lookup success" << '\n';
                         {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
                             auto emu = m_Emus[user->connectedEmu()];
-                            if (emu) emu->addTurnRequest(user);
+                            if (emu) {
+                                std::cout << "Adding user to queue..." << '\n';
+                                emu->addTurnRequest(user);
+                            } else
+                                std::cout << "Invalid emu in lookup in onTurn"
+                                          << '\n';
                         }
+
                     } break;
                     case kCommandType::Shutdown:
                         break;
@@ -279,8 +290,12 @@ void LetsPlayServer::QueueThread() {
                         // Check if the emu that the connect
                         {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
-                            if (m_Emus.find(command.emuID) == m_Emus.end())
+                            if (m_Emus.find(command.params[0]) ==
+                                m_Emus.end()) {
+                                std::cout << '\'' << command.emuID
+                                          << "' not a valid emu\n";
                                 break;
+                            }
                         }
                         // NOTE: only allow switching emus if
                         // emulatorcontrollers don't end up storing who's
@@ -292,7 +307,10 @@ void LetsPlayServer::QueueThread() {
                             user = &m_Users[command.hdl];
                         }
 
-                        if (user->username() == "") break;
+                        if (user->username() == "") {
+                            std::cout << "user wasn't username'd" << '\n';
+                            break;
+                        }
 
                         user->setConnectedEmu(command.params[0]);
                         {

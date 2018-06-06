@@ -46,7 +46,10 @@ class LetsPlayUser {
      */
     std::atomic<bool> requestedTurn;
 
-    LetsPlayUser() : m_lastHeartbeat{std::chrono::steady_clock::now()} {}
+    LetsPlayUser()
+        : m_lastHeartbeat{std::chrono::steady_clock::now()},
+          hasTurn{false},
+          requestedTurn{false} {}
 
     /*
      * Returns true if the user's last heartbeat was over the limit for timeout
