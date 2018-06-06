@@ -1,4 +1,4 @@
-# Lets Play
+# Let's Play
 A collaborative libretro emulator frontend
 
 # What is a "Collaborative libretro emulator frontend"?
