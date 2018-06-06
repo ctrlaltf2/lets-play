@@ -59,6 +59,7 @@ void EmulatorController::Run(const std::string& corePath,
         std::cout << "failed to do a thing" << '\n';
     }
 
+    m_TurnThreadRunning = true;
     m_TurnThread = std::thread(EmulatorController::TurnThread);
 
     while (true) (*(Core.fRun))();
@@ -93,10 +94,14 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data,
 
 void EmulatorController::TurnThread() {
     while (m_TurnThreadRunning) {
+        std::cout << "Loop" << '\n';
         std::unique_lock<std::mutex> lk((m_TurnMutex));
 
         // Wait for a nonempty queue
-        while (m_TurnQueue.empty()) m_TurnNotifier.wait(lk);
+        while (m_TurnQueue.empty()) {
+            m_TurnNotifier.wait(lk);
+            std::cout << "notified or spurious awake" << '\n';
+        }
 
         if (m_TurnThreadRunning == false) break;
         // XXX: Unprotected access to top of the queue, only access
