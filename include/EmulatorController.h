@@ -1,5 +1,7 @@
 class EmulatorController;
 struct EmulatorControllerProxy;
+struct RGBColor;
+struct VideoFormat;
 #pragma once
 #include <condition_variable>
 #include <cstdint>
@@ -20,9 +22,45 @@ struct EmulatorControllerProxy {
         userConnected;
 };
 
+struct RGBColor {
+    /*
+     * 0-255 value
+     */
+    std::atomic<std::uint8_t> r{0}, g{0}, b{0};
+
+    /*
+     * Color visible or not
+     */
+    std::atomic<bool> a{0};
+};
+
+struct VideoFormat {
+    /*
+     * Masks for red, green, blue, and alpha
+     */
+    std::atomic<std::uint16_t> rMask{0b111110000000000000000},
+        gMask{0b000001111100000000000}, bMask{0b000000000011111000000},
+        aMask{0b000000000000000000000};
+
+    /*
+     * Bit shifts for red, green, blue, and alpha
+     */
+    std::atomic<std::uint8_t> rShift{10}, gShift{5}, bShift{0}, aShift{15};
+
+    /*
+     * How many bits per pixel
+     */
+    std::atomic<std::uint8_t> bitsPerPel{16};
+
+    /*
+     * Width, height
+     */
+    std::atomic<std::uint32_t> width{0}, height{0};
+};
+
 /*
- * Class to be used once per thread, manages a libretro core and emulator, and
- * in the future will manage turns and votes on its own
+ * Class to be used once per thread, manages a libretro core, smulator, and its
+ * own turns through callbacks
  */
 class EmulatorController {
     /*
@@ -59,6 +97,29 @@ class EmulatorController {
      * ID of the emulator controller / emulator
      */
     static EmuID_t id;
+
+    /*
+     * Stores the masks and shifts required to generate a rgb 0xRRGGBB) vector
+     * from the video_refresh callback data
+     */
+    static VideoFormat m_videoFormat;
+
+    /*
+     * Vector representing the full screen, only used on sync commands and to
+     * keep track of differences
+     */
+    static std::vector<std::vector<RGBColor>> m_screen;
+
+    /*
+     * The frame that is to be sent off to clients, only the changes since the
+     * last frame, sent on update commands
+     */
+    static std::vector<std::vector<RGBColor>> m_nextFrame;
+
+    /*
+     * Mutex for accessing m_screen or m_nextFrame
+     */
+    std::mutex m_screenMutex;
 
    public:
     /*
@@ -119,4 +180,12 @@ class EmulatorController {
      * Called when a user connects
      */
     static void userConnected(LetsPlayUser* user);
+
+    /*
+     * Called when the emulator requests/announces a change in the pixel format
+     */
+    static bool setPixelFormat(const retro_pixel_format fmt);
+
+    static void overlay(std::vector<std::vector<RGBColor>>& fg,
+                        std::vector<std::vector<RGBColor>>& bg);
 };
