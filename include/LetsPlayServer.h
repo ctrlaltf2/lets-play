@@ -36,6 +36,7 @@ enum class kCommandType {
     Button,
     Turn,
     Connect,
+    Webp,
     // External -- requires admin
     AddEmu,
     RemoveEmu,

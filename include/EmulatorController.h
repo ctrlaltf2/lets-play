@@ -5,21 +5,30 @@ struct VideoFormat;
 #pragma once
 #include <condition_variable>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <mutex>
 #include <queue>
 #include <string>
 
+#include <webp/encode.h>
+
+#include "libretro.h"
+
 #include "Config.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
 
+using ScreenMatrix_t = std::vector<std::vector<RGBColor>>;
+using Visible = bool;
+
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
     std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
         userConnected;
+    std::function<ScreenMatrix_t()> getScreen;
 };
 
 struct RGBColor {
@@ -32,15 +41,41 @@ struct RGBColor {
      * Color visible or not
      */
     std::atomic<bool> a{0};
+
+    RGBColor(std::uint8_t pr, std::uint8_t pg, std::uint8_t pb, bool visible)
+        : r{pr}, g{pg}, b{pb}, a{visible} {}
+
+    RGBColor(const RGBColor& other) {
+        this->r = other.r.load();
+        this->g = other.g.load();
+        this->b = other.b.load();
+        this->a = other.a.load();
+    }
+
+    RGBColor operator=(const RGBColor& other) {
+        this->r = other.r.load();
+        this->g = other.g.load();
+        this->b = other.b.load();
+        this->a = other.a.load();
+        return *this;
+    }
 };
+
+inline bool operator==(const RGBColor& lhs, const RGBColor& rhs) {
+    return lhs.r.load() == rhs.r.load() && lhs.g.load() == rhs.g.load() &&
+           lhs.b.load() == rhs.b.load() && lhs.a.load() == rhs.a.load();
+}
+
+inline bool operator!=(const RGBColor& lhs, const RGBColor& rhs) {
+    return !(lhs == rhs);
+}
 
 struct VideoFormat {
     /*
      * Masks for red, green, blue, and alpha
      */
-    std::atomic<std::uint16_t> rMask{0b111110000000000000000},
-        gMask{0b000001111100000000000}, bMask{0b000000000011111000000},
-        aMask{0b000000000000000000000};
+    std::atomic<std::uint16_t> rMask{0b1111100000000000},
+        gMask{0b0000011111000000}, bMask{0b0000000000111110}, aMask{0b0};
 
     /*
      * Bit shifts for red, green, blue, and alpha
@@ -108,18 +143,18 @@ class EmulatorController {
      * Vector representing the full screen, only used on sync commands and to
      * keep track of differences
      */
-    static std::vector<std::vector<RGBColor>> m_screen;
+    static ScreenMatrix_t m_screen;
 
     /*
      * The frame that is to be sent off to clients, only the changes since the
      * last frame, sent on update commands
      */
-    static std::vector<std::vector<RGBColor>> m_nextFrame;
+    static ScreenMatrix_t m_nextFrame;
 
     /*
      * Mutex for accessing m_screen or m_nextFrame
      */
-    std::mutex m_screenMutex;
+    static std::mutex m_screenMutex;
 
    public:
     /*
@@ -186,6 +221,16 @@ class EmulatorController {
      */
     static bool setPixelFormat(const retro_pixel_format fmt);
 
-    static void overlay(std::vector<std::vector<RGBColor>>& fg,
-                        std::vector<std::vector<RGBColor>>& bg);
+    /*
+     * Function that overlays fg (possibly containing transparebt pixels) on top
+     * of bg (assumed to contain all opaque pixels)
+     */
+    static void overlay(ScreenMatrix_t& fg, ScreenMatrix_t& bg);
+
+    /*
+     * Safely get a copy of m_screen
+     */
+    static ScreenMatrix_t getScreen();
+
+    static void SaveImage();
 };
