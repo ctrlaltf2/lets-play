@@ -1,19 +1,22 @@
 #include "EmulatorController.h"
 #include <memory>
 
-RetroCore EmulatorController::Core;
+EmuID_t EmulatorController::id;
 LetsPlayServer* EmulatorController::m_server{nullptr};
+EmulatorControllerProxy EmulatorController::proxy;
+RetroCore EmulatorController::Core;
+
 std::vector<LetsPlayUser*> EmulatorController::m_TurnQueue;
 std::mutex EmulatorController::m_TurnMutex;
 std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
 std::thread EmulatorController::m_TurnThread;
-EmuID_t EmulatorController::id;
+
 VideoFormat EmulatorController::m_videoFormat;
-EmulatorControllerProxy EmulatorController::proxy;
-ScreenMatrix_t EmulatorController::m_nextFrame;
-ScreenMatrix_t EmulatorController::m_screen;
-std::mutex EmulatorController::m_screenMutex;
+Frame EmulatorController::m_keyFrame;
+Frame EmulatorController::m_deltaFrame;
+const void* EmulatorController::m_currentBuffer;
+std::mutex EmulatorController::m_videoMutex;
 
 void EmulatorController::Run(const std::string& corePath,
                              const std::string& romPath, LetsPlayServer* server,
@@ -22,7 +25,7 @@ void EmulatorController::Run(const std::string& corePath,
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{addTurnRequest, userDisconnected,
-                                    userConnected, getScreen};
+                                    userConnected};
     m_server->addEmu(id, &proxy);
     std::thread t(
         [](std::function<void()> function) {
@@ -31,7 +34,7 @@ void EmulatorController::Run(const std::string& corePath,
                 function();
             }
         },
-        SaveImage);
+        getKeyFrame);
 
     t.detach();
 
@@ -95,114 +98,19 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
 }
 
 void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
-                                        unsigned height, size_t stride) {
-    /*
-     * true if function only copies updates to m_nextFrame after merging
-     * m_screen and the previous version of m_nextFrame — only false on video
-     * mode resizes
-     */
-    bool diffMode;
-    if (width != m_videoFormat.width || height != m_videoFormat.height) {
+                                        unsigned height, size_t pitch) {
+    if (width != m_videoFormat.width || height != m_videoFormat.height ||
+        pitch != m_videoFormat.pitch) {
         std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
                   << m_videoFormat.height << " to " << width << 'x' << height
                   << '\n';
         m_videoFormat.width = width;
         m_videoFormat.height = height;
-        std::cout << width << ' ' << height << ' ' << stride << '\n';
-
-        // Reset the screens with all transparent vectors (the user's canvas
-        // will resize and stretch the existing image until new frames are sent)
-        std::unique_lock<std::mutex> lk((m_screenMutex));
-        m_screen.assign(height, std::vector<RGBColor>(
-                                    width, RGBColor(0, 0, 0, Visible{false})));
-        m_nextFrame = m_screen;
-        // Set diffMode to false so that all pixels are copied, not just the
-        // differences
-        diffMode = false;
-    } else {
-        // Merge m_nextFrame and m_screen
-        std::unique_lock<std::mutex> lk((m_screenMutex));
-        overlay(m_nextFrame, m_screen);
-        diffMode = true;
+        m_videoFormat.pitch = pitch;
     }
 
-    const auto bytesPerPel = m_videoFormat.bitsPerPel / 8;
-    const auto dataLength = bytesPerPel * stride * height;
-
-    const std::uint16_t* pData = static_cast<const std::uint16_t*>(data);
-    auto i = pData;
-
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            // Pull a pixel from the data stream
-            std::uint32_t pixel{0};
-            pixel |= *(i++);
-
-            if (bytesPerPel == 4) {
-                pixel <<= 16;
-                pixel |= *(i++);
-            }
-
-            // Calculate the rgb 0 - 255 values
-            const std::uint8_t rMax =
-                1 << (m_videoFormat.aShift - m_videoFormat.rShift);
-            const std::uint8_t gMax =
-                1 << (m_videoFormat.rShift - m_videoFormat.gShift);
-            const std::uint8_t bMax =
-                1 << (m_videoFormat.gShift - m_videoFormat.bShift);
-            // std::cout << (unsigned)rMax << ' ' << (unsigned)gMax << ' '
-            //<< (unsigned)bMax << '\n';
-
-            const std::uint8_t rVal =
-                (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
-            const std::uint8_t gVal =
-                (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
-            const std::uint8_t bVal =
-                (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
-            const std::uint8_t aVal =
-                (pixel & m_videoFormat.aMask) >> m_videoFormat.aShift;
-
-            // std::cout << (unsigned)rVal << ' ' << (unsigned)gVal << ' '
-            //<< (unsigned)bVal << '\n';
-            const std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
-            const std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
-            const std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
-            const bool aNormalized = (aVal > 0) ? true : false;
-
-            // Update the next frame accordingly
-            // FIXME? Mutex the screen vecs or does it even matter? We want
-            // performance at this part and a read while writing happening about
-            // once out of 1000 frames with 60 frames a second won't hurt
-            // anything
-            RGBColor pel{rNormalized, gNormalized, bNormalized, true};
-            if (diffMode && m_screen[y][x] != pel)
-                m_nextFrame.at(y).at(x) = pel;
-            else
-                m_nextFrame[y][x] = RGBColor{0, 0, 0, false};
-
-            if (false && pixel != 0) {
-                std::cout << " -- Pel -- " << pixel << '\n';
-                std::cout << " -- Max Values -- " << (unsigned)rMax << ' '
-                          << (unsigned)gMax << ' ' << (unsigned)bMax << '\n';
-                std::cout << " -- Masks -- " << (unsigned)m_videoFormat.rMask
-                          << ' ' << m_videoFormat.gMask << ' '
-                          << m_videoFormat.bMask << '\n';
-                std::cout << " -- Shifts -- " << (unsigned)m_videoFormat.aShift
-                          << ' ' << (unsigned)m_videoFormat.gShift << ' '
-                          << (unsigned)m_videoFormat.bShift << '\n';
-                std::cout << " -- Normalized -- " << (unsigned)rNormalized
-                          << ' ' << (unsigned)gNormalized << ' '
-                          << (unsigned)bNormalized << '\n';
-                std::cout << " -- Final values -- "
-                          << (unsigned)m_nextFrame[y][x].r << ' '
-                          << (unsigned)m_nextFrame[y][x].g << ' '
-                          << (unsigned)m_nextFrame[y][x].b << ' '
-                          << (unsigned)m_nextFrame[y][x].a << '\n';
-                std::cout << " -- Diff Mode -- " << diffMode << '\n';
-            }
-        }
-        // i += stride / 2;
-    }
+    std::unique_lock<std::mutex> lk(m_videoMutex);
+    m_currentBuffer = data;
 }
 
 void EmulatorController::OnPollInput() {}
@@ -287,6 +195,7 @@ void EmulatorController::userConnected(LetsPlayUser* user) { return; }
 
 bool EmulatorController::setPixelFormat(const retro_pixel_format fmt) {
     switch (fmt) {
+        // TODO: Find a core that uses this and test it
         case RETRO_PIXEL_FORMAT_0RGB1555:  // 16 bit
             // rrrrrgggggbbbbba
             std::clog << "Setting format to 0RGB15555" << '\n';
@@ -302,6 +211,7 @@ bool EmulatorController::setPixelFormat(const retro_pixel_format fmt) {
 
             m_videoFormat.bitsPerPel = 16;
             return true;
+        // TODO: Find a core that uses this and test it
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
             std::clog << "Setting format to XRGB8888" << '\n';
             m_videoFormat.rMask = 0xff000000;
@@ -349,56 +259,71 @@ void EmulatorController::overlay(ScreenMatrix_t& fg, ScreenMatrix_t& bg) {
     }
 }
 
-ScreenMatrix_t EmulatorController::getScreen() {
-    std::unique_lock<std::mutex> lk((m_screenMutex));
-    return m_screen;
-}
-
-void EmulatorController::SaveImage() {
+std::vector<std::uint8_t> EmulatorController::getKeyFrame() {
     static unsigned imageNum = 0;
-    // Split to own function later
-    auto screen = getScreen();
-
-    const size_t height = screen.size();
-    const size_t width = [&]() -> size_t {
-        if (screen.size() < 1)
-            return 0;
-        else
-            return screen[0].size();
-    }();
-
-    if (std::max(height, width) <= 0) return;
-
     std::vector<std::uint8_t> outVec;
+    {
+        std::unique_lock<std::mutex> lk(m_videoMutex);
+        if (m_currentBuffer == nullptr) return std::vector<std::uint8_t>();
 
-    for (size_t y = 0; y < height; ++y) {
-        for (size_t x = 0; x < width; ++x) {
-            auto pel = screen.at(y).at(x);
-            std::cout << (unsigned)pel.r << ' ' << (unsigned)pel.g << ' '
-                      << (unsigned)pel.b << '\n';
+        const std::uint8_t* i =
+            static_cast<const std::uint8_t*>(m_currentBuffer);
+        for (size_t h = 0; h < m_videoFormat.height; ++h) {
+            for (size_t w = 0; w < m_videoFormat.width; ++w) {
+                std::uint32_t pixel{0};
+                // Assuming little endian
+                pixel |= *(i++);
+                pixel |= *(i++) << 8;
 
-            // RGBA
-            outVec.push_back(pel.r.load());
-            outVec.push_back(pel.g.load());
-            outVec.push_back(pel.b.load());
+                if (m_videoFormat.bitsPerPel == 32) {
+                    pixel |= *(i++) << 16;
+                    pixel |= *(i++) << 24;
+                }
 
-            if (pel.a)
-                outVec.push_back(255);
-            else
-                outVec.push_back(0);
+                // Calculate the rgb 0 - 255 values
+                const std::uint8_t rMax =
+                    1 << (m_videoFormat.aShift - m_videoFormat.rShift);
+                const std::uint8_t gMax =
+                    1 << (m_videoFormat.rShift - m_videoFormat.gShift);
+                const std::uint8_t bMax =
+                    1 << (m_videoFormat.gShift - m_videoFormat.bShift);
+                // std::cout << (unsigned)rMax << ' ' << (unsigned)gMax << ' '
+                //<< (unsigned)bMax << '\n';
+
+                const std::uint8_t rVal =
+                    (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
+                const std::uint8_t gVal =
+                    (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
+                const std::uint8_t bVal =
+                    (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
+
+                // std::cout << (unsigned)rVal << ' ' << (unsigned)gVal << ' '
+                //<< (unsigned)bVal << '\n';
+                const std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
+                const std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
+                const std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
+
+                outVec.push_back(rNormalized);
+                outVec.push_back(gNormalized);
+                outVec.push_back(bNormalized);
+            }
+            // i += m_videoFormat.pitch;
         }
+        // ------
+        // size_t WebPEncodeLosslessRGBA(const uint8_t* rgba, int width, int
+        // height, int stride, uint8_t** output);
+
+        std::uint8_t* output;
+        size_t written = WebPEncodeLosslessRGB(
+            outVec.data(), m_videoFormat.width, m_videoFormat.height,
+            m_videoFormat.width * 3, &output);
+
+        std::ofstream of(
+            std::string("screenshot") + std::to_string(imageNum++) + ".webp",
+            std::ios::binary);
+        of.write(reinterpret_cast<char*>(output), written);
+        WebPFree(output);
     }
-    // ------
-    // size_t WebPEncodeLosslessRGBA(const uint8_t* rgba, int width, int height,
-    // int stride, uint8_t** output);
 
-    std::uint8_t* output;
-    size_t written = WebPEncodeLosslessRGBA(outVec.data(), width, height,
-                                            width * 3, &output);
-
-    std::ofstream of(
-        std::string("screenshot") + std::to_string(imageNum++) + ".webp",
-        std::ios::binary);
-    of.write(reinterpret_cast<char*>(output), written);
-    WebPFree(output);
+    return outVec;
 }

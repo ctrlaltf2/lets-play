@@ -28,7 +28,14 @@ using Visible = bool;
 struct EmulatorControllerProxy {
     std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
         userConnected;
-    std::function<ScreenMatrix_t()> getScreen;
+};
+
+struct Frame {
+    // Width and height are in pixels, stride is number of bytes
+    std::atomic<std::uint32_t> width{0}, height{0}, stride{0};
+
+    // Packed array
+    std::vector<std::uint8_t> RGBAColors;
 };
 
 struct RGBColor {
@@ -90,7 +97,7 @@ struct VideoFormat {
     /*
      * Width, height
      */
-    std::atomic<std::uint32_t> width{0}, height{0};
+    std::atomic<std::uint32_t> width{0}, height{0}, pitch{0};
 };
 
 /*
@@ -140,21 +147,29 @@ class EmulatorController {
     static VideoFormat m_videoFormat;
 
     /*
-     * Vector representing the full screen, only used on sync commands and to
-     * keep track of differences
+     * Key frame, in video compression land this is a frame that contains all
+     * the information for the frame. This is only updated when a keyframe or
+     * deltaframe are requested.
      */
-    static ScreenMatrix_t m_screen;
+    static Frame m_keyFrame;
 
     /*
-     * The frame that is to be sent off to clients, only the changes since the
-     * last frame, sent on update commands
+     * Delta frame, in video compression land this is a frame that builds on the
+     * last frame and only contains information on what's different since the
+     * last frame. Only updated when a delta frame is requested.
      */
-    static ScreenMatrix_t m_nextFrame;
+    // TODO: This member isn't needed
+    static Frame m_deltaFrame;
 
     /*
-     * Mutex for accessing m_screen or m_nextFrame
+     * Pointer to the current buffer
      */
-    static std::mutex m_screenMutex;
+    static const void* m_currentBuffer;
+
+    /*
+     * Mutex for accessing m_screen or m_nextFrame or updating the buffer
+     */
+    static std::mutex m_videoMutex;
 
    public:
     /*
@@ -227,10 +242,9 @@ class EmulatorController {
      */
     static void overlay(ScreenMatrix_t& fg, ScreenMatrix_t& bg);
 
-    /*
-     * Safely get a copy of m_screen
-     */
-    static ScreenMatrix_t getScreen();
+    static std::vector<std::uint8_t> getKeyFrame();
+
+    static std::vector<std::uint8_t> getDeltaFrame();
 
     static void SaveImage();
 };
