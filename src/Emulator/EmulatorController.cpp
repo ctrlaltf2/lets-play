@@ -307,7 +307,8 @@ std::vector<std::uint8_t> EmulatorController::getKeyFrame() {
                 outVec.push_back(gNormalized);
                 outVec.push_back(bNormalized);
             }
-            // i += m_videoFormat.pitch;
+            // Stride is pitch / 2
+            i += m_videoFormat.width - (m_videoFormat.pitch / 2);
         }
         // ------
         // size_t WebPEncodeLosslessRGBA(const uint8_t* rgba, int width, int
