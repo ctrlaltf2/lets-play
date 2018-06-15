@@ -1,18 +1,28 @@
 class EmulatorController;
 struct EmulatorControllerProxy;
+struct RGBColor;
+struct VideoFormat;
 #pragma once
 #include <condition_variable>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <mutex>
 #include <queue>
 #include <string>
 
+#include <webp/encode.h>
+
+#include "libretro.h"
+
 #include "Config.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
+
+using ScreenMatrix_t = std::vector<std::vector<RGBColor>>;
+using Visible = bool;
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
@@ -20,9 +30,79 @@ struct EmulatorControllerProxy {
         userConnected;
 };
 
+struct Frame {
+    // Width and height are in pixels, stride is number of bytes
+    std::atomic<std::uint32_t> width{0}, height{0}, stride{0};
+
+    // Packed array
+    std::vector<std::uint8_t> RGBAColors;
+};
+
+struct RGBColor {
+    /*
+     * 0-255 value
+     */
+    std::atomic<std::uint8_t> r{0}, g{0}, b{0};
+
+    /*
+     * Color visible or not
+     */
+    std::atomic<bool> a{0};
+
+    RGBColor(std::uint8_t pr, std::uint8_t pg, std::uint8_t pb, bool visible)
+        : r{pr}, g{pg}, b{pb}, a{visible} {}
+
+    RGBColor(const RGBColor& other) {
+        this->r = other.r.load();
+        this->g = other.g.load();
+        this->b = other.b.load();
+        this->a = other.a.load();
+    }
+
+    RGBColor operator=(const RGBColor& other) {
+        this->r = other.r.load();
+        this->g = other.g.load();
+        this->b = other.b.load();
+        this->a = other.a.load();
+        return *this;
+    }
+};
+
+inline bool operator==(const RGBColor& lhs, const RGBColor& rhs) {
+    return lhs.r.load() == rhs.r.load() && lhs.g.load() == rhs.g.load() &&
+           lhs.b.load() == rhs.b.load() && lhs.a.load() == rhs.a.load();
+}
+
+inline bool operator!=(const RGBColor& lhs, const RGBColor& rhs) {
+    return !(lhs == rhs);
+}
+
+struct VideoFormat {
+    /*
+     * Masks for red, green, blue, and alpha
+     */
+    std::atomic<std::uint16_t> rMask{0b1111100000000000},
+        gMask{0b0000011111000000}, bMask{0b0000000000111110}, aMask{0b0};
+
+    /*
+     * Bit shifts for red, green, blue, and alpha
+     */
+    std::atomic<std::uint8_t> rShift{10}, gShift{5}, bShift{0}, aShift{15};
+
+    /*
+     * How many bits per pixel
+     */
+    std::atomic<std::uint8_t> bitsPerPel{16};
+
+    /*
+     * Width, height
+     */
+    std::atomic<std::uint32_t> width{0}, height{0}, pitch{0};
+};
+
 /*
- * Class to be used once per thread, manages a libretro core and emulator, and
- * in the future will manage turns and votes on its own
+ * Class to be used once per thread, manages a libretro core, smulator, and its
+ * own turns through callbacks
  */
 class EmulatorController {
     /*
@@ -59,6 +139,37 @@ class EmulatorController {
      * ID of the emulator controller / emulator
      */
     static EmuID_t id;
+
+    /*
+     * Stores the masks and shifts required to generate a rgb 0xRRGGBB) vector
+     * from the video_refresh callback data
+     */
+    static VideoFormat m_videoFormat;
+
+    /*
+     * Key frame, in video compression land this is a frame that contains all
+     * the information for the frame. This is only updated when a keyframe or
+     * deltaframe are requested.
+     */
+    static Frame m_keyFrame;
+
+    /*
+     * Delta frame, in video compression land this is a frame that builds on the
+     * last frame and only contains information on what's different since the
+     * last frame. Only updated when a delta frame is requested.
+     */
+    // TODO: This member isn't needed
+    static Frame m_deltaFrame;
+
+    /*
+     * Pointer to the current buffer
+     */
+    static const void* m_currentBuffer;
+
+    /*
+     * Mutex for accessing m_screen or m_nextFrame or updating the buffer
+     */
+    static std::mutex m_videoMutex;
 
    public:
     /*
@@ -119,4 +230,21 @@ class EmulatorController {
      * Called when a user connects
      */
     static void userConnected(LetsPlayUser* user);
+
+    /*
+     * Called when the emulator requests/announces a change in the pixel format
+     */
+    static bool setPixelFormat(const retro_pixel_format fmt);
+
+    /*
+     * Function that overlays fg (possibly containing transparebt pixels) on top
+     * of bg (assumed to contain all opaque pixels)
+     */
+    static void overlay(ScreenMatrix_t& fg, ScreenMatrix_t& bg);
+
+    static std::vector<std::uint8_t> getKeyFrame();
+
+    static std::vector<std::uint8_t> getDeltaFrame();
+
+    static void SaveImage();
 };

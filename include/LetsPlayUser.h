@@ -46,10 +46,17 @@ class LetsPlayUser {
      */
     std::atomic<bool> requestedTurn;
 
+    /*
+     * Whether or not the user supports webp and if webp should be sent instead
+     * of png
+     */
+    std::atomic<bool> supportsWebp;
+
     LetsPlayUser()
         : m_lastHeartbeat{std::chrono::steady_clock::now()},
           hasTurn{false},
-          requestedTurn{false} {}
+          requestedTurn{false},
+          supportsWebp{false} {}
 
     /*
      * Returns true if the user's last heartbeat was over the limit for timeout
