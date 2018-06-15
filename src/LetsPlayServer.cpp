@@ -31,6 +31,17 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
+        // Skip having to connect, change username, addemu
+        {
+            std::unique_lock<std::mutex> lk((m_QueueMutex));
+            m_WorkQueue.push(
+                Command{kCommandType::AddEmu,
+                        {"emu1", "./vbam_libretro.so", "./smw.gba"},
+                        {},
+                        ""});
+            m_QueueNotifier.notify_one();
+        }
+
         server->start_accept();
         server->run();
 
@@ -104,6 +115,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         t = kCommandType::Connect;
     else if (command == "turn")  // No params
         t = kCommandType::Turn;
+    else if (command == "webp")
+        t = kCommandType::Webp;
     else if (command == "add")
         t = kCommandType::AddEmu;
     else if (command == "shutdown")
@@ -333,6 +346,12 @@ void LetsPlayServer::QueueThread() {
                                 std::thread(EmulatorController::Run, corePath,
                                             romPath, this, id));
                         }
+                    } break;
+                    case kCommandType::Webp: {
+                        if (command.params.size() != 0) break;
+
+                        std::unique_lock<std::mutex> lk((m_UsersMutex));
+                        m_Users[command.hdl].supportsWebp = true;
                     } break;
                 }
 
