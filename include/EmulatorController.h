@@ -1,7 +1,9 @@
 class EmulatorController;
 struct EmulatorControllerProxy;
 struct RGBColor;
+struct RGBAColor;
 struct VideoFormat;
+struct Frame;
 #pragma once
 #include <condition_variable>
 #include <cstdint>
@@ -11,6 +13,9 @@ struct VideoFormat;
 #include <mutex>
 #include <queue>
 #include <string>
+#include <variant>
+
+#include <websocketpp/frame.hpp>
 
 #include <webp/encode.h>
 
@@ -21,61 +26,53 @@ struct VideoFormat;
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
 
-using ScreenMatrix_t = std::vector<std::vector<RGBColor>>;
-using Visible = bool;
+using AlphaChannel = bool;
+using ShouldUpdateVector = bool;
+using KeyFrame = bool;
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
     std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
         userConnected;
+    std::function<Frame(bool)> getFrame;
+    bool isReady{false};
 };
 
+// NOTE: Doesn't need to be thread safe, the only use of this is a member that
+// is access protected by a mutex
 struct Frame {
-    // Width and height are in pixels, stride is number of bytes
-    std::atomic<std::uint32_t> width{0}, height{0}, stride{0};
+    // Width and height are in pixels
+    std::uint32_t width{0}, height{0};
 
-    // Packed array
-    std::vector<std::uint8_t> RGBAColors;
+    // Packed array, RGB(a)
+    std::variant<std::vector<RGBColor>, std::vector<RGBAColor>> colors;
+
+    // If the pixel array has an alpha channel and is therefore a vector of
+    // RGBAColors instead of RGBColor
+    bool alphaChannel{false};
+
+    // True if the size of the vector inside the colors variant doesn't match
+    // the value of width * height. When this is true, the next call of GetFrame
+    // will clear out the vector in colors and create a blank one that is width
+    // * height size
+    bool needsVectorUpdate{false};
 };
 
+#pragma pack(push, 1)
 struct RGBColor {
     /*
      * 0-255 value
      */
-    std::atomic<std::uint8_t> r{0}, g{0}, b{0};
-
-    /*
-     * Color visible or not
-     */
-    std::atomic<bool> a{0};
-
-    RGBColor(std::uint8_t pr, std::uint8_t pg, std::uint8_t pb, bool visible)
-        : r{pr}, g{pg}, b{pb}, a{visible} {}
-
-    RGBColor(const RGBColor& other) {
-        this->r = other.r.load();
-        this->g = other.g.load();
-        this->b = other.b.load();
-        this->a = other.a.load();
-    }
-
-    RGBColor operator=(const RGBColor& other) {
-        this->r = other.r.load();
-        this->g = other.g.load();
-        this->b = other.b.load();
-        this->a = other.a.load();
-        return *this;
-    }
+    std::uint8_t r{0}, g{0}, b{0};
 };
 
-inline bool operator==(const RGBColor& lhs, const RGBColor& rhs) {
-    return lhs.r.load() == rhs.r.load() && lhs.g.load() == rhs.g.load() &&
-           lhs.b.load() == rhs.b.load() && lhs.a.load() == rhs.a.load();
-}
-
-inline bool operator!=(const RGBColor& lhs, const RGBColor& rhs) {
-    return !(lhs == rhs);
-}
+struct RGBAColor {
+    /*
+     * 0-255 value
+     */
+    std::uint8_t r{0}, g{0}, b{0}, a{0};
+};
+#pragma pack(pop)
 
 struct VideoFormat {
     /*
@@ -141,28 +138,20 @@ class EmulatorController {
     static EmuID_t id;
 
     /*
-     * Stores the masks and shifts required to generate a rgb 0xRRGGBB) vector
+     * Stores the masks and shifts required to generate a rgb 0xRRGGBB vector
      * from the video_refresh callback data
      */
     static VideoFormat m_videoFormat;
 
     /*
-     * Key frame, in video compression land this is a frame that contains all
-     * the information for the frame. This is only updated when a keyframe or
-     * deltaframe are requested.
+     * Key frame, a frame similar to a video compression key frame that contains
+     * all the information for the last used frame. This is only updated when a
+     * keyframe or deltaframe are requested.
      */
     static Frame m_keyFrame;
 
     /*
-     * Delta frame, in video compression land this is a frame that builds on the
-     * last frame and only contains information on what's different since the
-     * last frame. Only updated when a delta frame is requested.
-     */
-    // TODO: This member isn't needed
-    static Frame m_deltaFrame;
-
-    /*
-     * Pointer to the current buffer
+     * Pointer to the current video buffer
      */
     static const void* m_currentBuffer;
 
@@ -170,6 +159,8 @@ class EmulatorController {
      * Mutex for accessing m_screen or m_nextFrame or updating the buffer
      */
     static std::mutex m_videoMutex;
+
+    static retro_system_av_info m_avinfo;
 
    public:
     /*
@@ -182,6 +173,8 @@ class EmulatorController {
      * for loading symbols and storing function pointers.
      */
     static RetroCore Core;
+
+    static std::atomic<std::uint64_t> usersConnected;
 
     /*
      * Kind of the constructor. Blocks when called.
@@ -219,32 +212,33 @@ class EmulatorController {
     /*
      * Adds a user to the turn request queue, invoked by parent LetsPlayServer
      */
-    static void addTurnRequest(LetsPlayUser* user);
+    static void AddTurnRequest(LetsPlayUser* user);
 
     /*
      * Called when a user disonnects, updates turn queue if applicable
      */
-    static void userDisconnected(LetsPlayUser* user);
+    static void UserDisconnected(LetsPlayUser* user);
 
     /*
      * Called when a user connects
      */
-    static void userConnected(LetsPlayUser* user);
+    static void UserConnected(LetsPlayUser* user);
 
     /*
      * Called when the emulator requests/announces a change in the pixel format
      */
-    static bool setPixelFormat(const retro_pixel_format fmt);
+    static bool SetPixelFormat(const retro_pixel_format fmt);
 
     /*
      * Function that overlays fg (possibly containing transparebt pixels) on top
      * of bg (assumed to contain all opaque pixels)
      */
-    static void overlay(ScreenMatrix_t& fg, ScreenMatrix_t& bg);
+    static void Overlay(Frame& fg, Frame& bg);
 
-    static std::vector<std::uint8_t> getKeyFrame();
-
-    static std::vector<std::uint8_t> getDeltaFrame();
+    /*
+     * Gets a key frame based on the current video buffer, updates m_keyFrame
+     */
+    static Frame GetFrame(bool isKeyFrame);
 
     static void SaveImage();
 };

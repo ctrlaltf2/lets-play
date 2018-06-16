@@ -60,6 +60,8 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         std::unique_lock<std::mutex> lk((m_UsersMutex));
         m_Users[hdl].setUsername("");
     }
+    std::string payload = "\x01\x02\x03\x04hello";
+    server->send(hdl, payload, websocketpp::frame::opcode::binary);
 }
 
 void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
@@ -130,7 +132,7 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         std::cout << command << '(';
         for (const auto& param : params) std::cout << param << ", ";
         std::cout << ')' << '\n';
-        m_WorkQueue.push(Command{t, params, hdl});
+        m_WorkQueue.push(Command{t, params, hdl, ""});
     }
 
     m_QueueNotifier.notify_one();
@@ -157,7 +159,7 @@ void LetsPlayServer::Shutdown() {
         // ... Except for a shutdown command
         m_WorkQueue.push(Command{kCommandType::Shutdown,
                                  std::vector<std::string>(),
-                                 websocketpp::connection_hdl()});
+                                 websocketpp::connection_hdl(), ""});
     }
 
     std::clog << "Stopping listen..." << '\n';
@@ -176,7 +178,7 @@ void LetsPlayServer::Shutdown() {
     {
         std::clog << "Closing every connection..." << '\n';
         std::unique_lock<std::mutex> lk((m_UsersMutex));
-        for (const auto& [hdl, user] : m_Users)
+        for ([[maybe_unused]] const auto& [hdl, user] : m_Users)
             server->close(hdl, websocketpp::close::status::normal, "Closing",
                           err);
     }
@@ -217,8 +219,9 @@ void LetsPlayServer::QueueThread() {
 
                         BroadcastAll(
                             command.emuID + ": " +
-                            LetsPlayServer::encode(std::vector<std::string>{
-                                "chat", username, command.params[0]}));
+                                LetsPlayServer::encode(std::vector<std::string>{
+                                    "chat", username, command.params[0]}),
+                            websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
@@ -243,11 +246,13 @@ void LetsPlayServer::QueueThread() {
 
                         if (oldUsername == "")
                             // TODO: Join?
-                            BroadcastAll(newUsername + " has joined!");
+                            BroadcastAll(newUsername + " has joined!",
+                                         websocketpp::frame::opcode::text);
                         else
                             BroadcastAll(
                                 LetsPlayServer::encode(std::vector<std::string>{
-                                    "username", oldUsername, newUsername}));
+                                    "username", oldUsername, newUsername}),
+                                websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::List: {
                         if (command.params.size() > 0) break;
@@ -256,7 +261,7 @@ void LetsPlayServer::QueueThread() {
 
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
-                            for (auto& [hdl, user] : m_Users)
+                            for ([[maybe_unused]] auto& [hdl, user] : m_Users)
                                 message.push_back(user.username());
                         }
 
@@ -353,6 +358,11 @@ void LetsPlayServer::QueueThread() {
                         std::unique_lock<std::mutex> lk((m_UsersMutex));
                         m_Users[command.hdl].supportsWebp = true;
                     } break;
+                    case kCommandType::RemoveEmu:
+                    case kCommandType::StopEmu:
+                    case kCommandType::Unknown:
+                        // Unimplemented
+                        break;
                 }
 
                 m_WorkQueue.pop();
@@ -361,11 +371,12 @@ void LetsPlayServer::QueueThread() {
     }
 }
 
-void LetsPlayServer::BroadcastAll(const std::string& data) {
+void LetsPlayServer::BroadcastAll(const std::string& data,
+                                  websocketpp::frame::opcode::value op) {
     std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
     for (auto& [hdl, user] : m_Users) {
         if (user.username() != "" && !hdl.expired())
-            server->send(hdl, data, websocketpp::frame::opcode::text);
+            server->send(hdl, data, op);
     }
 }
 
@@ -374,7 +385,7 @@ void LetsPlayServer::BroadcastOne(const std::string& data,
     server->send(hdl, data, websocketpp::frame::opcode::text);
 }
 
-void LetsPlayServer::addEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
+void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
     std::unique_lock<std::mutex> lk((m_EmusMutex));
     m_Emus[id] = emu;
 }
@@ -441,4 +452,62 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
         R"((\\x[\da-f]{2}|\\u[\da-f]{4}|\\u\{1[\da-f]{4}\}))"};
     const std::string output = std::regex_replace(str, re, "X");
     return output.size();
+}
+
+void LetsPlayServer::SendFrame(const EmuID_t& id, frametype::value type) {
+    // TODO: webp and png differentiation
+    // TODO: send the smaller of the two, webp or png (doing this requires
+    // clientside being able to read the first byte of the frame and from that
+    // determine the file type, webp or png. Should be easy because png starts
+    // with 0x89, webp with 0x52)
+    Frame frame;
+    {
+        std::unique_lock<std::mutex> lk(m_EmusMutex);
+        auto emu = m_Emus[id];
+        switch (type) {
+            case frametype::key:
+                frame = emu->getFrame(KeyFrame{true});
+                break;
+            case frametype::delta:
+                frame = emu->getFrame(KeyFrame{false});
+                break;
+        }
+        // If frame is uninitialized (screen buffer was probably nullptr, this
+        // function fired before the libretro core setup the screeni, or the
+        // video mode changed and the video refresh callback hasn't gone off)
+        if (frame.height == 0 && frame.width == 0) return;
+    }
+
+    std::uint8_t* webpData{nullptr};
+    size_t webpWritten;
+    if (frame.alphaChannel) {
+        std::clog << "Delta frame -- wrote ";
+        auto& RGBAVec = std::get<1>(frame.colors);
+        webpWritten = WebPEncodeLosslessRGBA(
+            reinterpret_cast<const std::uint8_t*>(RGBAVec.data()), frame.width,
+            frame.height, frame.width * 4, &webpData);
+    } else {
+        std::clog << "Key frame -- wrote ";
+        auto& RGBVec = std::get<0>(frame.colors);
+        webpWritten = WebPEncodeLosslessRGB(
+            reinterpret_cast<const std::uint8_t*>(RGBVec.data()), frame.width,
+            frame.height, frame.width * 3, &webpData);
+    }
+    std::clog << webpWritten << " bytes\n";
+
+    // Do png encoding
+
+    // TODO: once png encoding implemented, make png be the backup if webp fails
+    // for whatever reason
+    if (!webpData || !webpWritten) return;
+
+    std::unique_lock<std::mutex> lk(m_UsersMutex);
+    for (auto& [hdl, user] : m_Users) {
+        if (user.connectedEmu() == id) {
+            server->send(hdl, webpData, webpWritten,
+                         websocketpp::frame::opcode::binary);
+        }
+    }
+
+    WebPFree(webpData);
 }
