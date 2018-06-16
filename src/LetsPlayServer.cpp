@@ -60,8 +60,6 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         std::unique_lock<std::mutex> lk((m_UsersMutex));
         m_Users[hdl].setUsername("");
     }
-    std::string payload = "\x01\x02\x03\x04hello";
-    server->send(hdl, payload, websocketpp::frame::opcode::binary);
 }
 
 void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
