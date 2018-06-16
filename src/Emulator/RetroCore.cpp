@@ -58,7 +58,9 @@ void RetroCore::Init(const char* corePath) {
 }
 
 RetroCore::~RetroCore() {
-    (*(this->fUnloadGame))();
-    (*(this->fDeinit))();
-    dlclose(m_hCore);
+    if (m_hCore) {
+        (*(this->fUnloadGame))();
+        (*(this->fDeinit))();
+        dlclose(m_hCore);
+    }
 }

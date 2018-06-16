@@ -46,6 +46,10 @@ enum class kCommandType {
     Unknown,
 };
 
+namespace frametype {
+enum value { key, delta };
+}
+
 /*
  * POD class for the action queue
  */
@@ -176,20 +180,34 @@ class LetsPlayServer {
     /*
      * Send a message to all connected users
      * @param The message to send (isn't modified or encoded on the way out)
+     * @param The type of message to send
      */
-    void BroadcastAll(const std::string& message);
+    void BroadcastAll(const std::string& message,
+                      websocketpp::frame::opcode::value op);
 
     /*
      * Send a message to just one user
      * @param The message to send (isn't modified or encoded on the way out)
+     * @param Who to send it to
      */
     void BroadcastOne(const std::string& message,
                       websocketpp::connection_hdl hdl);
 
+    // --- Functions called only by emulator controllers --- //
     /*
-     * Callback when an emulator controller is spawned, updates m_Emus
+     * Called when an emulator controller is spawned, updates m_Emus
+     * @param id The id of the emulator to add
+     * @param emu Pointer to the POD struct containing the information necessary
+     * for interacting with the newly added emulator controller
      */
-    void addEmu(const EmuID_t& id, EmulatorControllerProxy* emu);
+    void AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu);
+
+    /*
+     * Called when an emulator controller has a frame update
+     * @param id The id of the caller
+     * @param type The video frame type, either key or delta
+     */
+    void SendFrame(const EmuID_t& id, frametype::value type);
 
    private:
     /*
@@ -205,8 +223,8 @@ class LetsPlayServer {
     static std::vector<std::string> decode(const std::string& input);
 
     /*
-     * Helper function that checks if all characters in the string are ones that
-     * can be typed on a standard keyboard
+     * Helper function that checks if all characters in the string are ones
+     * that can be typed on a common 101 to 104 key keyboard
      * @param str The string to validate
      */
     static bool isAsciiStr(const std::string& str);

@@ -24,6 +24,15 @@ set_target_properties(letsplay
 
 target_compile_features(letsplay
     PUBLIC
+        cxx_auto_type
+        cxx_binary_literals
+        cxx_constexpr
+        cxx_generic_lambdas
+        cxx_lambdas
+        cxx_nonstatic_member_init
+        cxx_nullptr
+        cxx_range_for
+        cxx_right_angle_brackets
         cxx_std_17
 )
 
@@ -40,6 +49,7 @@ target_compile_options(letsplay
         -g
         -ggdb
         -pedantic-errors
+        -Wfatal-errors
 )
 
 target_link_libraries(letsplay

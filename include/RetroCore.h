@@ -51,7 +51,7 @@ class RetroCore {
     void (*fUnloadGame)() = nullptr;
     unsigned (*fRetroAPIVersion)() = nullptr;
     void (*fGetSystemInfo)(retro_system_info*) = nullptr;
-    void (*fGetAudioVideoInfo)(retro_system_av_info) = nullptr;
+    void (*fGetAudioVideoInfo)(retro_system_av_info*) = nullptr;
     void (*fSetControllerPortDevice)(unsigned, unsigned) = nullptr;
     bool (*fLoadGame)(const retro_game_info*) = nullptr;
 
