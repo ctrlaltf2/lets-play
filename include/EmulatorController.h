@@ -11,6 +11,7 @@ struct Frame;
 #include <functional>
 #include <iostream>
 #include <mutex>
+#include <new>
 #include <queue>
 #include <string>
 #include <variant>
@@ -26,59 +27,27 @@ struct Frame;
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
 
-using AlphaChannel = bool;
-using ShouldUpdateVector = bool;
-using KeyFrame = bool;
-
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
     std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
         userConnected;
-    std::function<Frame(bool)> getFrame;
+    std::function<Frame()> getFrame;
     bool isReady{false};
 };
 
-// NOTE: Doesn't need to be thread safe, the only use of this is a member that
-// is access protected by a mutex
 struct Frame {
     // Width and height are in pixels
     std::uint32_t width{0}, height{0};
 
-    // Packed array, RGB(a)
-    std::variant<std::vector<RGBColor>, std::vector<RGBAColor>> colors;
-
-    // If the pixel array has an alpha channel and is therefore a vector of
-    // RGBAColors instead of RGBColor
-    bool alphaChannel{false};
-
-    // True if the size of the vector inside the colors variant doesn't match
-    // the value of width * height. When this is true, the next call of GetFrame
-    // will clear out the vector in colors and create a blank one that is width
-    // * height size
-    bool needsVectorUpdate{false};
+    // Packed array, RGB
+    std::shared_ptr<std::uint8_t[]> data{nullptr};
 };
-
-#pragma pack(push, 1)
-struct RGBColor {
-    /*
-     * 0-255 value
-     */
-    std::uint8_t r{0}, g{0}, b{0};
-};
-
-struct RGBAColor {
-    /*
-     * 0-255 value
-     */
-    std::uint8_t r{0}, g{0}, b{0}, a{0};
-};
-#pragma pack(pop)
 
 struct VideoFormat {
     /*
      * Masks for red, green, blue, and alpha
      */
-    std::atomic<std::uint16_t> rMask{0b1111100000000000},
+    std::atomic<std::uint32_t> rMask{0b1111100000000000},
         gMask{0b0000011111000000}, bMask{0b0000000000111110}, aMask{0b0};
 
     /*
@@ -230,15 +199,7 @@ class EmulatorController {
     static bool SetPixelFormat(const retro_pixel_format fmt);
 
     /*
-     * Function that overlays fg (possibly containing transparebt pixels) on top
-     * of bg (assumed to contain all opaque pixels)
-     */
-    static void Overlay(Frame& fg, Frame& bg);
-
-    /*
      * Gets a key frame based on the current video buffer, updates m_keyFrame
      */
-    static Frame GetFrame(bool isKeyFrame);
-
-    static void SaveImage();
+    static Frame GetFrame();
 };

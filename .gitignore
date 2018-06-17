@@ -4,8 +4,12 @@ Makefile
 cmake_install.cmake
 CMakeFiles/
 bin/
-
-*.gba
-*libretro.so
+vgcore*
+perf*
 
 trash/
+
+cores/
+roms/
+libretro.so
+core
