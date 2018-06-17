@@ -47,7 +47,7 @@ struct VideoFormat {
     /*
      * Masks for red, green, blue, and alpha
      */
-    std::atomic<std::uint16_t> rMask{0b1111100000000000},
+    std::atomic<std::uint32_t> rMask{0b1111100000000000},
         gMask{0b0000011111000000}, bMask{0b0000000000111110}, aMask{0b0};
 
     /*

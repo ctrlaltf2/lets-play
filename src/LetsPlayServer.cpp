@@ -34,11 +34,10 @@ void LetsPlayServer::Run(std::uint16_t port) {
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk((m_QueueMutex));
-            m_WorkQueue.push(
-                Command{kCommandType::AddEmu,
-                        {"emu1", "./vbam_libretro.so", "./smw.gba"},
-                        {},
-                        ""});
+            m_WorkQueue.push(Command{kCommandType::AddEmu,
+                                     {"emu1", "./libretro.so", "./core"},
+                                     {},
+                                     ""});
             m_QueueNotifier.notify_one();
         }
 
