@@ -10,3 +10,14 @@ Have websocketpp and Boost installed then run `cmake .` in the project directory
 # Todo
  - Hunterize (Currently a problem with the websocketpp package and C ABI detection not working)
  - ~~Move to Beast (if its even possible at this point)~~ that's never happening
+ - Add support for the following cores that just don't work
+   - Mupen64Plus - Requires libpng12.so for some reason
+   - DeSmuME - Just crashes, even on [nanoarch](https://github.com/heuripedes/nanoarch)
+   - bsnes (only tried accuracy one) - Outputs XRGB8888 but the video output is all zeroes. Likely a bug in bsnes (nobody uses bsnes anyways)
+   - gpsp - Can't load roms
+   - And many more...
+ - Things have *have* been tested to work
+   - vbam
+   - mbam
+   - snes9x
+   - nestopia
