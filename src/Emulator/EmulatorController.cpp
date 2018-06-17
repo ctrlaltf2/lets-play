@@ -74,13 +74,13 @@ void EmulatorController::Run(const std::string& corePath,
     unsigned msWait = (1.0 / m_avinfo.timing.fps) * 1000;
 
     // TODO: Manage this thread
-    std::thread t([&]() {
+    /*std::thread t([&]() {
         using namespace std::chrono;
         auto nextKeyFrame = steady_clock::now();
 
         while (true) {
-            if (nextKeyFrame < steady_clock::now()) {
-                server->SendFrame(id, frametype::key);
+            server->SendFrame(id, frametype::key);
+            /*if (nextKeyFrame < steady_clock::now()) {
                 nextKeyFrame = steady_clock::now() + seconds(2);
             } else {
                 server->SendFrame(id, frametype::delta);
@@ -89,12 +89,17 @@ void EmulatorController::Run(const std::string& corePath,
             std::this_thread::sleep_for(milliseconds(33));
         }
     });
-    t.detach();
+    t.detach();*/
 
     proxy.isReady = true;
+    std::chrono::time_point<std::chrono::steady_clock> wait_time =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(msWait));
+        std::this_thread::sleep_until(wait_time);
+        wait_time = std::chrono::steady_clock::now() +
+                    std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
+        server->SendFrame(id);
     }
 }
 
@@ -128,16 +133,6 @@ void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
         m_videoFormat.width = width;
         m_videoFormat.height = height;
         m_videoFormat.pitch = pitch;
-
-        /*
-         * Solves two problems, one of the frame vector size being wrong on res
-         * change (and therefore not being able to be used for making delta
-         * frames) and the problem of a key frame being needed when the
-         * resolution changes (basically a scene change)
-         */
-        m_keyFrame.width = width;
-        m_keyFrame.height = height;
-        m_keyFrame.needsVectorUpdate = true;
     }
     m_currentBuffer = data;
 }
@@ -278,36 +273,13 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
     return false;
 }
 
-void EmulatorController::Overlay(Frame& fg, Frame& bg) {
-    if (!fg.alphaChannel || bg.alphaChannel) return;
-
-    auto& fgData = std::get<1>(fg.colors);
-    auto& bgData = std::get<0>(bg.colors);
-
-    for (std::size_t i = 0; i < fgData.size(); ++i) {
-        if (fgData[i].a) {
-            bgData[i].r = fgData[i].r;
-            bgData[i].g = fgData[i].g;
-            bgData[i].b = fgData[i].b;
-        }
-    }
-}
-
-Frame EmulatorController::GetFrame(bool isKeyFrame) {
-    std::variant<std::vector<RGBColor>, std::vector<RGBAColor>> outVec;
-
-    if (isKeyFrame)
-        outVec = std::vector<RGBColor>();
-    else
-        outVec = std::vector<RGBAColor>();
-
+Frame EmulatorController::GetFrame() {
     std::unique_lock<std::mutex> lk(m_videoMutex);
-    if (m_currentBuffer == nullptr) return Frame{0, 0, {}, false};
-    if (m_keyFrame.needsVectorUpdate) {
-        m_keyFrame.alphaChannel = false;
-        m_keyFrame.colors =
-            std::vector<RGBColor>(m_videoFormat.height * m_videoFormat.width);
-    }
+    if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
+    // Reserve just enough space
+    std::shared_ptr<std::uint8_t[]> outVec(
+        new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
+    size_t j{0};
 
     const std::uint8_t* i = static_cast<const std::uint8_t*>(m_currentBuffer);
     for (size_t h = 0; h < m_videoFormat.height; ++h) {
@@ -323,84 +295,31 @@ Frame EmulatorController::GetFrame(bool isKeyFrame) {
             }
 
             // Calculate the rgb 0 - 255 values
-            const std::uint8_t rMax =
+            const std::uint8_t& rMax =
                 1 << (m_videoFormat.aShift - m_videoFormat.rShift);
-            const std::uint8_t gMax =
+            const std::uint8_t& gMax =
                 1 << (m_videoFormat.rShift - m_videoFormat.gShift);
-            const std::uint8_t bMax =
+            const std::uint8_t& bMax =
                 1 << (m_videoFormat.gShift - m_videoFormat.bShift);
 
-            const std::uint8_t rVal =
+            const std::uint8_t& rVal =
                 (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
-            const std::uint8_t gVal =
+            const std::uint8_t& gVal =
                 (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
-            const std::uint8_t bVal =
+            const std::uint8_t& bVal =
                 (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
 
-            const std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
-            const std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
-            const std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
+            std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
+            std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
+            std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
 
-            // If delta frame mode
-            if (!isKeyFrame) {
-                const auto& i = h * m_videoFormat.height + w;
-
-                // If the current frame's pixel is different from the last
-                // frame's
-                if ((std::get<0>(m_keyFrame.colors)[i].r != rNormalized) ||
-                    (std::get<0>(m_keyFrame.colors)[i].g != gNormalized) ||
-                    (std::get<0>(m_keyFrame.colors)[i].b != bNormalized)) {
-                    std::get<1>(outVec).push_back(
-                        RGBAColor{rNormalized, gNormalized, bNormalized, 255});
-                } else {  // No change, 0, 0, 0, 0 it
-                    /* TODO?: This will require GetFrame knowing what type of
-                     * data its going to eventually output to so its not viable
-                     * to do it here, but maybe 0, 0, 0, 0ing it isn't as good
-                     * as copying the previous pixel's rgb data and setting a to
-                     * 0 because lossless webp stores a cache of recently used
-                     * colors and this *may* be a small optimization on image
-                     * size which is what we want, requires testing to see if
-                     * worth implementing
-                     */
-                    std::get<1>(outVec).push_back(RGBAColor{0, 0, 0, 0});
-                }
-            } else {
-                std::get<0>(outVec).push_back(
-                    RGBColor{rNormalized, gNormalized, bNormalized});
-                isKeyFrame = true;
-            }
+            outVec[j++] = rNormalized;
+            outVec[j++] = gNormalized;
+            outVec[j++] = bNormalized;
         }
         // Stride is pitch / 2
         i += m_videoFormat.width - (m_videoFormat.pitch / 2);
     }
 
-    Frame frame{m_videoFormat.width, m_videoFormat.height, outVec,
-                AlphaChannel{!isKeyFrame}, ShouldUpdateVector{false}};
-
-    if (isKeyFrame)
-        m_keyFrame = frame;
-    else
-        Overlay(frame, /* on top of */ m_keyFrame);
-
-    return frame;
-
-    /*
-            std::uint8_t* output{nullptr};
-            size_t written = WebPEncodeLosslessRGB(
-                outVec.data(), m_videoFormat.width, m_videoFormat.height,
-                m_videoFormat.width * 3, &output);
-
-            if (output) {
-                std::string payload;
-                for (size_t i = 0; i < written; ++i) {
-                    payload += static_cast<char>(*(output + i));
-                }
-
-                m_server->BroadcastAll(payload,
-       websocketpp::frame::opcode::binary); std::ofstream of(
-                    std::string("screenshot") + std::to_string(imageNum++) +
-                ".webp", std::ios::binary);
-                of.write(reinterpret_cast<char*>(output), written);
-                WebPFree(output);
-            }*/
+    return Frame{m_videoFormat.width, m_videoFormat.height, outVec};
 }
