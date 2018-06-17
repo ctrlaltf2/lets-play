@@ -4,6 +4,8 @@ project(letsplay
     DESCRIPTION "Emulator thing"
 )
 
+find_package(Boost 1.62 COMPONENTS program_options REQUIRED)
+
 add_executable(letsplay
     # src/
         src/Main.cpp
@@ -39,6 +41,7 @@ target_compile_features(letsplay
 target_include_directories(letsplay
     PUBLIC
         include
+        ${Boost_INCLUDE_DIR}
 )
 
 target_compile_options(letsplay
@@ -58,4 +61,6 @@ target_link_libraries(letsplay
         pthread
         boost_system
         webp
+        ${Boost_LIBRARIES}
+        stdc++fs
 )
