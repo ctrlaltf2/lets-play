@@ -37,7 +37,8 @@ void EmulatorController::Run(const std::string& corePath,
     (*(Core.fSetAudioSampleBatch))(OnBatchAudioSample);
     (*(Core.fInit))();
 
-    // TODO: C++
+    std::clog << "Past initialization" << '\n';
+
     retro_system_info system = {0};
     retro_game_info info = {romPath.c_str(), 0};
     FILE* file = fopen(romPath.c_str(), "rb");
@@ -73,20 +74,14 @@ void EmulatorController::Run(const std::string& corePath,
     (*(Core.fGetAudioVideoInfo))(&m_avinfo);
     unsigned msWait = (1.0 / m_avinfo.timing.fps) * 1000;
 
-    // TODO: Manage this thread
-    /*std::thread t([&]() {
+    /*// TODO: Manage this thread
+    std::thread t([&]() {
         using namespace std::chrono;
         auto nextKeyFrame = steady_clock::now();
 
         while (true) {
-            server->SendFrame(id, frametype::key);
-            /*if (nextKeyFrame < steady_clock::now()) {
-                nextKeyFrame = steady_clock::now() + seconds(2);
-            } else {
-                server->SendFrame(id, frametype::delta);
-            }
-            // Around 60 fps
-            std::this_thread::sleep_for(milliseconds(33));
+            server->SendFrame(id);
+            std::this_thread::sleep_for(milliseconds(250));
         }
     });
     t.detach();*/
@@ -129,7 +124,7 @@ void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
         pitch != m_videoFormat.pitch) {
         std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
                   << m_videoFormat.height << " to " << width << 'x' << height
-                  << '\n';
+                  << ' ' << pitch << '\n';
         m_videoFormat.width = width;
         m_videoFormat.height = height;
         m_videoFormat.pitch = pitch;
@@ -227,6 +222,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
         // TODO: Find a core that uses this and test it
         case RETRO_PIXEL_FORMAT_0RGB1555:  // 16 bit
             // rrrrrgggggbbbbba
+            std::clog << "0RGB1555" << '\n';
             m_videoFormat.rMask = 0b1111100000000000;
             m_videoFormat.gMask = 0b0000011111000000;
             m_videoFormat.bMask = 0b0000000000111110;
@@ -239,12 +235,15 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
             m_videoFormat.bitsPerPel = 16;
             return true;
-        // TODO: Find a core that uses this and test it
+        // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
+        // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
+            std::clog << "XRGB8888\n";
             m_videoFormat.rMask = 0xff000000;
             m_videoFormat.gMask = 0x00ff0000;
             m_videoFormat.bMask = 0x0000ff00;
-            m_videoFormat.aMask = 0x000000ff;
+            m_videoFormat.aMask =
+                0x00000000;  // normally 0xff but who cares about alpha
 
             m_videoFormat.rShift = 16;
             m_videoFormat.gShift = 8;
@@ -255,6 +254,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             return true;
         case RETRO_PIXEL_FORMAT_RGB565:  // 16 bit
             // rrrrrggggggbbbbb
+            std::clog << "RGB656\n";
             m_videoFormat.rMask = 0b1111100000000000;
             m_videoFormat.gMask = 0b0000011111100000;
             m_videoFormat.bMask = 0b0000000000011111;
@@ -274,8 +274,11 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 }
 
 Frame EmulatorController::GetFrame() {
+    static size_t o = 0;
     std::unique_lock<std::mutex> lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
+    std::clog << m_videoFormat.width << ' ' << m_videoFormat.height << ' '
+              << m_videoFormat.pitch << '\n';
     // Reserve just enough space
     std::shared_ptr<std::uint8_t[]> outVec(
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
@@ -317,9 +320,12 @@ Frame EmulatorController::GetFrame() {
             outVec[j++] = gNormalized;
             outVec[j++] = bNormalized;
         }
-        // Stride is pitch / 2
-        i += m_videoFormat.width - (m_videoFormat.pitch / 2);
+        // I don't even know what i'm doing anymore
+        i += m_videoFormat.pitch - 2 * m_videoFormat.width;
+        // i += o;
     }
 
+    // std::clog << o << '\n';
+    // o = (o + 1) % 100;
     return Frame{m_videoFormat.width, m_videoFormat.height, outVec};
 }
