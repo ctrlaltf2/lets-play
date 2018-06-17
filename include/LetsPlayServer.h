@@ -46,10 +46,6 @@ enum class kCommandType {
     Unknown,
 };
 
-namespace frametype {
-enum value { key, delta };
-}
-
 /*
  * POD class for the action queue
  */
@@ -205,9 +201,8 @@ class LetsPlayServer {
     /*
      * Called when an emulator controller has a frame update
      * @param id The id of the caller
-     * @param type The video frame type, either key or delta
      */
-    void SendFrame(const EmuID_t& id, frametype::value type);
+    void SendFrame(const EmuID_t& id);
 
    private:
     /*

@@ -452,46 +452,26 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
     return output.size();
 }
 
-void LetsPlayServer::SendFrame(const EmuID_t& id, frametype::value type) {
+void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // TODO: webp and png differentiation
     // TODO: send the smaller of the two, webp or png (doing this requires
     // clientside being able to read the first byte of the frame and from that
     // determine the file type, webp or png. Should be easy because png starts
     // with 0x89, webp with 0x52)
-    Frame frame;
-    {
+    Frame frame = [&]() {
         std::unique_lock<std::mutex> lk(m_EmusMutex);
         auto emu = m_Emus[id];
-        switch (type) {
-            case frametype::key:
-                frame = emu->getFrame(KeyFrame{true});
-                break;
-            case frametype::delta:
-                frame = emu->getFrame(KeyFrame{false});
-                break;
-        }
-        // If frame is uninitialized (screen buffer was probably nullptr, this
-        // function fired before the libretro core setup the screeni, or the
-        // video mode changed and the video refresh callback hasn't gone off)
-        if (frame.height == 0 && frame.width == 0) return;
-    }
+        return emu->getFrame();
+    }();
+
+    // currentBuffer was nullptr
+    if (frame.width == 0 || frame.height == 0) return;
 
     std::uint8_t* webpData{nullptr};
-    size_t webpWritten;
-    if (frame.alphaChannel) {
-        std::clog << "Delta frame -- wrote ";
-        auto& RGBAVec = std::get<1>(frame.colors);
-        webpWritten = WebPEncodeLosslessRGBA(
-            reinterpret_cast<const std::uint8_t*>(RGBAVec.data()), frame.width,
-            frame.height, frame.width * 4, &webpData);
-    } else {
-        std::clog << "Key frame -- wrote ";
-        auto& RGBVec = std::get<0>(frame.colors);
-        webpWritten = WebPEncodeLosslessRGB(
-            reinterpret_cast<const std::uint8_t*>(RGBVec.data()), frame.width,
-            frame.height, frame.width * 3, &webpData);
-    }
+    size_t webpWritten = WebPEncodeLosslessRGB(
+        &frame.data[0], frame.width, frame.height, frame.width * 3, &webpData);
     std::clog << webpWritten << " bytes\n";
+    std::clog << frame.width << ' ' << frame.height << '\n';
 
     // Do png encoding
 
