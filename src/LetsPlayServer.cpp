@@ -1,5 +1,9 @@
 #include "LetsPlayServer.h"
 
+LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) {
+    //...
+}
+
 void LetsPlayServer::Run(std::uint16_t port) {
     if (port == 0) return;
 

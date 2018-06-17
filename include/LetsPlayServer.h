@@ -4,6 +4,7 @@ class LetsPlayServer;
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -126,13 +127,33 @@ class LetsPlayServer {
      */
     std::map<EmuID_t, EmulatorControllerProxy*> m_Emus;
 
+    /*
+     * Make m_emus threadsafe
+     */
     std::mutex m_EmusMutex;
+
+    /*
+     * Config object
+     */
+    // LetsPlayConfig m_config;
+
+    /*
+     * Make the object threadsafe
+     */
+    std::mutex m_configMutex;
 
    public:
     /*
      * Pointer to the websocketpp server
      */
     std::shared_ptr<wcpp_server> server;
+
+    /*
+     * Constructor
+     * @param configFile Path to the config.json file (defaults to
+     * ~/.config/letsplay/config)
+     */
+    LetsPlayServer(std::filesystem::path& configFile);
 
     /*
      * Blocking function that starts the LetsPlayServer on the given port
