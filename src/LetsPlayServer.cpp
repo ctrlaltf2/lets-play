@@ -1,7 +1,8 @@
 #include "LetsPlayServer.h"
 
 LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) {
-    //...
+    std::unique_lock<std::mutex> lk(m_configMutex);
+    m_config.LoadFrom(configFile);
 }
 
 void LetsPlayServer::Run(std::uint16_t port) {
@@ -215,7 +216,7 @@ void LetsPlayServer::QueueThread() {
                             break;
 
                         if (LetsPlayServer::escapedSize(command.params[0]) >
-                            c_maxMsgSize)
+                            m_config.)
                             break;
 
                         BroadcastAll(
@@ -484,7 +485,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
 
     std::unique_lock<std::mutex> lk(m_UsersMutex);
     for (auto& [hdl, user] : m_Users) {
-        if (user.connectedEmu() == id) {
+        if (user.connectedEmu() == id && !hdl.expired()) {
             server->send(hdl, webpData, webpWritten,
                          websocketpp::frame::opcode::binary);
         }

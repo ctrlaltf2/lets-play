@@ -135,12 +135,7 @@ class LetsPlayServer {
     /*
      * Config object
      */
-    // LetsPlayConfig m_config;
-
-    /*
-     * Make the object threadsafe
-     */
-    std::mutex m_configMutex;
+    LetsPlayConfig m_config;
 
    public:
     /*
