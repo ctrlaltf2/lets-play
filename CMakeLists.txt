@@ -9,6 +9,7 @@ find_package(Boost 1.62 COMPONENTS program_options REQUIRED)
 add_executable(letsplay
     # src/
         src/Main.cpp
+        src/LetsPlayConfig.cpp
         src/LetsPlayServer.cpp
         src/LetsPlayUser.cpp
         # Emulator/
@@ -34,6 +35,7 @@ target_compile_features(letsplay
         cxx_nonstatic_member_init
         cxx_nullptr
         cxx_range_for
+        cxx_raw_string_literals
         cxx_right_angle_brackets
         cxx_std_17
 )
@@ -42,6 +44,7 @@ target_include_directories(letsplay
     PUBLIC
         include
         ${Boost_INCLUDE_DIR}
+        external/json/single_include
 )
 
 target_compile_options(letsplay
