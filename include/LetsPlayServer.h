@@ -38,11 +38,13 @@ enum class kCommandType {
     Turn,
     Connect,
     Webp,
+    Admin,
     // External -- requires admin
     AddEmu,
     RemoveEmu,
     StopEmu,
     Shutdown,
+    Config,
     // Internal -- only generated inside program
     Unknown,
 };

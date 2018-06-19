@@ -4,16 +4,22 @@
 const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 {
     "serverConfig": {
-        "syncInterval": "5s",
+        "emulators": {
+            "template": {
+                "coreLocation": "./core",
+                "fps": 60,
+                "overrideFramerate": false,
+                "romLocation": "./rom",
+                "turnLength": "10s",
+            }
+        },
+        "heartbeatTimeout": "3s",
         "maxMessageSize": 100,
         "maxUsernameLength": 15,
         "minUsernameLength": 3,
-        "turnLength": "10s",
-        "heartbeatTimeout": "3s",
-        "overrideFramerate": false,
-        "framerate": 60,
+        "saveDirectory": "~/.letsplay/save/",
+        "syncInterval": "5s",
         "systemDirectory": "~/.letsplay/system/",
-        "saveDirectory": "~/.letsplay/save/"
     },
     "coreConfig": {
         "Snes9x": {
@@ -46,36 +52,41 @@ void LetsPlayConfig::LoadFrom(const std::filesystem::path& path) {
 nlohmann::json LetsPlayConfig::getServerSetting(const std::string& setting) {
     std::unique_lock<std::mutex> lk(m_configMutex);
 
-    if (!m_config.count("serverConfig") ||
-        !m_config["serverConfig"].count(setting)) {
-        // Fallback on default values
-        if (!defaultConfig["serverConfig"].count(setting))
-            return nlohmann : json;
-        else
-            return defaultConfig["serverConfig"][setting];
-    }
+    if (m_config["serverConfig"].count(setting))
+        return m_config["serverConfig"][setting];
 
-    return m_config["serverConfig"][setting];
+    // Fallback on default values
+    if (defaultConfig["serverConfig"].count(setting))
+        return defaultConfig["serverConfig"][setting];
+
+    return nlohmann::json;
+}
+
+void LetsPlayConfig::setServerSetting(const std::string& setting,
+                                      const nlohmann::json& value) {
+    std::unique_lock<std::mutex> lk(m_configMutex);
+    m_config["serverConfig"][setting] = value;
+}
+
+void LetsPlayConfig::setCoreSetting(const std::string& coreName,
+                                    const std::string& setting,
+                                    const nlohmann::json& value) {
+    std::unique_lock<std::mutex> lk(m_configMutex);
+    m_config["coreConfig"][coreName][setting] = value;
 }
 
 nlohmann::json LetsPlayConfig::getCoreSetting(const std::string& coreName,
                                               const std::string& setting) {
     std::unique_lock<std::mutex> lk(m_configMutex);
 
-    if (!m_config.count("coreConfig") ||
-        !m_config["coreConfig"].count(coreName) ||
-        !m_config["coreConfig"][coreName].count(setting)) {
-        // Not inside the config that was loaded from disk, so fallback on
-        // checking the default config
-        if (!m_config["coreConfig"].count(coreName) ||
-            !m_config["coreConfig"][coreName].count(setting)) {
-            return nlohmann::json;
-        } else {  // Value exists in default and not disk
-            return defaultConfig["coreConfig"][coreName][setting];
-        }
-    }
+    if (m_config["coreConfig"][coreName].count(setting))
+        return m_config["coreConfig"][coreName][setting];
 
-    return m_config["coreConfig"][coreName][setting];
+    // Fallback on default
+    if (defaultConfig["coreConfig"][coreName].count(setting))
+        return defaultConfig["coreConfig"][coreName][setting];
+
+    return nlohmann::json;
 }
 
 ~LetsPlayConfig::LetsPlayConfig() {

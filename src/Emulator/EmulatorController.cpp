@@ -19,6 +19,33 @@ const void* EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
 
+// LetsPlay filesystem layout
+/*
+ * letsplayfolder/ (~/.letsplay?)
+ *     cores/
+ *         mgba_libretro.so
+ *         vbam_libretro.so
+ *         ...
+ *     roms/
+ *         gba/
+ *             Super\ Mario\ Advance\ 1.gba
+ *             ...
+ *         n64/
+ *             Super\ Mario\ 64.n64
+ *             ...
+ *     system/
+ *         some_required_bios.bin
+ *         ...
+ *     emulators/
+ *         gba1/ (automatically created)
+ *             state0.sav
+ *             emulator_specific_file
+ *         snes1/
+ *             state0.frz
+ *         ...
+ *
+ */
+
 void EmulatorController::Run(const std::string& corePath,
                              const std::string& romPath, LetsPlayServer* server,
                              EmuID_t t_id) {
@@ -28,6 +55,9 @@ void EmulatorController::Run(const std::string& corePath,
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected,
                                     UserConnected, GetFrame};
     m_server->AddEmu(id, &proxy);
+
+    auto& emuConfigs = server->m_config["serverConfig"]["emulators"];
+    if (!emuConfigs.count(id)) emuConfigs[id] = emuConfigs["template"];
 
     (*(Core.fSetEnvironment))(OnEnvironment);
     (*(Core.fSetVideoRefresh))(OnVideoRefresh);
@@ -72,20 +102,26 @@ void EmulatorController::Run(const std::string& corePath,
     m_TurnThread = std::thread(EmulatorController::TurnThread);
 
     (*(Core.fGetAudioVideoInfo))(&m_avinfo);
+    int fps{-1};
+    if (emuConfig[id]["overrideFramerate"].is_boolean() &&
+        emuConfig[id]["fps"].is_number())
+        fps = (1.0 / emuConfig[id]["fps"]) * 1000;
+
+    // TODO: Manage this thread
+    if (fps != -1) {
+        std::thread t([&]() {
+            using namespace std::chrono;
+            auto nextKeyFrame = steady_clock::now();
+
+            while (true) {
+                server->SendFrame(id);
+                std::this_thread::sleep_for(milliseconds(250));
+            }
+        });
+        t.detach();
+    }
+
     unsigned msWait = (1.0 / m_avinfo.timing.fps) * 1000;
-
-    /*// TODO: Manage this thread
-    std::thread t([&]() {
-        using namespace std::chrono;
-        auto nextKeyFrame = steady_clock::now();
-
-        while (true) {
-            server->SendFrame(id);
-            std::this_thread::sleep_for(milliseconds(250));
-        }
-    });
-    t.detach();*/
-
     proxy.isReady = true;
     std::chrono::time_point<std::chrono::steady_clock> wait_time =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
@@ -94,7 +130,7 @@ void EmulatorController::Run(const std::string& corePath,
         wait_time = std::chrono::steady_clock::now() +
                     std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
-        server->SendFrame(id);
+        if (fps == -1) server->SendFrame(id);
     }
 }
 
@@ -108,10 +144,25 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
 
             return SetPixelFormat(*fmt);
         } break;
-        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: {
-            return false;
-            //...?
-        } break;
+        // clang-format off
+        // Will be implemented
+        case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
+        case RETRO_ENVIRONMENT_GET_OVERSCAN: // We don't (usually) want overscan
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // Path to the system directory, isolated to each emu and core
+        case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
+        case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: // Use this instead of sleep_until?
+        case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: // For rumble support for later on
+        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: // See core logs
+        case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:
+        case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY: // Where assets are stored
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // Directory to store saves in
+        case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: // Use to see if the core recognizes the retropad (if it doesn't well....)
+        case RETRO_ENVIRONMENT_GET_USERNAME: // If netplay is ever figured out (probably won't be, the docs suck), emulators will be able to announce themselves as emu1, emu2, snes1, snes2, etc
+        case RETRO_ENVIRONMENT_GET_LANGUAGE: // Some cores might use this and its simple to add
+        case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: // Some cores use this and it wouldn't be hard to implement with fstream and filesystem being a thing
+        case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: // Some cores might not use audio, so don't even bother with sending the audio streams
+        case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: // Might want this for support for more hardware accelerated cores
+        // clang-format on
         default:
             return false;
     }
