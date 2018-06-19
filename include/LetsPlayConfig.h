@@ -43,6 +43,7 @@ class LetsPlayConfig {
      * Get a specific config from m_config, either the server settings or the
      * core specific settings
      * @param setting The server setting to retrieve
+     * @return The setting, if it exists
      */
     nlohmann::json LetsPlayConfig::getServerSetting(const std::string& setting);
 
@@ -55,9 +56,30 @@ class LetsPlayConfig {
      * @param coreName The name of the core (see the libretro core's wiki page,
      * under the Directories header it will say what the core reports itself as)
      * @param setting Which setting to get
+     * @return The setting, if it exists
      */
     nlohmann::json LetsPlayConfig::getCoreSetting(const std::string& coreName,
-                                                  const std::string& setting) {}
+                                                  const std::string& setting);
+
+    /*
+     * Similar semantics to getServerSetting except it safely sets a server
+     * setting
+     * @param setting The name of the server setting to lookup and modify
+     * @param value The value to set the setting to
+     */
+    void LetsPlayConfig::setServerSetting(const std::string& setting,
+                                          const nlohmann::json& value);
+
+    /*
+     * Similar semantics to getCoreSetting except it safely sets a setting
+     * @param coreName The name of the core
+     * @param setting Which setting to set
+     * @param value The value to set it to
+     */
+
+    void LetsPlayConfig::setCoreSetting(const std::string& coreName,
+                                        const std::string& setting,
+                                        const nlohmann::json& value);
     /*
      * Writes the current config to the disk
      */

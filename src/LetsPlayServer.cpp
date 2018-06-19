@@ -199,7 +199,7 @@ void LetsPlayServer::QueueThread() {
                 switch (command.type) {
                     case kCommandType::Chat: {
                         // Chat has only one, the message
-                        if (command.params.size() > 1) break;
+                        if (command.params.size() != 1) break;
                         std::string username;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
@@ -215,8 +215,15 @@ void LetsPlayServer::QueueThread() {
                         if (!LetsPlayServer::isAsciiStr(command.params[0]))
                             break;
 
+                        auto maxMessageSize =
+                            m_config.getServerSetting("maxMessageSize");
+                        if (!maxMessageSize.is_number())
+                            maxMessageSize =
+                                LetsPlayConfig::defaultConfig["serverConfig"]
+                                                             ["maxMessageSize"];
+
                         if (LetsPlayServer::escapedSize(command.params[0]) >
-                            m_config.)
+                            maxMessageSize)
                             break;
 
                         BroadcastAll(
@@ -227,11 +234,24 @@ void LetsPlayServer::QueueThread() {
                     } break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
-                        if (command.params.size() > 1) break;
+                        if (command.params.size() != 1) break;
 
                         const auto& newUsername = command.params.at(0);
-                        if (newUsername.size() > c_maxUserName ||
-                            newUsername.size() < c_minUserName)
+
+                        auto maxUsernameLength =
+                            m_config.getServerSetting("maxUsernameLength");
+                        if (!maxUsernameLength.is_number())
+                            maxUsernameLength = LetsPlayConfig::defaultConfig
+                                ["serverConfig"]["maxUsernameLength"];
+
+                        auto minUsernameLength =
+                            m_config.getServerSetting("minUsernameLength");
+                        if (!minUsernameLength.is_number())
+                            minUsernameLength = LetsPlayConfig::defaultConfig
+                                ["serverConfig"]["minUsernameLength"];
+
+                        if (newUsername.size() > maxUsernameLength ||
+                            newUsername.size() < minUsernameLength)
                             break;
                         if (!LetsPlayServer::isAsciiStr(newUsername)) break;
                         if (newUsername.front() == ' ' ||
@@ -257,14 +277,15 @@ void LetsPlayServer::QueueThread() {
                                 websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::List: {
-                        if (command.params.size() > 0) break;
+                        if (command.params.size() != 0) break;
                         std::vector<std::string> message;
                         message.push_back("list");
 
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
                             for ([[maybe_unused]] auto& [hdl, user] : m_Users)
-                                message.push_back(user.username());
+                                if (!hdl.expired())
+                                    message.push_back(user.username());
                         }
 
                         BroadcastOne(LetsPlayServer::encode(message),
@@ -362,6 +383,8 @@ void LetsPlayServer::QueueThread() {
                     } break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
+                    case kCommandType::Admin:
+                    case kCommandType::Config:
                     case kCommandType::Unknown:
                         // Unimplemented
                         break;
