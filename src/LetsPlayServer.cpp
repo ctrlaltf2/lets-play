@@ -1,8 +1,7 @@
 #include "LetsPlayServer.h"
 
 LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) {
-    std::unique_lock<std::mutex> lk(m_configMutex);
-    m_config.LoadFrom(configFile);
+    config.LoadFrom(configFile);
 }
 
 void LetsPlayServer::Run(std::uint16_t port) {
@@ -39,10 +38,8 @@ void LetsPlayServer::Run(std::uint16_t port) {
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk((m_QueueMutex));
-            m_WorkQueue.push(Command{kCommandType::AddEmu,
-                                     {"emu1", "./libretro.so", "./core"},
-                                     {},
-                                     ""});
+            m_WorkQueue.push(Command{
+                kCommandType::AddEmu, {"emu1", "./core", "./rom"}, {}, ""});
             m_QueueNotifier.notify_one();
         }
 
@@ -216,7 +213,7 @@ void LetsPlayServer::QueueThread() {
                             break;
 
                         auto maxMessageSize =
-                            m_config.getServerSetting("maxMessageSize");
+                            config.getServerSetting("maxMessageSize");
                         if (!maxMessageSize.is_number())
                             maxMessageSize =
                                 LetsPlayConfig::defaultConfig["serverConfig"]
@@ -239,13 +236,13 @@ void LetsPlayServer::QueueThread() {
                         const auto& newUsername = command.params.at(0);
 
                         auto maxUsernameLength =
-                            m_config.getServerSetting("maxUsernameLength");
+                            config.getServerSetting("maxUsernameLength");
                         if (!maxUsernameLength.is_number())
                             maxUsernameLength = LetsPlayConfig::defaultConfig
                                 ["serverConfig"]["maxUsernameLength"];
 
                         auto minUsernameLength =
-                            m_config.getServerSetting("minUsernameLength");
+                            config.getServerSetting("minUsernameLength");
                         if (!minUsernameLength.is_number())
                             minUsernameLength = LetsPlayConfig::defaultConfig
                                 ["serverConfig"]["minUsernameLength"];
@@ -515,4 +512,19 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     }
 
     WebPFree(webpData);
+}
+
+std::string LetsPlayServer::escapeTilde(std::string str) {
+    if (str.front() == '~') {
+        const char* homePath = std::getenv("HOME");
+        if (!homePath) {
+            std::cerr << "Tilde path was specified but couldn't retrieve "
+                         "actual home path. Check if $HOME was declared.\n";
+            return ".";
+        }
+
+        str.erase(0);
+        str.insert(0, homePath);
+    }
+    return str;
 }

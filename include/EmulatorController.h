@@ -5,11 +5,13 @@ struct RGBAColor;
 struct VideoFormat;
 struct Frame;
 #pragma once
+#include <algorithm>
 #include <condition_variable>
 #include <cstdint>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <mutex>
 #include <new>
 #include <queue>
@@ -131,7 +133,15 @@ class EmulatorController {
 
     static retro_system_av_info m_avinfo;
 
+    /*
+     * General mutex for things that won't really go off at once and get blocked
+     */
+    static std::mutex m_generalMutex;
+
    public:
+    static std::string saveDirectory;
+    static std::string systemDirectory;
+
     /*
      * Pointer to some functions that the managing server needs to call
      */

@@ -19,6 +19,10 @@ const void* EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
 
+std::string EmulatorController::saveDirectory;
+std::string EmulatorController::systemDirectory;
+std::mutex EmulatorController::m_generalMutex;
+
 // LetsPlay filesystem layout
 /*
  * letsplayfolder/ (~/.letsplay?)
@@ -49,6 +53,7 @@ retro_system_av_info EmulatorController::m_avinfo;
 void EmulatorController::Run(const std::string& corePath,
                              const std::string& romPath, LetsPlayServer* server,
                              EmuID_t t_id) {
+    std::clog << "Started " << t_id << '\n';
     Core.Init(corePath.c_str());
     m_server = server;
     id = t_id;
@@ -56,8 +61,7 @@ void EmulatorController::Run(const std::string& corePath,
                                     UserConnected, GetFrame};
     m_server->AddEmu(id, &proxy);
 
-    auto& emuConfigs = server->m_config["serverConfig"]["emulators"];
-    if (!emuConfigs.count(id)) emuConfigs[id] = emuConfigs["template"];
+    server->config.createEmuIfNotExist(t_id);
 
     (*(Core.fSetEnvironment))(OnEnvironment);
     (*(Core.fSetVideoRefresh))(OnVideoRefresh);
@@ -103,9 +107,11 @@ void EmulatorController::Run(const std::string& corePath,
 
     (*(Core.fGetAudioVideoInfo))(&m_avinfo);
     int fps{-1};
-    if (emuConfig[id]["overrideFramerate"].is_boolean() &&
-        emuConfig[id]["fps"].is_number())
-        fps = (1.0 / emuConfig[id]["fps"]) * 1000;
+    if (server->config.getEmuSetting(id, "overrideFramerate").is_boolean() &&
+        server->config.getEmuSetting(id, "overrideFramerate").get<bool>() &&
+        server->config.getEmuSetting(id, "fps").is_number())
+        fps = (1.0 / server->config.getEmuSetting(id, "fps").get<double>()) *
+              1000;
 
     // TODO: Manage this thread
     if (fps != -1) {
@@ -130,6 +136,7 @@ void EmulatorController::Run(const std::string& corePath,
         wait_time = std::chrono::steady_clock::now() +
                     std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
+        std::clog << saveDirectory << ' ' << systemDirectory << '\n';
         if (fps == -1) server->SendFrame(id);
     }
 }
@@ -144,20 +151,41 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
 
             return SetPixelFormat(*fmt);
         } break;
-        // clang-format off
+            // clang-format off
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
+            std::unique_lock<std::mutex> lk(m_generalMutex);
+            std::string dir = m_server->config.getServerSetting("systemDirectory");
+            // thanks nlohmann (and contributers) for this wonderful bug, which, for now, can only be bypassed by printing the value (because apparently serialization changes the object's state)
+            std::clog << dir << '\n';
+            if(dir.empty())
+                break;
+            systemDirectory = LetsPlayServer::escapeTilde(dir);
+            *static_cast<const char**>(data) = systemDirectory.c_str();
+        } break;
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
+            std::unique_lock<std::mutex> lk(m_generalMutex);
+            std::string dir = m_server->config.getServerSetting("saveDirectory");
+            // thanks nlohmann (and contributers) for this wonderful bug, which, for now, can only be bypassed by printing the value (because apparently serialization changes the object's state)
+            std::clog << dir << '\n';
+            if(dir.empty())
+                break;
+            saveDirectory = LetsPlayServer::escapeTilde(dir);
+            *static_cast<const char**>(data) = saveDirectory.c_str();
+        } break;
+        case RETRO_ENVIRONMENT_GET_USERNAME: {
+            *static_cast<const char**>(data) = id.c_str();
+        } break;
+        case RETRO_ENVIRONMENT_GET_OVERSCAN: { // We don't (usually) want overscan
+            return false;
+        } break;
         // Will be implemented
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
-        case RETRO_ENVIRONMENT_GET_OVERSCAN: // We don't (usually) want overscan
-        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // Path to the system directory, isolated to each emu and core
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
         case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: // Use this instead of sleep_until?
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: // For rumble support for later on
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: // See core logs
-        case RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY:
         case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY: // Where assets are stored
-        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // Directory to store saves in
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: // Use to see if the core recognizes the retropad (if it doesn't well....)
-        case RETRO_ENVIRONMENT_GET_USERNAME: // If netplay is ever figured out (probably won't be, the docs suck), emulators will be able to announce themselves as emu1, emu2, snes1, snes2, etc
         case RETRO_ENVIRONMENT_GET_LANGUAGE: // Some cores might use this and its simple to add
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: // Some cores use this and it wouldn't be hard to implement with fstream and filesystem being a thing
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: // Some cores might not use audio, so don't even bother with sending the audio streams
@@ -214,9 +242,19 @@ void EmulatorController::TurnThread() {
         std::string username = currentUser->username();
         currentUser->hasTurn = true;
         m_server->BroadcastAll(id + ": " + username + " now has a turn!",
-                               websocketpp::frame::opcode::binary);
+                               websocketpp::frame::opcode::text);
+
+        unsigned turnLength;
+        nlohmann::json data = m_server->config.getEmuSetting(id, "turnLength");
+        if (data.empty() || !data.is_number())
+            turnLength =
+                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
+                                             ["template"]["turnLength"];
+        else
+            turnLength = data;
+
         const auto turnEnd = std::chrono::steady_clock::now() +
-                             std::chrono::seconds(c_turnLength);
+                             std::chrono::milliseconds(turnLength);
 
         while (currentUser && currentUser->hasTurn &&
                (std::chrono::steady_clock::now() < turnEnd)) {
