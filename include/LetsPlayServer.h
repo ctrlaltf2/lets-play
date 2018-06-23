@@ -20,8 +20,8 @@ class LetsPlayServer;
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-#include "Config.h"
 #include "EmulatorController.h"
+#include "LetsPlayConfig.h"
 #include "LetsPlayUser.h"
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
@@ -134,12 +134,12 @@ class LetsPlayServer {
      */
     std::mutex m_EmusMutex;
 
+   public:
     /*
      * Config object
      */
-    LetsPlayConfig m_config;
+    LetsPlayConfig config;
 
-   public:
     /*
      * Pointer to the websocketpp server
      */
@@ -221,6 +221,8 @@ class LetsPlayServer {
      * @param id The id of the caller
      */
     void SendFrame(const EmuID_t& id);
+
+    static std::string escapeTilde(std::string str);
 
    private:
     /*

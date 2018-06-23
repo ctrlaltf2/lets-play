@@ -1,9 +1,21 @@
 class LetsPlayConfig;
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
+#include <variant>
 
 #include "nlohmann/json.hpp"
+
+using json_value_type = std::variant<
+    std::nullptr_t, nlohhmann::basic_json::boolean_t,
+    nlohmann::basic_json::string_t, nlohmann::basic_json::number_integer_t,
+    nlohmann::basic_json::number_unsigned_t, nlohmann::basic_json::float_t,
+    nlohmann::basic_json::object_t, nlohmann::basic_json::array_t>;
 
 class LetsPlayConfig {
     /*
@@ -45,7 +57,7 @@ class LetsPlayConfig {
      * @param setting The server setting to retrieve
      * @return The setting, if it exists
      */
-    nlohmann::json LetsPlayConfig::getServerSetting(const std::string& setting);
+    json_value_type getServerSetting(const std::string& setting);
 
     /*
      * Get a core setting, based on the core's name. See libretro wiki page on
@@ -58,8 +70,8 @@ class LetsPlayConfig {
      * @param setting Which setting to get
      * @return The setting, if it exists
      */
-    nlohmann::json LetsPlayConfig::getCoreSetting(const std::string& coreName,
-                                                  const std::string& setting);
+    json_value_type getCoreSetting(const std::string& coreName,
+                                   const std::string& setting);
 
     /*
      * Similar semantics to getServerSetting except it safely sets a server
@@ -67,8 +79,8 @@ class LetsPlayConfig {
      * @param setting The name of the server setting to lookup and modify
      * @param value The value to set the setting to
      */
-    void LetsPlayConfig::setServerSetting(const std::string& setting,
-                                          const nlohmann::json& value);
+    void setServerSetting(const std::string& setting,
+                          const nlohmann::json& value);
 
     /*
      * Similar semantics to getCoreSetting except it safely sets a setting
@@ -77,11 +89,42 @@ class LetsPlayConfig {
      * @param value The value to set it to
      */
 
-    void LetsPlayConfig::setCoreSetting(const std::string& coreName,
-                                        const std::string& setting,
-                                        const nlohmann::json& value);
+    void setCoreSetting(const std::string& coreName, const std::string& setting,
+                        const nlohmann::json& value);
+
+    /*
+     * Retrieve an emu-specific setting such as turn length or framerate
+     * overrides
+     * @param id the emu id
+     * @param The setting to return, if it exists
+     * @return The value of the setting, if it exists (nlohmann::json()
+     * otherwise)
+     */
+    json_value_type getEmuSetting(const std::string& id,
+                                  const std::string& setting);
+
+    /*
+     * Set an emu-specific setting
+     * @param id The id of the emu
+     * @param setting The setting to set
+     * @param value the value to set the setting to
+     */
+    void setEmuSetting(const std::string& id, const std::string& setting,
+                       const std::string& value);
+
+    /*
+     * Creates an emulator under serverConfig->emulators equal to the id if it
+     * does not already exist
+     * @param id the id to check for and create if nonexistent
+     */
+    void createEmuIfNotExist(const std::string& id);
+
     /*
      * Writes the current config to the disk
      */
+    void SaveConfig();
+
     ~LetsPlayConfig();
+
+    static json_value_type jsonToValueType(const nlohmann::json& j);
 };
