@@ -6,6 +6,7 @@ std::string EmulatorController::coreName;
 LetsPlayServer* EmulatorController::m_server{nullptr};
 EmulatorControllerProxy EmulatorController::proxy;
 RetroCore EmulatorController::Core;
+char* EmulatorController::romData{nullptr};
 
 std::vector<LetsPlayUser*> EmulatorController::m_TurnQueue;
 std::mutex EmulatorController::m_TurnMutex;
@@ -54,6 +55,15 @@ std::shared_mutex EmulatorController::m_generalMutex;
 void EmulatorController::Run(const std::string& corePath,
                              const std::string& romPath, LetsPlayServer* server,
                              EmuID_t t_id) {
+    std::filesystem::path coreFile = corePath, romFile = romPath;
+    if (!std::filesystem::is_regular_file(coreFile)) {
+        std::cerr << "provided core path '" << corePath << "' was not valid.\n";
+        return;
+    }
+    if (!std::filesystem::is_regular_file(romFile)) {
+        std::cerr << "provided rom path '" << romPath << "' was not valid.\n";
+        return;
+    }
     std::clog << "Started " << t_id << '\n';
     Core.Init(corePath.c_str());
     m_server = server;
@@ -84,33 +94,34 @@ void EmulatorController::Run(const std::string& corePath,
 
     std::clog << "Past initialization" << '\n';
 
-    retro_system_info system = {0};
-    retro_game_info info = {romPath.c_str(), 0};
-    FILE* file = fopen(romPath.c_str(), "rb");
+    retro_game_info info = {romPath.c_str(), nullptr,
+                            std::filesystem::file_size(romFile), nullptr};
+    std::ifstream fo(romFile, std::ios::binary);
 
-    if (!file) {
-        std::cout << "invalid file" << '\n';
-        return;
-    }
-
-    fseek(file, 0, SEEK_END);
-    info.size = ftell(file);
-    rewind(file);
-
+    retro_system_info system{};
     (*(Core.fGetSystemInfo))(&system);
 
     if (!system.need_fullpath) {
-        info.data = malloc(info.size);
+        romData = new char[std::filesystem::file_size(romFile)];
+        info.data = static_cast<void*>(romData);
 
-        if (!info.data || !fread((void*)info.data, info.size, 1, file)) {
-            std::cout << "Some error about sizing" << '\n';
-            fclose(file);
+        if (!info.data) {
+            std::cerr << "Failed to allocate memory for the ROM\n";
+            return;
+        }
+        if (!fo.read(romData, std::filesystem::file_size(romFile))) {
+            std::cerr << "Failed to load data from the file -- Do you have the "
+                         "right access rights?\n";
             return;
         }
     }
 
+    // TODO: compressed roms and stuff
+
     if (!((*(Core.fLoadGame))(&info))) {
-        std::cout << "failed to do a thing" << '\n';
+        std::cerr << "Failed to load game -- Was the rom the correct? file type"
+                  << '\n';
+        return;
     }
 
     m_TurnThreadRunning = true;
@@ -156,7 +167,6 @@ void EmulatorController::Run(const std::string& corePath,
         wait_time = std::chrono::steady_clock::now() +
                     std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
-        std::cout << systemDirectory << ' ' << saveDirectory << '\n';
         if (fps == -1) m_server->SendFrame(id);
     }
 }
