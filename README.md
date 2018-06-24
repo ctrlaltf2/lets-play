@@ -21,3 +21,5 @@ To build you need a compiler with full (not experimental) support for std::files
    - mbam
    - snes9x
    - nestopia
+ - Multicontroller support (smash tournaments here we come)
+ - Logging system
