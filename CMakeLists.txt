@@ -51,7 +51,8 @@ target_compile_options(letsplay
     PUBLIC
         -Wall
         -Wextra
-        -O3
+        -Werror=return-type
+        -O1
         -g
         -ggdb
         -pedantic-errors

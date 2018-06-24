@@ -2,6 +2,7 @@
 #include <memory>
 
 EmuID_t EmulatorController::id;
+std::string EmulatorController::coreName;
 LetsPlayServer* EmulatorController::m_server{nullptr};
 EmulatorControllerProxy EmulatorController::proxy;
 RetroCore EmulatorController::Core;
@@ -21,7 +22,7 @@ retro_system_av_info EmulatorController::m_avinfo;
 
 std::string EmulatorController::saveDirectory;
 std::string EmulatorController::systemDirectory;
-std::mutex EmulatorController::m_generalMutex;
+std::shared_mutex EmulatorController::m_generalMutex;
 
 // LetsPlay filesystem layout
 /*
@@ -61,7 +62,17 @@ void EmulatorController::Run(const std::string& corePath,
                                     UserConnected, GetFrame};
     m_server->AddEmu(id, &proxy);
 
-    server->config.createEmuIfNotExist(t_id);
+    // Add emu specific config if it doesn't already exist
+    {
+        std::unique_lock<std::shared_mutex> lk(server->config.mutex);
+        if (!server->config.config["serverConfig"]["emulators"].count(t_id)) {
+            server->config.config["serverConfig"]["emulators"][t_id] =
+                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
+                                             ["template"];
+        }
+    }
+
+    server->config.SaveConfig();
 
     (*(Core.fSetEnvironment))(OnEnvironment);
     (*(Core.fSetVideoRefresh))(OnVideoRefresh);
@@ -106,22 +117,31 @@ void EmulatorController::Run(const std::string& corePath,
     m_TurnThread = std::thread(EmulatorController::TurnThread);
 
     (*(Core.fGetAudioVideoInfo))(&m_avinfo);
-    int fps{-1};
-    if (server->config.getEmuSetting(id, "overrideFramerate").is_boolean() &&
-        server->config.getEmuSetting(id, "overrideFramerate").get<bool>() &&
-        server->config.getEmuSetting(id, "fps").is_number())
-        fps = (1.0 / server->config.getEmuSetting(id, "fps").get<double>()) *
-              1000;
+    std::uint64_t fps = -1ull;
+    {
+        std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+        const auto& config = m_server->config.config;
+        if (config["serverConfig"]["emulators"][id]["overrideFramerate"]
+                .is_boolean() &&
+            config["serverConfig"]["emulators"][id]["overrideFramerate"]
+                .get<bool>() &&
+            config["serverConfig"]["emulators"][id]["fps"]
+                .is_number_unsigned()) {
+            fps = config["serverConfig"]["emulators"][id]["fps"]
+                      .get<std::uint64_t>();
+        }
+    }
 
     // TODO: Manage this thread
-    if (fps != -1) {
+    if (fps != -1ull) {
         std::thread t([&]() {
             using namespace std::chrono;
             auto nextKeyFrame = steady_clock::now();
 
             while (true) {
                 server->SendFrame(id);
-                std::this_thread::sleep_for(milliseconds(250));
+                std::this_thread::sleep_for(
+                    milliseconds(static_cast<long int>((1.0 / fps) * 1000)));
             }
         });
         t.detach();
@@ -136,12 +156,13 @@ void EmulatorController::Run(const std::string& corePath,
         wait_time = std::chrono::steady_clock::now() +
                     std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
-        std::clog << saveDirectory << ' ' << systemDirectory << '\n';
-        if (fps == -1) server->SendFrame(id);
+        std::cout << systemDirectory << ' ' << saveDirectory << '\n';
+        if (fps == -1) m_server->SendFrame(id);
     }
 }
 
 bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
+    std::cout << "OnEnvironment(): " << cmd << '\n';
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt =
@@ -153,23 +174,25 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
         } break;
             // clang-format off
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
-            std::unique_lock<std::mutex> lk(m_generalMutex);
-            std::string dir = m_server->config.getServerSetting("systemDirectory");
-            // thanks nlohmann (and contributers) for this wonderful bug, which, for now, can only be bypassed by printing the value (because apparently serialization changes the object's state)
-            std::clog << dir << '\n';
-            if(dir.empty())
+            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            if(!m_server->config.config["serverConfig"]["systemDirectory"].is_string())
                 break;
-            systemDirectory = LetsPlayServer::escapeTilde(dir);
+            nlohmann::json& dir = m_server->config.config["serverConfig"]["systemDirectory"];
+            {
+                std::shared_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
+                systemDirectory = LetsPlayServer::escapeTilde(dir);
+            }
             *static_cast<const char**>(data) = systemDirectory.c_str();
         } break;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
-            std::unique_lock<std::mutex> lk(m_generalMutex);
-            std::string dir = m_server->config.getServerSetting("saveDirectory");
-            // thanks nlohmann (and contributers) for this wonderful bug, which, for now, can only be bypassed by printing the value (because apparently serialization changes the object's state)
-            std::clog << dir << '\n';
-            if(dir.empty())
+            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            if(!m_server->config.config["serverConfig"]["saveDirectory"].is_string())
                 break;
-            saveDirectory = LetsPlayServer::escapeTilde(dir);
+            nlohmann::json& dir = m_server->config.config["serverConfig"]["saveDirectory"];
+            {
+                std::unique_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
+                saveDirectory = LetsPlayServer::escapeTilde(dir);
+            }
             *static_cast<const char**>(data) = saveDirectory.c_str();
         } break;
         case RETRO_ENVIRONMENT_GET_USERNAME: {
@@ -190,10 +213,11 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: // Some cores use this and it wouldn't be hard to implement with fstream and filesystem being a thing
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: // Some cores might not use audio, so don't even bother with sending the audio streams
         case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: // Might want this for support for more hardware accelerated cores
-        // clang-format on
         default:
             return false;
+            // clang-format on
     }
+    return true;
 }
 
 void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
@@ -244,14 +268,19 @@ void EmulatorController::TurnThread() {
         m_server->BroadcastAll(id + ": " + username + " now has a turn!",
                                websocketpp::frame::opcode::text);
 
-        unsigned turnLength;
-        nlohmann::json data = m_server->config.getEmuSetting(id, "turnLength");
-        if (data.empty() || !data.is_number())
-            turnLength =
-                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
-                                             ["template"]["turnLength"];
-        else
-            turnLength = data;
+        std::uint64_t turnLength;
+        {
+            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            nlohmann::json& data =
+                m_server->config
+                    .config["serverConfig"]["emulators"][id]["turnLength"];
+            if (data.empty() || !data.is_number())
+                turnLength =
+                    LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
+                                                 ["template"]["turnLength"];
+            else
+                turnLength = data;
+        }
 
         const auto turnEnd = std::chrono::steady_clock::now() +
                              std::chrono::milliseconds(turnLength);

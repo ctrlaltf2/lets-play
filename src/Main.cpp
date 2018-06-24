@@ -13,8 +13,8 @@
 int main(int argc, char** argv) {
     std::uint16_t port{3074};
 
-    std::string configPath{"~/.config/letsplay/config.json"};
-    std::filesystem::path configFilePath(configPath);
+    std::string configPath{"~/.letsplay/config.json"};
+    std::filesystem::path configFilePath;
 
     try {
         using namespace boost;
@@ -40,20 +40,24 @@ int main(int argc, char** argv) {
 
         if (vm.count("config")) {
             configPath = vm["config"].as<std::string>();
-            if (configPath.front() == '~') {
-                const char* homePath = std::getenv("HOME");
-                if (!homePath) {
-                    std::cerr
-                        << "Tilde path was specified but couldn't retrieve "
-                           "actual home path. Check if $HOME was declared.\n";
-                    return -1;
-                }
-
-                configPath.erase(0);
-                configPath.insert(0, homePath);
-            }
-            configFilePath = configPath;
         }
+
+        if (configPath.front() == '~') {
+            const char* homePath = std::getenv("HOME");
+            if (!homePath) {
+                std::cerr << "Tilde path was specified but couldn't retrieve "
+                             "actual home path. Check if $HOME was declared.\n";
+                return -1;
+            }
+
+            std::clog << configPath << __LINE__ << '\n';
+            configPath.erase(0, 1);
+            std::clog << configPath << __LINE__ << '\n';
+            configPath.insert(0, homePath);
+            std::clog << configPath << __LINE__ << '\n';
+        }
+        configFilePath = configPath;
+
         if (!std::filesystem::exists(configFilePath)) {
             std::cerr << "Warning: config file doesn't exist" << '\n';
         }
