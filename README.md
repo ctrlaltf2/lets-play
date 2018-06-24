@@ -23,3 +23,5 @@ To build you need a compiler with full (not experimental) support for std::files
    - nestopia
  - Multicontroller support (smash tournaments here we come)
  - Logging system
+ - Bans
+ - Exceptions
