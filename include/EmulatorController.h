@@ -156,6 +156,11 @@ class EmulatorController {
     static std::string systemDirectory;
 
     /*
+     * Rom data if loaded from file
+     */
+    static char* romData;
+
+    /*
      * Pointer to some functions that the managing server needs to call
      */
     static EmulatorControllerProxy proxy;
