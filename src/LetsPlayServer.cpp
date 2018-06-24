@@ -212,12 +212,23 @@ void LetsPlayServer::QueueThread() {
                         if (!LetsPlayServer::isAsciiStr(command.params[0]))
                             break;
 
-                        auto maxMessageSize =
-                            config.getServerSetting("maxMessageSize");
-                        if (!maxMessageSize.is_number())
-                            maxMessageSize =
-                                LetsPlayConfig::defaultConfig["serverConfig"]
-                                                             ["maxMessageSize"];
+                        std::uint64_t maxMessageSize;
+                        {
+                            std::shared_lock<std::shared_mutex> lk(
+                                config.mutex);
+                            nlohmann::json& data =
+                                config.config["serverConfig"]["maxMessageSize"];
+
+                            // TODO: Warning on invalid data type (logging
+                            // system implemented)
+                            if (!data.is_number_unsigned()) {
+                                maxMessageSize = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["maxMessageSize"];
+                            } else {
+                                maxMessageSize = data;
+                            }
+                        }
+                        std::cout << "max msg size: " << maxMessageSize << '\n';
 
                         if (LetsPlayServer::escapedSize(command.params[0]) >
                             maxMessageSize)
@@ -235,20 +246,36 @@ void LetsPlayServer::QueueThread() {
 
                         const auto& newUsername = command.params.at(0);
 
-                        auto maxUsernameLength =
-                            config.getServerSetting("maxUsernameLength");
-                        if (!maxUsernameLength.is_number())
-                            maxUsernameLength = LetsPlayConfig::defaultConfig
-                                ["serverConfig"]["maxUsernameLength"];
+                        std::uint64_t maxUsernameLen, minUsernameLen;
+                        {
+                            std::shared_lock<std::shared_mutex> lk(
+                                config.mutex);
+                            nlohmann::json& max =
+                                config.config["serverConfig"]
+                                             ["maxUsernameLength"];
+                            nlohmann::json& min =
+                                config.config["serverConfig"]
+                                             ["minUsernameLength"];
 
-                        auto minUsernameLength =
-                            config.getServerSetting("minUsernameLength");
-                        if (!minUsernameLength.is_number())
-                            minUsernameLength = LetsPlayConfig::defaultConfig
-                                ["serverConfig"]["minUsernameLength"];
+                            // TODO: Warning on invalid data type (logging
+                            // system implemented)
+                            if (!max.is_number_unsigned()) {
+                                maxUsernameLen = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["maxUsernameLength"];
+                            } else {
+                                maxUsernameLen = max;
+                            }
 
-                        if (newUsername.size() > maxUsernameLength ||
-                            newUsername.size() < minUsernameLength)
+                            if (!min.is_number_unsigned()) {
+                                minUsernameLen = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["minUsernameLength"];
+                            } else {
+                                minUsernameLen = min;
+                            }
+                        }
+
+                        if (newUsername.size() > maxUsernameLen ||
+                            newUsername.size() < minUsernameLen)
                             break;
                         if (!LetsPlayServer::isAsciiStr(newUsername)) break;
                         if (newUsername.front() == ' ' ||
@@ -325,7 +352,8 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Connect: {
                         if (command.params.size() != 1) break;
 
-                        // Check if the emu that the connect
+                        // Check if the emu that the connect thing that was sent
+                        // exists
                         {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
                             if (m_Emus.find(command.params[0]) ==
@@ -495,7 +523,6 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     size_t webpWritten = WebPEncodeLosslessRGB(
         &frame.data[0], frame.width, frame.height, frame.width * 3, &webpData);
     std::clog << webpWritten << " bytes\n";
-    std::clog << frame.width << ' ' << frame.height << '\n';
 
     // Do png encoding
 
@@ -523,7 +550,7 @@ std::string LetsPlayServer::escapeTilde(std::string str) {
             return ".";
         }
 
-        str.erase(0);
+        str.erase(0, 1);
         str.insert(0, homePath);
     }
     return str;
