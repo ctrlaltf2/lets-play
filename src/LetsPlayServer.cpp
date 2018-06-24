@@ -1,5 +1,9 @@
 #include "LetsPlayServer.h"
 
+LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) {
+    config.LoadFrom(configFile);
+}
+
 void LetsPlayServer::Run(std::uint16_t port) {
     if (port == 0) return;
 
@@ -34,10 +38,8 @@ void LetsPlayServer::Run(std::uint16_t port) {
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk((m_QueueMutex));
-            m_WorkQueue.push(Command{kCommandType::AddEmu,
-                                     {"emu1", "./libretro.so", "./core"},
-                                     {},
-                                     ""});
+            m_WorkQueue.push(Command{
+                kCommandType::AddEmu, {"emu1", "./core", "./rom"}, {}, ""});
             m_QueueNotifier.notify_one();
         }
 
@@ -194,7 +196,7 @@ void LetsPlayServer::QueueThread() {
                 switch (command.type) {
                     case kCommandType::Chat: {
                         // Chat has only one, the message
-                        if (command.params.size() > 1) break;
+                        if (command.params.size() != 1) break;
                         std::string username;
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
@@ -210,8 +212,26 @@ void LetsPlayServer::QueueThread() {
                         if (!LetsPlayServer::isAsciiStr(command.params[0]))
                             break;
 
+                        std::uint64_t maxMessageSize;
+                        {
+                            std::shared_lock<std::shared_mutex> lk(
+                                config.mutex);
+                            nlohmann::json& data =
+                                config.config["serverConfig"]["maxMessageSize"];
+
+                            // TODO: Warning on invalid data type (logging
+                            // system implemented)
+                            if (!data.is_number_unsigned()) {
+                                maxMessageSize = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["maxMessageSize"];
+                            } else {
+                                maxMessageSize = data;
+                            }
+                        }
+                        std::cout << "max msg size: " << maxMessageSize << '\n';
+
                         if (LetsPlayServer::escapedSize(command.params[0]) >
-                            c_maxMsgSize)
+                            maxMessageSize)
                             break;
 
                         BroadcastAll(
@@ -222,11 +242,40 @@ void LetsPlayServer::QueueThread() {
                     } break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
-                        if (command.params.size() > 1) break;
+                        if (command.params.size() != 1) break;
 
                         const auto& newUsername = command.params.at(0);
-                        if (newUsername.size() > c_maxUserName ||
-                            newUsername.size() < c_minUserName)
+
+                        std::uint64_t maxUsernameLen, minUsernameLen;
+                        {
+                            std::shared_lock<std::shared_mutex> lk(
+                                config.mutex);
+                            nlohmann::json& max =
+                                config.config["serverConfig"]
+                                             ["maxUsernameLength"];
+                            nlohmann::json& min =
+                                config.config["serverConfig"]
+                                             ["minUsernameLength"];
+
+                            // TODO: Warning on invalid data type (logging
+                            // system implemented)
+                            if (!max.is_number_unsigned()) {
+                                maxUsernameLen = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["maxUsernameLength"];
+                            } else {
+                                maxUsernameLen = max;
+                            }
+
+                            if (!min.is_number_unsigned()) {
+                                minUsernameLen = LetsPlayConfig::defaultConfig
+                                    ["serverConfig"]["minUsernameLength"];
+                            } else {
+                                minUsernameLen = min;
+                            }
+                        }
+
+                        if (newUsername.size() > maxUsernameLen ||
+                            newUsername.size() < minUsernameLen)
                             break;
                         if (!LetsPlayServer::isAsciiStr(newUsername)) break;
                         if (newUsername.front() == ' ' ||
@@ -252,14 +301,15 @@ void LetsPlayServer::QueueThread() {
                                 websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::List: {
-                        if (command.params.size() > 0) break;
+                        if (command.params.size() != 0) break;
                         std::vector<std::string> message;
                         message.push_back("list");
 
                         {
                             std::unique_lock<std::mutex> lk((m_UsersMutex));
                             for ([[maybe_unused]] auto& [hdl, user] : m_Users)
-                                message.push_back(user.username());
+                                if (!hdl.expired())
+                                    message.push_back(user.username());
                         }
 
                         BroadcastOne(LetsPlayServer::encode(message),
@@ -302,7 +352,8 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Connect: {
                         if (command.params.size() != 1) break;
 
-                        // Check if the emu that the connect
+                        // Check if the emu that the connect thing that was sent
+                        // exists
                         {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
                             if (m_Emus.find(command.params[0]) ==
@@ -357,6 +408,8 @@ void LetsPlayServer::QueueThread() {
                     } break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
+                    case kCommandType::Admin:
+                    case kCommandType::Config:
                     case kCommandType::Unknown:
                         // Unimplemented
                         break;
@@ -470,7 +523,6 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     size_t webpWritten = WebPEncodeLosslessRGB(
         &frame.data[0], frame.width, frame.height, frame.width * 3, &webpData);
     std::clog << webpWritten << " bytes\n";
-    std::clog << frame.width << ' ' << frame.height << '\n';
 
     // Do png encoding
 
@@ -480,11 +532,26 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
 
     std::unique_lock<std::mutex> lk(m_UsersMutex);
     for (auto& [hdl, user] : m_Users) {
-        if (user.connectedEmu() == id) {
+        if (user.connectedEmu() == id && !hdl.expired()) {
             server->send(hdl, webpData, webpWritten,
                          websocketpp::frame::opcode::binary);
         }
     }
 
     WebPFree(webpData);
+}
+
+std::string LetsPlayServer::escapeTilde(std::string str) {
+    if (str.front() == '~') {
+        const char* homePath = std::getenv("HOME");
+        if (!homePath) {
+            std::cerr << "Tilde path was specified but couldn't retrieve "
+                         "actual home path. Check if $HOME was declared.\n";
+            return ".";
+        }
+
+        str.erase(0, 1);
+        str.insert(0, homePath);
+    }
+    return str;
 }

@@ -4,6 +4,7 @@ class LetsPlayServer;
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -19,8 +20,8 @@ class LetsPlayServer;
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-#include "Config.h"
 #include "EmulatorController.h"
+#include "LetsPlayConfig.h"
 #include "LetsPlayUser.h"
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
@@ -37,11 +38,13 @@ enum class kCommandType {
     Turn,
     Connect,
     Webp,
+    Admin,
     // External -- requires admin
     AddEmu,
     RemoveEmu,
     StopEmu,
     Shutdown,
+    Config,
     // Internal -- only generated inside program
     Unknown,
 };
@@ -126,13 +129,28 @@ class LetsPlayServer {
      */
     std::map<EmuID_t, EmulatorControllerProxy*> m_Emus;
 
+    /*
+     * Make m_emus threadsafe
+     */
     std::mutex m_EmusMutex;
 
    public:
     /*
+     * Config object
+     */
+    LetsPlayConfig config;
+
+    /*
      * Pointer to the websocketpp server
      */
     std::shared_ptr<wcpp_server> server;
+
+    /*
+     * Constructor
+     * @param configFile Path to the config.json file (defaults to
+     * ~/.config/letsplay/config)
+     */
+    LetsPlayServer(std::filesystem::path& configFile);
 
     /*
      * Blocking function that starts the LetsPlayServer on the given port
@@ -203,6 +221,8 @@ class LetsPlayServer {
      * @param id The id of the caller
      */
     void SendFrame(const EmuID_t& id);
+
+    static std::string escapeTilde(std::string str);
 
    private:
     /*

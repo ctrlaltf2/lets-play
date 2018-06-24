@@ -5,14 +5,17 @@ struct RGBAColor;
 struct VideoFormat;
 struct Frame;
 #pragma once
+#include <algorithm>
 #include <condition_variable>
 #include <cstdint>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <mutex>
 #include <new>
 #include <queue>
+#include <shared_mutex>
 #include <string>
 #include <variant>
 
@@ -102,11 +105,6 @@ class EmulatorController {
     static std::thread m_TurnThread;
 
     /*
-     * ID of the emulator controller / emulator
-     */
-    static EmuID_t id;
-
-    /*
      * Stores the masks and shifts required to generate a rgb 0xRRGGBB vector
      * from the video_refresh callback data
      */
@@ -131,7 +129,32 @@ class EmulatorController {
 
     static retro_system_av_info m_avinfo;
 
+    /*
+     * General mutex for things that won't really go off at once and get blocked
+     */
+    static std::shared_mutex m_generalMutex;
+
    public:
+    /*
+     * ID of the emulator controller / emulator
+     */
+    static EmuID_t id;
+
+    /*
+     * Name of the library that is loaded (mGBA, Snes9x, bsnes, etc)
+     */
+    static std::string coreName;
+
+    /*
+     * Location of the save directory, loaded from config
+     */
+    static std::string saveDirectory;
+
+    /*
+     * Location of the system directory, loaded from config
+     */
+    static std::string systemDirectory;
+
     /*
      * Pointer to some functions that the managing server needs to call
      */
