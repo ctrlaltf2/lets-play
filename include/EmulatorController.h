@@ -1,7 +1,6 @@
 class EmulatorController;
 struct EmulatorControllerProxy;
 struct RGBColor;
-struct RGBAColor;
 struct VideoFormat;
 struct Frame;
 #pragma once
@@ -15,6 +14,7 @@ struct Frame;
 #include <mutex>
 #include <new>
 #include <queue>
+#include <set>
 #include <shared_mutex>
 #include <string>
 #include <variant>
@@ -36,14 +36,6 @@ struct EmulatorControllerProxy {
         userConnected;
     std::function<Frame()> getFrame;
     bool isReady{false};
-};
-
-struct Frame {
-    // Width and height are in pixels
-    std::uint32_t width{0}, height{0};
-
-    // Packed array, RGB
-    std::shared_ptr<std::uint8_t[]> data{nullptr};
 };
 
 struct VideoFormat {
@@ -68,6 +60,35 @@ struct VideoFormat {
      */
     std::atomic<std::uint32_t> width{0}, height{0}, pitch{0};
 };
+
+struct RGBColor {
+    std::uint8_t r{0}, g{0}, b{0};
+};
+
+inline bool operator<(const RGBColor& a, const RGBColor& b) {
+    return (a.r | (a.g << 8) | (a.b << 16)) < (b.r | (b.g << 8) | (b.b << 16));
+}
+
+struct Frame {
+    /*
+     * Width/height of the frame (px)
+     */
+    std::uint32_t width{0}, height{0};
+
+    /*
+     * Set of unique colors in the color data. Used for deciding whether or
+     * not to use indexed coloring for PNG images
+     */
+    std::set<RGBColor> palette;
+
+    // Packed array, RGB
+    std::shared_ptr<std::uint8_t[]> data{nullptr};
+};
+
+// Why is every png library either 1) Overly verbose 2) Undocumented
+inline bool operator==(const png::color& a, const png::color& b) {
+    return (a.red == b.red) && (a.green == b.green) && (a.blue && b.blue);
+}
 
 /*
  * Class to be used once per thread, manages a libretro core, smulator, and its

@@ -52,7 +52,7 @@ target_compile_options(letsplay
         -Wall
         -Wextra
         -Werror=return-type
-        -O1
+        -O3
         -g
         -ggdb
         -pedantic-errors
@@ -67,4 +67,5 @@ target_link_libraries(letsplay
         webp
         ${Boost_LIBRARIES}
         stdc++fs
+        png
 )

@@ -16,6 +16,8 @@ class LetsPlayServer;
 
 #define _WEBSOCKETPP_CPP11_THREAD_
 
+#include <png++/png.hpp>
+
 #include <websocketpp/common/connection_hdl.hpp>
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
