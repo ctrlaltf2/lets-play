@@ -522,7 +522,45 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     std::uint8_t* webpData{nullptr};
     size_t webpWritten = WebPEncodeLosslessRGB(
         &frame.data[0], frame.width, frame.height, frame.width * 3, &webpData);
-    std::clog << webpWritten << " bytes\n";
+
+    std::vector<std::uint8_t> pngData;
+    std::ostringstream out;
+    if (frame.palette.size() <= 256) {  // Use indexed color png
+        png::image<png::index_pixel> image(frame.width, frame.height);
+        png::palette pal(frame.palette.size());
+        unsigned i = 0;
+        for (auto paletteColor = frame.palette.begin();
+             paletteColor != frame.palette.end(); ++paletteColor, ++i) {
+            pal[i] =
+                png::color(paletteColor->r, paletteColor->g, paletteColor->b);
+        }
+        image.set_palette(pal);
+        for (std::uint32_t y = 0, j = 0; y < image.get_height(); ++y) {
+            for (std::uint32_t x = 0; x < image.get_width(); ++x, j += 3) {
+                png::color color = png::color{frame.data[j], frame.data[j + 1],
+                                              frame.data[j + 2]};
+                image[y][x] = std::distance(
+                    pal.begin(), std::find(pal.begin(), pal.end(), color));
+            }
+        }
+        image.write_stream(out);
+    } else {
+        png::image<png::rgb_pixel> image(frame.width, frame.height);
+        for (std::uint32_t y = 0, i = 0; y < image.get_height(); ++y) {
+            for (std::uint32_t x = 0; x < image.get_width(); ++x, i += 3) {
+                image[y][x] = png::rgb_pixel(frame.data[i], frame.data[i + 1],
+                                             frame.data[i + 2]);
+            }
+        }
+        image.write_stream(out);
+    }
+    // ree
+    std::string data = out.str();
+    for (const char c : data) pngData.push_back(static_cast<unsigned char>(c));
+
+    std::clog << "PNG: " << pngData.size() << ", WebP: " << webpWritten << '\n';
+
+    // std::clog << webpWritten << " bytes\n";
 
     // Do png encoding
 

@@ -172,7 +172,7 @@ void EmulatorController::Run(const std::string& corePath,
 }
 
 bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
-    std::cout << "OnEnvironment(): " << cmd << '\n';
+    // std::cout << "OnEnvironment(): " << cmd << '\n';
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt =
@@ -404,14 +404,15 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 Frame EmulatorController::GetFrame() {
     static size_t o = 0;
     std::unique_lock<std::mutex> lk(m_videoMutex);
-    if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
-    std::clog << m_videoFormat.width << ' ' << m_videoFormat.height << ' '
-              << m_videoFormat.pitch << '\n';
+    if (m_currentBuffer == nullptr) return Frame{0, 0, {}, {}};
+    // std::clog << m_videoFormat.width << ' ' << m_videoFormat.height << ' '
+    // << m_videoFormat.pitch << '\n';
     // Reserve just enough space
     std::shared_ptr<std::uint8_t[]> outVec(
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
     size_t j{0};
 
+    std::set<RGBColor> pixelSet;
     const std::uint8_t* i = static_cast<const std::uint8_t*>(m_currentBuffer);
     for (size_t h = 0; h < m_videoFormat.height; ++h) {
         for (size_t w = 0; w < m_videoFormat.width; ++w) {
@@ -444,6 +445,14 @@ Frame EmulatorController::GetFrame() {
             std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
             std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
 
+            if (pixelSet.size() <
+                257) { /* 256 is the max size for a palette, if the number of
+                          unique pixels is more than 256, the pixelSet will
+                          contain 257 values and therefore not be used */
+                pixelSet.insert(
+                    RGBColor{rNormalized, gNormalized, bNormalized});
+            }
+
             outVec[j++] = rNormalized;
             outVec[j++] = gNormalized;
             outVec[j++] = bNormalized;
@@ -455,5 +464,5 @@ Frame EmulatorController::GetFrame() {
 
     // std::clog << o << '\n';
     // o = (o + 1) % 100;
-    return Frame{m_videoFormat.width, m_videoFormat.height, outVec};
+    return Frame{m_videoFormat.width, m_videoFormat.height, pixelSet, outVec};
 }
