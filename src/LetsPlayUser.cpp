@@ -6,21 +6,21 @@ bool LetsPlayUser::shouldDisconnect() const {
 }
 
 EmuID_t LetsPlayUser::connectedEmu() {
-    std::unique_lock<std::mutex> lk((m_access));
+    std::unique_lock lk((m_access));
     return m_connectedEmu;
 }
 
 void LetsPlayUser::setConnectedEmu(const EmuID_t& id) {
-    std::unique_lock<std::mutex> lk((m_access));
+    std::unique_lock lk((m_access));
     m_connectedEmu = id;
 }
 
 std::string LetsPlayUser::username() {
-    std::unique_lock<std::mutex> lk((m_access));
+    std::unique_lock lk((m_access));
     return m_username;
 }
 
 void LetsPlayUser::setUsername(const std::string& name) {
-    std::unique_lock<std::mutex> lk((m_access));
+    std::unique_lock lk((m_access));
     m_username = name;
 }
