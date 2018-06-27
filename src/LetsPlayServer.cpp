@@ -58,7 +58,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     {
-        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        std::unique_lock lk((m_UsersMutex));
         m_Users[hdl].setUsername("");
     }
 }
@@ -70,7 +70,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     LetsPlayUser* user{nullptr};
     auto search = m_Users.end();
     {
-        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        std::unique_lock lk((m_UsersMutex));
         search = m_Users.find(hdl);
         if (search == m_Users.end()) {
             std::clog << "Couldn't find left user in list" << '\n';
@@ -81,13 +81,13 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
 
     if (user && user->connectedEmu() != "") {
         {
-            std::unique_lock<std::mutex> lk((m_EmusMutex));
+            std::unique_lock lk((m_EmusMutex));
             m_Emus[user->connectedEmu()]->userDisconnected(user);
         }
     }
 
     {
-        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        std::unique_lock lk((m_UsersMutex));
         m_Users.erase(search);
     }
 }
@@ -127,7 +127,7 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
 
     std::vector<std::string> params(decoded.begin() + 1, decoded.end());
     {
-        std::unique_lock<std::mutex> lk((m_QueueMutex));
+        std::unique_lock lk((m_QueueMutex));
         std::cout << command << '(';
         for (const auto& param : params) std::cout << param << ", ";
         std::cout << ')' << '\n';
@@ -153,7 +153,7 @@ void LetsPlayServer::Shutdown() {
     {
         std::clog << "Emptying queue..." << '\n';
         // Empty the queue ...
-        std::unique_lock<std::mutex> lk((m_QueueMutex));
+        std::unique_lock lk((m_QueueMutex));
         while (m_WorkQueue.size()) m_WorkQueue.pop();
         // ... Except for a shutdown command
         m_WorkQueue.push(Command{kCommandType::Shutdown,
@@ -176,7 +176,7 @@ void LetsPlayServer::Shutdown() {
     // Close every connection
     {
         std::clog << "Closing every connection..." << '\n';
-        std::unique_lock<std::mutex> lk((m_UsersMutex));
+        std::unique_lock lk((m_UsersMutex));
         for ([[maybe_unused]] const auto& [hdl, user] : m_Users)
             server->close(hdl, websocketpp::close::status::normal, "Closing",
                           err);
@@ -186,7 +186,7 @@ void LetsPlayServer::Shutdown() {
 void LetsPlayServer::QueueThread() {
     while (m_QueueThreadRunning) {
         {
-            std::unique_lock<std::mutex> lk((m_QueueMutex));
+            std::unique_lock lk((m_QueueMutex));
             // Use std::condition_variable::wait Predicate?
             while (m_WorkQueue.empty()) m_QueueNotifier.wait(lk);
 
@@ -199,7 +199,7 @@ void LetsPlayServer::QueueThread() {
                         if (command.params.size() != 1) break;
                         std::string username;
                         {
-                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            std::unique_lock lk((m_UsersMutex));
                             LetsPlayUser* user = &(m_Users[command.hdl]);
                             if (user && (user->connectedEmu() == "")) break;
                             username = user->username();
@@ -214,8 +214,7 @@ void LetsPlayServer::QueueThread() {
 
                         std::uint64_t maxMessageSize;
                         {
-                            std::shared_lock<std::shared_mutex> lk(
-                                config.mutex);
+                            std::shared_lock lk(config.mutex);
                             nlohmann::json& data =
                                 config.config["serverConfig"]["maxMessageSize"];
 
@@ -248,8 +247,7 @@ void LetsPlayServer::QueueThread() {
 
                         std::uint64_t maxUsernameLen, minUsernameLen;
                         {
-                            std::shared_lock<std::shared_mutex> lk(
-                                config.mutex);
+                            std::shared_lock lk(config.mutex);
                             nlohmann::json& max =
                                 config.config["serverConfig"]
                                              ["maxUsernameLength"];
@@ -285,7 +283,7 @@ void LetsPlayServer::QueueThread() {
 
                         std::string oldUsername;
                         {
-                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            std::unique_lock lk((m_UsersMutex));
                             oldUsername = m_Users[command.hdl].username();
                             m_Users[command.hdl].setUsername(newUsername);
                         }
@@ -295,10 +293,10 @@ void LetsPlayServer::QueueThread() {
                             BroadcastAll(newUsername + " has joined!",
                                          websocketpp::frame::opcode::text);
                         else
-                            BroadcastAll(
-                                LetsPlayServer::encode(std::vector<std::string>{
-                                    "username", oldUsername, newUsername}),
-                                websocketpp::frame::opcode::text);
+                            BroadcastAll(LetsPlayServer::encode(std::vector{
+                                             std::string("username"),
+                                             oldUsername, newUsername}),
+                                         websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::List: {
                         if (command.params.size() != 0) break;
@@ -306,7 +304,7 @@ void LetsPlayServer::QueueThread() {
                         message.push_back("list");
 
                         {
-                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            std::unique_lock lk((m_UsersMutex));
                             for ([[maybe_unused]] auto& [hdl, user] : m_Users)
                                 if (!hdl.expired())
                                     message.push_back(user.username());
@@ -321,7 +319,7 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Turn: {
                         LetsPlayUser* user{nullptr};
                         {
-                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            std::unique_lock lk((m_UsersMutex));
                             user = &(m_Users[command.hdl]);
                             std::cout << user->connectedEmu() << '\n';
                             if ((user->connectedEmu() == "") ||
@@ -336,7 +334,7 @@ void LetsPlayServer::QueueThread() {
                         }
                         std::cout << "User lookup success" << '\n';
                         {
-                            std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            std::unique_lock lk((m_EmusMutex));
                             if (auto emu = m_Emus[user->connectedEmu()]; emu) {
                                 std::cout << "Adding user to queue..." << '\n';
                                 emu->addTurnRequest(user);
@@ -354,7 +352,7 @@ void LetsPlayServer::QueueThread() {
 
                         // Check if the emu that the connect thing that was sent
                         // exists
-                        if (std::unique_lock<std::mutex> lk((m_EmusMutex));
+                        if (std::unique_lock lk((m_EmusMutex));
                             m_Emus.find(command.params[0]) == m_Emus.end()) {
                             std::cout << '\'' << command.emuID
                                       << "' not a valid emu\n";
@@ -366,7 +364,7 @@ void LetsPlayServer::QueueThread() {
                         // the list
                         LetsPlayUser* user{nullptr};
                         {
-                            std::unique_lock<std::mutex> lk((m_UsersMutex));
+                            std::unique_lock lk((m_UsersMutex));
                             user = &m_Users[command.hdl];
                         }
 
@@ -377,7 +375,7 @@ void LetsPlayServer::QueueThread() {
 
                         user->setConnectedEmu(command.params[0]);
                         {
-                            std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            std::unique_lock lk((m_EmusMutex));
                             m_Emus[user->connectedEmu()]->userConnected(user);
                         }
                     } break;
@@ -391,7 +389,7 @@ void LetsPlayServer::QueueThread() {
                         const auto& romPath = command.params[2];
 
                         {
-                            std::unique_lock<std::mutex> lk((m_EmuThreadMutex));
+                            std::unique_lock lk((m_EmuThreadMutex));
                             m_EmulatorThreads.emplace_back(
                                 std::thread(EmulatorController::Run, corePath,
                                             romPath, this, id));
@@ -400,7 +398,7 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Webp: {
                         if (command.params.size() != 0) break;
 
-                        std::unique_lock<std::mutex> lk((m_UsersMutex));
+                        std::unique_lock lk((m_UsersMutex));
                         m_Users[command.hdl].supportsWebp = true;
                     } break;
                     case kCommandType::RemoveEmu:
@@ -420,7 +418,7 @@ void LetsPlayServer::QueueThread() {
 
 void LetsPlayServer::BroadcastAll(const std::string& data,
                                   websocketpp::frame::opcode::value op) {
-    std::unique_lock<std::mutex> lk(m_UsersMutex, std::try_to_lock);
+    std::unique_lock lk(m_UsersMutex, std::try_to_lock);
     for (auto& [hdl, user] : m_Users) {
         if (user.username() != "" && !hdl.expired())
             server->send(hdl, data, op);
@@ -433,7 +431,7 @@ void LetsPlayServer::BroadcastOne(const std::string& data,
 }
 
 void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
-    std::unique_lock<std::mutex> lk((m_EmusMutex));
+    std::unique_lock lk((m_EmusMutex));
     m_Emus[id] = emu;
 }
 
@@ -508,7 +506,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // determine the file type, webp or png. Should be easy because png starts
     // with 0x89, webp with 0x52)
     Frame frame = [&]() {
-        std::unique_lock<std::mutex> lk(m_EmusMutex);
+        std::unique_lock lk(m_EmusMutex);
         auto emu = m_Emus[id];
         return emu->getFrame();
     }();
@@ -565,7 +563,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // for whatever reason
     if (!webpData || !webpWritten) return;
 
-    std::unique_lock<std::mutex> lk(m_UsersMutex);
+    std::unique_lock lk(m_UsersMutex);
     for (auto& [hdl, user] : m_Users) {
         if (user.connectedEmu() == id && !hdl.expired()) {
             server->send(hdl, webpData, webpWritten,

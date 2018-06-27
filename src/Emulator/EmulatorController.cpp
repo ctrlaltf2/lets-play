@@ -232,7 +232,7 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
 
 void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
                                         unsigned height, size_t pitch) {
-    std::unique_lock<std::mutex> lk(m_videoMutex);
+    std::unique_lock lk(m_videoMutex);
     if (width != m_videoFormat.width || height != m_videoFormat.height ||
         pitch != m_videoFormat.pitch) {
         std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
@@ -262,7 +262,7 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data,
 
 void EmulatorController::TurnThread() {
     while (m_TurnThreadRunning) {
-        std::unique_lock<std::mutex> lk((m_TurnMutex));
+        std::unique_lock lk((m_TurnMutex));
 
         // Wait for a nonempty queue
         while (m_TurnQueue.empty()) {
@@ -280,7 +280,7 @@ void EmulatorController::TurnThread() {
 
         std::uint64_t turnLength;
         {
-            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            std::shared_lock lk(m_server->config.mutex);
             if (nlohmann::json& data =
                     m_server->config
                         .config["serverConfig"]["emulators"][id]["turnLength"];
@@ -316,14 +316,14 @@ void EmulatorController::TurnThread() {
 }
 
 void EmulatorController::AddTurnRequest(LetsPlayUser* user) {
-    std::unique_lock<std::mutex> lk((m_TurnMutex));
+    std::unique_lock lk((m_TurnMutex));
     m_TurnQueue.emplace_back(user);
     m_TurnNotifier.notify_one();
 }
 
 void EmulatorController::UserDisconnected(LetsPlayUser* user) {
     --usersConnected;
-    std::unique_lock<std::mutex> lk((m_TurnMutex));
+    std::unique_lock lk((m_TurnMutex));
     auto& currentUser = m_TurnQueue[0];
 
     if (currentUser->hasTurn) {  // Current turn is user
@@ -403,7 +403,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
 Frame EmulatorController::GetFrame() {
     static size_t o = 0;
-    std::unique_lock<std::mutex> lk(m_videoMutex);
+    std::unique_lock lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}, {}};
     // std::clog << m_videoFormat.width << ' ' << m_videoFormat.height << ' '
     // << m_videoFormat.pitch << '\n';

@@ -35,7 +35,7 @@ const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 // clang-format on
 
 void LetsPlayConfig::ReloadConfig() {
-    if (std::unique_lock<std::shared_mutex> lk(mutex, std::try_to_lock);
+    if (std::unique_lock lk(mutex, std::try_to_lock);
         std::filesystem::exists(m_configPath) &&
         std::filesystem::is_regular_file(m_configPath)) {
         std::ifstream fi(m_configPath);
@@ -47,9 +47,8 @@ void LetsPlayConfig::ReloadConfig() {
 
 void LetsPlayConfig::LoadFrom(const std::filesystem::path& path) {
     std::clog << "Loading file" << '\n';
-    if (std::unique_lock<std::shared_mutex> lk((mutex));
-        std::filesystem::exists(path) &&
-        std::filesystem::is_regular_file(path)) {
+    if (std::unique_lock lk((mutex)); std::filesystem::exists(path) &&
+                                      std::filesystem::is_regular_file(path)) {
         std::clog << "Valid path: " << path << '\n';
         m_configPath = path;
         ReloadConfig();
@@ -59,7 +58,7 @@ void LetsPlayConfig::LoadFrom(const std::filesystem::path& path) {
 }
 
 void LetsPlayConfig::SaveConfig() {
-    std::shared_lock<std::shared_mutex> lk((mutex));
+    std::shared_lock lk((mutex));
     std::ofstream fo(m_configPath);
     fo << std::setw(4) << config;
 }
