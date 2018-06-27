@@ -281,10 +281,10 @@ void EmulatorController::TurnThread() {
         std::uint64_t turnLength;
         {
             std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
-            nlohmann::json& data =
-                m_server->config
-                    .config["serverConfig"]["emulators"][id]["turnLength"];
-            if (data.empty() || !data.is_number())
+            if (nlohmann::json& data =
+                    m_server->config
+                        .config["serverConfig"]["emulators"][id]["turnLength"];
+                data.empty() || !data.is_number())
                 turnLength =
                     LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
                                                  ["template"]["turnLength"];

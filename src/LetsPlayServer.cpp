@@ -337,13 +337,13 @@ void LetsPlayServer::QueueThread() {
                         std::cout << "User lookup success" << '\n';
                         {
                             std::unique_lock<std::mutex> lk((m_EmusMutex));
-                            auto emu = m_Emus[user->connectedEmu()];
-                            if (emu) {
+                            if (auto emu = m_Emus[user->connectedEmu()]; emu) {
                                 std::cout << "Adding user to queue..." << '\n';
                                 emu->addTurnRequest(user);
-                            } else
+                            } else {
                                 std::cout << "Invalid emu in lookup in onTurn"
                                           << '\n';
+                            }
                         }
 
                     } break;
@@ -354,14 +354,11 @@ void LetsPlayServer::QueueThread() {
 
                         // Check if the emu that the connect thing that was sent
                         // exists
-                        {
-                            std::unique_lock<std::mutex> lk((m_EmusMutex));
-                            if (m_Emus.find(command.params[0]) ==
-                                m_Emus.end()) {
-                                std::cout << '\'' << command.emuID
-                                          << "' not a valid emu\n";
-                                break;
-                            }
+                        if (std::unique_lock<std::mutex> lk((m_EmusMutex));
+                            m_Emus.find(command.params[0]) == m_Emus.end()) {
+                            std::cout << '\'' << command.emuID
+                                      << "' not a valid emu\n";
+                            break;
                         }
                         // NOTE: only allow switching emus if
                         // emulatorcontrollers don't end up storing who's

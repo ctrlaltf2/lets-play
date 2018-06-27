@@ -21,16 +21,11 @@ void RetroCore::Init(const char* corePath) {
     void* hCore = dlopen(corePath, RTLD_NOW);
 
     // TODO: Exception
-    if (hCore == nullptr) {
+    if (!hCore) {
         std::cerr << "Failed to load libretro core -- " << dlerror() << '\n';
         std::exit(-1);
     }
 
-    // TODO: Exception
-    if (hCore == nullptr) {
-        std::cerr << "RetroCore handle points to nothing\n";
-        std::exit(-2);
-    }
     this->m_hCore = hCore;
 
     // Load functions from hCore
