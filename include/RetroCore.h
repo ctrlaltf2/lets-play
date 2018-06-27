@@ -56,6 +56,13 @@ class RetroCore {
     bool (*fLoadGame)(const retro_game_info*) = nullptr;
 
     RetroCore();
+
+    /**
+     * Delete the copy constructor because this can cause problems with the
+     * destructor being called and closing the dynamic lib, therefore making the
+     * core pointer invalid
+     */
+    RetroCore(const RetroCore&) = delete;
     /**
      * Create a RetroCore object based on a core path
      * @param corePath Path to the core to load
