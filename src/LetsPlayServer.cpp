@@ -500,6 +500,10 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
 }
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
+    // temporary
+    static tjhandle _jpegCompressor = tjInitCompress();
+    static long unsigned int _jpegBufferSize = 0;
+    static std::uint8_t* jpegData{nullptr};
     // TODO: webp and png differentiation
     // TODO: send the smaller of the two, webp or png (doing this requires
     // clientside being able to read the first byte of the frame and from that
@@ -514,10 +518,14 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // currentBuffer was nullptr
     if (frame.width == 0 || frame.height == 0) return;
 
+    /*
+    auto webpStart = std::chrono::steady_clock::now();
     std::uint8_t* webpData{nullptr};
     size_t webpWritten = WebPEncodeLosslessRGB(
         &frame.data[0], frame.width, frame.height, frame.width * 3, &webpData);
+    auto webpEnd = std::chrono::steady_clock::now();
 
+    auto pngStart = std::chrono::steady_clock::now();
     std::vector<std::uint8_t> pngData;
     std::ostringstream out;
     if (frame.palette.size() <= 256) {  // Use indexed color png
@@ -552,26 +560,50 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // ree
     std::string data = out.str();
     for (const char c : data) pngData.push_back(static_cast<unsigned char>(c));
+    auto pngEnd = std::chrono::steady_clock::now();*/
 
-    std::clog << "PNG: " << pngData.size() << ", WebP: " << webpWritten << '\n';
+    unsigned quality =
+        LetsPlayConfig::defaultConfig["serverConfig"]["jpegQuality"];
+    if (std::shared_lock lk(config.mutex);
+        config.config["serverConfig"].count("jpegQuality")) {
+        nlohmann::json& value = config.config["serverConfig"]["jpegQuality"];
+        if (value.is_number() && (value <= 100) && (value >= 1))
+            quality = value;
+    }
+    auto jpegStart = std::chrono::steady_clock::now();
+    long unsigned int jpegSize = _jpegBufferSize;
+    tjCompress2(_jpegCompressor, frame.data.get(), frame.width, frame.width * 3,
+                frame.height, TJPF_RGB, &jpegData, &jpegSize, TJSAMP_422,
+                quality, TJFLAG_ACCURATEDCT);
+
+    _jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
+    auto jpegEnd = std::chrono::steady_clock::now();
+
+    std::clog /*<< "PNG:\t\t" << pngData.size() << " bytes\t\t"
+              << (pngEnd - pngStart).count() << "ms\n"
+              << "WebP:\t\t" << webpWritten << " bytes\t\t"
+              << (webpEnd - webpStart).count() << "ms\n"*/
+        << "JPEG:\t\t" << jpegSize << " bytes\t\t"
+        << (jpegEnd - jpegStart).count() << "ms\n";
+    //<< '\n';
 
     // std::clog << webpWritten << " bytes\n";
 
     // Do png encoding
 
-    // TODO: once png encoding implemented, make png be the backup if webp fails
-    // for whatever reason
-    if (!webpData || !webpWritten) return;
+    // TODO: once png encoding implemented, make png be the backup if webp
+    // fails for whatever reason
+    // if (!webpData || !webpWritten) return;
 
     std::unique_lock lk(m_UsersMutex);
     for (auto& [hdl, user] : m_Users) {
         if (user.connectedEmu() == id && !hdl.expired()) {
-            server->send(hdl, webpData, webpWritten,
+            server->send(hdl, jpegData, jpegSize,
                          websocketpp::frame::opcode::binary);
         }
     }
 
-    WebPFree(webpData);
+    // WebPFree(webpData);
 }
 
 std::string LetsPlayServer::escapeTilde(std::string str) {

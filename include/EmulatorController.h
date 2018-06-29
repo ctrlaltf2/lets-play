@@ -82,7 +82,7 @@ struct Frame {
     std::set<RGBColor> palette;
 
     // Packed array, RGB
-    std::shared_ptr<std::uint8_t[]> data{nullptr};
+    std::shared_ptr<std::uint8_t[]> data;
 };
 
 // Why is every png library either 1) Overly verbose 2) Undocumented

@@ -64,8 +64,7 @@ target_link_libraries(letsplay
         dl
         pthread
         boost_system
-        webp
         ${Boost_LIBRARIES}
         stdc++fs
-        png
+        turbojpeg
 )
