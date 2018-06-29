@@ -573,7 +573,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     auto jpegStart = std::chrono::steady_clock::now();
     long unsigned int jpegSize = _jpegBufferSize;
     tjCompress2(_jpegCompressor, frame.data.get(), frame.width, frame.width * 3,
-                frame.height, TJPF_RGB, &jpegData, &jpegSize, TJSAMP_422,
+                frame.height, TJPF_RGB, &jpegData, &jpegSize, TJSAMP_420,
                 quality, TJFLAG_ACCURATEDCT);
 
     _jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
