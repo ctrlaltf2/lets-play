@@ -412,6 +412,7 @@ Frame EmulatorController::GetFrame() {
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
     size_t j{0};
 
+    // TODO: Use simd lib to speed this up?
     std::set<RGBColor> pixelSet;
     const std::uint8_t* i = static_cast<const std::uint8_t*>(m_currentBuffer);
     for (size_t h = 0; h < m_videoFormat.height; ++h) {
