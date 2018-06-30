@@ -49,6 +49,7 @@ enum class kCommandType {
     Shutdown,
     Config,
     // Internal -- only generated inside program
+    CleanupUser,
     Unknown,
 };
 

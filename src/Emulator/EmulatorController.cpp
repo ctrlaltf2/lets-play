@@ -323,21 +323,24 @@ void EmulatorController::AddTurnRequest(LetsPlayUser* user) {
 
 void EmulatorController::UserDisconnected(LetsPlayUser* user) {
     --usersConnected;
-    std::unique_lock lk((m_TurnMutex));
-    auto& currentUser = m_TurnQueue[0];
+    if (std::unique_lock lk((m_TurnMutex));
+        m_TurnQueue.size() > 0 && m_TurnQueue[0] == user) {
+        auto& currentUser = m_TurnQueue[0];
 
-    if (currentUser->hasTurn) {  // Current turn is user
-        m_TurnNotifier.notify_one();
-    } else if (currentUser->requestedTurn) {  // In the queue
-        m_TurnQueue.erase(
-            std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
-            m_TurnQueue.end());
-    };
-    // Set the current user to nullptr so turnqueue knows not to try to
-    // modify it, as it may be in an invalid state because the memory it
-    // points to (managed by a std::map) may be reallocated as part of an
-    // erase
-    currentUser = nullptr;
+        if (currentUser->hasTurn) {  // Current turn is user
+            m_TurnNotifier.notify_one();
+        } else if (currentUser->requestedTurn) {  // In the queue
+            m_TurnQueue.erase(
+                std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
+                m_TurnQueue.end());
+        };
+
+        // Set the current user to nullptr so turnqueue knows not to try to
+        // modify it, as it may be in an invalid state because the memory it
+        // points to (managed by a std::map) may be reallocated as part of an
+        // erase
+        currentUser = nullptr;
+    }
 }
 
 void EmulatorController::UserConnected(LetsPlayUser* user) {
