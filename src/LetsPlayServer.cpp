@@ -598,8 +598,9 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     std::unique_lock lk(m_UsersMutex);
     for (auto& [hdl, user] : m_Users) {
         if (user.connectedEmu() == id && !hdl.expired()) {
+            websocketpp::lib::error_code ec;
             server->send(hdl, jpegData, jpegSize,
-                         websocketpp::frame::opcode::binary);
+                         websocketpp::frame::opcode::binary, ec);
         }
     }
 
