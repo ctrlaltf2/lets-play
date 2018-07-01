@@ -33,7 +33,6 @@ using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 
 enum class kCommandType {
-    // External -- only generated from clients sending messages
     Chat,
     Username,
     List,
@@ -42,14 +41,11 @@ enum class kCommandType {
     Connect,
     Webp,
     Admin,
-    // External -- requires admin
     AddEmu,
     RemoveEmu,
     StopEmu,
     Shutdown,
     Config,
-    // Internal -- only generated inside program
-    CleanupUser,
     Unknown,
 };
 
