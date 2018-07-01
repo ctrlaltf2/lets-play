@@ -94,12 +94,10 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
 
 void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
                                wcpp_server::message_ptr msg) {
-    std::clog << "OnMessage()" << '\n';
     const std::string& data = msg->get_payload();
     const auto decoded = decode(data);
 
     if (decoded.empty()) return;
-
     // TODO: that switch case hash thing, its faster
     const auto& command = decoded.at(0);
     kCommandType t = kCommandType::Unknown;
@@ -118,6 +116,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         t = kCommandType::Turn;
     else if (command == "webp")
         t = kCommandType::Webp;
+    else if (command == "button")
+        t = kCommandType::Button;
     else if (command == "add")
         t = kCommandType::AddEmu;
     else if (command == "shutdown")
@@ -311,10 +311,7 @@ void LetsPlayServer::QueueThread() {
 
                         BroadcastOne(LetsPlayServer::encode(message),
                                      command.hdl);
-                    }
-                    case kCommandType::Button:
-                        // Broadcast none
-                        break;
+                    } break;
                     case kCommandType::Turn: {
                         LetsPlayUser* user{nullptr};
                         {
@@ -376,6 +373,37 @@ void LetsPlayServer::QueueThread() {
                         {
                             std::unique_lock lk((m_EmusMutex));
                             m_Emus[user->connectedEmu()]->userConnected(user);
+                        }
+                    } break;
+                    case kCommandType::Button: {  // up/down, id
+                        if (command.params.size() != 2) return;
+
+                        if (command.params[0].front() == '-') return;
+
+                        EmuID_t userEmuID;
+                        {
+                            std::unique_lock lk(m_UsersMutex);
+                            userEmuID = m_Users[command.hdl].connectedEmu();
+                        }
+                        if (userEmuID != "") {
+                            unsigned buttonID{0};
+                            try {
+                                buttonID = std::stoi(command.params[1]);
+                            } catch (const std::invalid_argument& e) {
+                                break;
+                            } catch (const std::out_of_range& e) {
+                                break;
+                            }
+                            if (buttonID > 15u) break;
+
+                            std::unique_lock lk(m_EmusMutex);
+                            if (command.params[0] == "up") {
+                                m_Emus[userEmuID]->joypad->buttonRelease(
+                                    buttonID);
+                            } else if (command.params[0] == "down") {
+                                m_Emus[userEmuID]->joypad->buttonPress(
+                                    buttonID);
+                            }
                         }
                     } break;
                     case kCommandType::AddEmu: {  // emu, libretro core path,

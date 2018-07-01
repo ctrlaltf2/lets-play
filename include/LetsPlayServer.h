@@ -70,8 +70,7 @@ struct Command {
     websocketpp::connection_hdl hdl;
 
     /*
-     * (User provided) ID of the emulator the user is connected to and
-     * (apparently) sending the message from
+     * ID of the emulator the user is connected to and sending the message from
      */
     EmuID_t emuID;
 };

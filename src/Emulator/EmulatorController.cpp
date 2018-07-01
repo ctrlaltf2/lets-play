@@ -14,6 +14,7 @@ std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
 std::thread EmulatorController::m_TurnThread;
 std::atomic<std::uint64_t> EmulatorController::usersConnected{0};
+RetroPad EmulatorController::joypad;
 
 VideoFormat EmulatorController::m_videoFormat;
 Frame EmulatorController::m_keyFrame;
@@ -69,7 +70,8 @@ void EmulatorController::Run(const std::string& corePath,
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected,
-                                    UserConnected, GetFrame};
+                                    UserConnected,  GetFrame,
+                                    false,          &joypad};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -249,7 +251,12 @@ void EmulatorController::OnPollInput() {}
 
 std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
                                                  unsigned index, unsigned id) {
-    return 0;
+    // std::cout << port << ' ' << index << ' ' << device << ' ' << id << ' '
+    //<< joypad.isPressed(id) << '\n';
+    if (port || index || device != RETRO_DEVICE_JOYPAD) return 0;
+
+    if (joypad.isPressed(id)) std::clog << id << " Pressed!" << '\n';
+    return joypad.isPressed(id);
 }
 
 void EmulatorController::OnLRAudioSample(std::int16_t left,

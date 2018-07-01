@@ -25,10 +25,10 @@ struct Frame;
 
 #include "libretro.h"
 
-#include "Config.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
+#include "RetroPad.h"
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
@@ -36,6 +36,7 @@ struct EmulatorControllerProxy {
         userConnected;
     std::function<Frame()> getFrame;
     bool isReady{false};
+    RetroPad* joypad{nullptr};
 };
 
 struct VideoFormat {
@@ -180,6 +181,11 @@ class EmulatorController {
      * Rom data if loaded from file
      */
     static char* romData;
+
+    /*
+     * The joypad object storing the button state
+     */
+    static RetroPad joypad;
 
     /*
      * Pointer to some functions that the managing server needs to call
