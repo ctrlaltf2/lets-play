@@ -234,9 +234,8 @@ void LetsPlayServer::QueueThread() {
                             break;
 
                         BroadcastAll(
-                            command.emuID + ": " +
-                                LetsPlayServer::encode(std::vector<std::string>{
-                                    "chat", username, command.params[0]}),
+                            LetsPlayServer::encode(std::vector<std::string>{
+                                "chat", username, command.params[0]}),
                             websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::Username: {
@@ -584,7 +583,10 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
               << "WebP:\t\t" << webpWritten << " bytes\t\t"
               << (webpEnd - webpStart).count() << "ms\n"*/
         << "JPEG:\t\t" << jpegSize << " bytes\t\t"
-        << (jpegEnd - jpegStart).count() << "ms\n";
+        << std::chrono::duration_cast<std::chrono::nanoseconds>(jpegEnd -
+                                                                jpegStart)
+               .count()
+        << "ms\n";
     //<< '\n';
 
     // std::clog << webpWritten << " bytes\n";
