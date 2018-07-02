@@ -40,6 +40,7 @@ enum class kCommandType {
     Turn,
     Connect,
     Webp,
+    Error,
     Admin,
     AddEmu,
     RemoveEmu,
@@ -48,6 +49,15 @@ enum class kCommandType {
     Config,
     Unknown,
 };
+
+namespace error {
+enum {
+    usernameTooLong,
+    usernameTooShort,
+    usernameInvalidChars,
+    connectInvalidEmu
+};
+}  // namespace error
 
 /*
  * POD class for the action queue
@@ -70,9 +80,17 @@ struct Command {
     websocketpp::connection_hdl hdl;
 
     /*
-     * ID of the emulator the user is connected to and sending the message from
+     * ID of the emulator the user is connected to (if any) and sending the
+     * message from
      */
     EmuID_t emuID;
+
+    /*
+     * Pointer to the LetsPlayUser object inside of the hdl->user relation map
+     * XXX: Possible data race for when the map internally reallocates, but
+     * hasn't happened in tests
+     */
+    LetsPlayUser* user{nullptr};
 };
 
 class LetsPlayServer {
@@ -192,16 +210,27 @@ class LetsPlayServer {
 
     /*
      * Send a message to all connected users
-     * @param The message to send (isn't modified or encoded on the way out)
-     * @param The type of message to send
+     * @param message The message to send (isn't modified or encoded on the way
+     * out)
+     * @param op The type of message to send
      */
     void BroadcastAll(const std::string& message,
                       websocketpp::frame::opcode::value op);
 
     /*
+     * Send a message to all users connected to an emu
+     * @param emu ID of the emulator to broadcast to
+     * @param message The message to send
+     * @param op The type of frame to send
+     */
+    void BroadcastToEmu(const EmuID_t& emu, const std::string& message,
+                        websocketpp::frame::opcode::value op);
+
+    /*
      * Send a message to just one user
-     * @param The message to send (isn't modified or encoded on the way out)
-     * @param Who to send it to
+     * @param message The message to send (isn't modified or encoded on the way
+     * out)
+     * @param hdl Who to send it to
      */
     void BroadcastOne(const std::string& message,
                       websocketpp::connection_hdl hdl);

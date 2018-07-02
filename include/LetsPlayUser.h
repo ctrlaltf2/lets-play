@@ -68,6 +68,8 @@ class LetsPlayUser {
     // cs-major-just-introduced-to-java-classes-esque getters and setters is for
     // thread safe access / modification
 
+    // TODO: Check for where double-check locking is required
+
     /*
      * Returns what emu (if any) the user if connected to
      */
