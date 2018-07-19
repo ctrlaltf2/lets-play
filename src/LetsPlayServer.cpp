@@ -68,12 +68,12 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
 
     LetsPlayUser* user{nullptr};
-    auto search = m_Users.end();
+    decltype(m_Users)::iterator search;
     {
         std::unique_lock lk((m_UsersMutex));
         search = m_Users.find(hdl);
         if (search == m_Users.end()) {
-            std::clog << "Couldn't find left user in list" << '\n';
+            std::clog << "Couldn't find user who left in list" << '\n';
             return;
         }
         user = &search->second;
@@ -88,7 +88,9 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
 
     {
         std::unique_lock lk((m_UsersMutex));
-        m_Users.erase(search);
+        // Double check is on purpose
+        search = m_Users.find(hdl);
+        if (search != m_Users.end()) m_Users.erase(search);
     }
 }
 
@@ -133,12 +135,13 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl,
         emuID = user->connectedEmu();
     }
 
-    if (std::unique_lock lk(m_QueueMutex); decoded.size() > 0) {
-        std::vector<std::string> params(decoded.begin() + 1, decoded.end());
-        m_WorkQueue.push(Command{t, params, hdl, emuID, user});
-    } else {
-        m_WorkQueue.push(
-            Command{t, std::vector<std::string>(), hdl, emuID, user});
+    Command c{t, std::vector<std::string>(), hdl, emuID, user};
+    if (decoded.size() > 1)
+        c.params = std::vector<std::string>(decoded.begin() + 1, decoded.end());
+
+    {
+        std::unique_lock lk(m_QueueMutex);
+        m_WorkQueue.push(c);
     }
 
     m_QueueNotifier.notify_one();
@@ -271,45 +274,15 @@ void LetsPlayServer::QueueThread() {
                         }
 
                         if (newUsername.size() > maxUsernameLen) {
-                            websocketpp::lib::error_code ec;
-                            if (!command.hdl.expired())
-                                server->send(
-                                    command.hdl,
-                                    LetsPlayServer::encode(
-                                        std::vector<std::string>{
-                                            "error",
-                                            std::to_string(
-                                                error::usernameTooLong)}),
-                                    websocketpp::frame::opcode::text, ec);
                             break;
                         }
                         if (newUsername.size() < minUsernameLen) {
-                            websocketpp::lib::error_code ec;
-                            if (!command.hdl.expired())
-                                server->send(
-                                    command.hdl,
-                                    LetsPlayServer::encode(
-                                        std::vector<std::string>{
-                                            "error",
-                                            std::to_string(
-                                                error::usernameTooShort)}),
-                                    websocketpp::frame::opcode::text, ec);
                             break;
                         }
                         if (!LetsPlayServer::isAsciiStr(newUsername)) break;
                         if (newUsername.front() == ' ' ||
                             newUsername.back() == ' ' ||
                             (newUsername.find("  ") != std::string::npos)) {
-                            websocketpp::lib::error_code ec;
-                            if (!command.hdl.expired())
-                                server->send(
-                                    command.hdl,
-                                    LetsPlayServer::encode(
-                                        std::vector<std::string>{
-                                            "error",
-                                            std::to_string(
-                                                error::usernameInvalidChars)}),
-                                    websocketpp::frame::opcode::text, ec);
                             break;
                         }
 
@@ -471,7 +444,7 @@ void LetsPlayServer::BroadcastOne(const std::string& data,
 }
 
 void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
-    std::unique_lock lk((m_EmusMutex));
+    std::unique_lock lk(m_EmusMutex);
     m_Emus[id] = emu;
 }
 
@@ -540,10 +513,9 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
 }
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
-    // temporary
-    static tjhandle _jpegCompressor = tjInitCompress();
-    static long unsigned int _jpegBufferSize = 0;
-    static std::uint8_t* jpegData{nullptr};
+    thread_local static tjhandle _jpegCompressor = tjInitCompress();
+    thread_local static long unsigned int _jpegBufferSize = 0;
+    thread_local static std::uint8_t* jpegData{nullptr};
     // TODO: webp and png differentiation
     // TODO: send the smaller of the two, webp or png (doing this requires
     // clientside being able to read the first byte of the frame and from
