@@ -26,8 +26,7 @@ int main(int argc, char** argv) {
         // clang-format on
 
         program_options::variables_map vm;
-        program_options::store(
-            program_options::parse_command_line(argc, argv, desc), vm);
+        program_options::store(program_options::parse_command_line(argc, argv, desc), vm);
 
         if (vm.count("help")) {
             std::cout << desc << '\n';

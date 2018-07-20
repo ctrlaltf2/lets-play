@@ -35,17 +35,14 @@ void RetroCore::Init(const char* corePath) {
     RetroCore::Load(this->m_hCore, fSetInputPoll, "retro_set_input_poll");
     RetroCore::Load(this->m_hCore, fSetInputState, "retro_set_input_state");
     RetroCore::Load(this->m_hCore, fSetAudioSample, "retro_set_audio_sample");
-    RetroCore::Load(this->m_hCore, fSetAudioSampleBatch,
-                    "retro_set_audio_sample_batch");
+    RetroCore::Load(this->m_hCore, fSetAudioSampleBatch, "retro_set_audio_sample_batch");
 
     RetroCore::Load(this->m_hCore, fInit, "retro_init");
     RetroCore::Load(this->m_hCore, fDeinit, "retro_deinit");
     RetroCore::Load(this->m_hCore, fRetroAPIVersion, "retro_api_version");
     RetroCore::Load(this->m_hCore, fGetSystemInfo, "retro_get_system_info");
-    RetroCore::Load(this->m_hCore, fGetAudioVideoInfo,
-                    "retro_get_system_av_info");
-    RetroCore::Load(this->m_hCore, fSetControllerPortDevice,
-                    "retro_set_controller_port_device");
+    RetroCore::Load(this->m_hCore, fGetAudioVideoInfo, "retro_get_system_av_info");
+    RetroCore::Load(this->m_hCore, fSetControllerPortDevice, "retro_set_controller_port_device");
     RetroCore::Load(this->m_hCore, fReset, "retro_reset");
     RetroCore::Load(this->m_hCore, fRun, "retro_run");
     RetroCore::Load(this->m_hCore, fLoadGame, "retro_load_game");

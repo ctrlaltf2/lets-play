@@ -32,8 +32,7 @@ struct Frame;
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
-    std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected,
-        userConnected;
+    std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected, userConnected;
     std::function<Frame()> getFrame;
     bool isReady{false};
     RetroPad* joypad{nullptr};
@@ -43,8 +42,8 @@ struct VideoFormat {
     /*
      * Masks for red, green, blue, and alpha
      */
-    std::atomic<std::uint32_t> rMask{0b1111100000000000},
-        gMask{0b0000011111000000}, bMask{0b0000000000111110}, aMask{0b0};
+    std::atomic<std::uint32_t> rMask{0b1111100000000000}, gMask{0b0000011111000000},
+        bMask{0b0000000000111110}, aMask{0b0};
 
     /*
      * Bit shifts for red, green, blue, and alpha
@@ -203,8 +202,8 @@ class EmulatorController {
     /*
      * Kind of the constructor. Blocks when called.
      */
-    static void Run(const std::string& corePath, const std::string& romPath,
-                    LetsPlayServer* server, EmuID_t t_id);
+    static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer* server,
+                    EmuID_t t_id);
 
     // libretro_core -> Controller ?> Server
     /*
@@ -215,13 +214,12 @@ class EmulatorController {
     static bool OnEnvironment(unsigned cmd, void* data);
     // Either:
     //  1) libretro_core -> Controller
-    static void OnVideoRefresh(const void* data, unsigned width,
-                               unsigned height, size_t stride);
+    static void OnVideoRefresh(const void* data, unsigned width, unsigned height, size_t stride);
     // Controller -> Server.getInput (input is TOGGLE)
     static void OnPollInput();
     // Controller -> libretro_core
-    static std::int16_t OnGetInputState(unsigned port, unsigned device,
-                                        unsigned index, unsigned id);
+    static std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
+                                        unsigned id);
     // Controller -> Server
     static void OnLRAudioSample(std::int16_t left, std::int16_t right);
     // Controller -> Server
