@@ -234,11 +234,10 @@ void LetsPlayServer::QueueThread() {
                             maxMessageSize)
                             break;
 
-                        BroadcastAll(
-                            LetsPlayServer::encode(std::vector<std::string>{
-                                "chat", command.user->username(),
-                                command.params[0]}),
-                            websocketpp::frame::opcode::text);
+                        BroadcastAll(LetsPlayServer::encode(
+                                         "chat", command.user->username(),
+                                         command.params[0]),
+                                     websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
@@ -293,10 +292,10 @@ void LetsPlayServer::QueueThread() {
                             // Join
                             ;
                         else
-                            BroadcastAll(LetsPlayServer::encode(std::vector{
-                                             std::string("username"),
-                                             oldUsername, newUsername}),
-                                         websocketpp::frame::opcode::text);
+                            BroadcastAll(
+                                LetsPlayServer::encode("username", oldUsername,
+                                                       newUsername),
+                                websocketpp::frame::opcode::text);
                     } break;
                     case kCommandType::List: {
                         if (command.params.size() != 0) break;
@@ -312,8 +311,9 @@ void LetsPlayServer::QueueThread() {
                                     message.push_back(user.username());
                         }
 
-                        BroadcastOne(LetsPlayServer::encode(message),
-                                     command.hdl);
+                        // TODO: Fix
+                        // BroadcastOne(LetsPlayServer::encode(message),
+                        // command.hdl);
                     } break;
                     case kCommandType::Turn: {
                         if (command.params.size() != 0) break;
@@ -341,10 +341,7 @@ void LetsPlayServer::QueueThread() {
                                 server->send(
                                     command.hdl,
                                     LetsPlayServer::encode(
-                                        std::vector<std::string>{
-                                            "error",
-                                            std::to_string(
-                                                error::connectInvalidEmu)}),
+                                        "error", error::connectInvalidEmu),
                                     websocketpp::frame::opcode::text, ec);
                             }
                             break;
@@ -448,22 +445,6 @@ void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
     m_Emus[id] = emu;
 }
 
-std::string LetsPlayServer::encode(const std::vector<std::string>& input) {
-    std::ostringstream oss;
-
-    for (const auto& s : input) {
-        oss << s.size();
-        oss << '.';
-        oss << s;
-        oss << ',';
-    }
-
-    auto output = oss.str();
-    output.back() = ';';
-
-    return output;
-}
-
 std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
     std::vector<std::string> output;
 
@@ -488,8 +469,9 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
         iss.read(content.data(), length);
         output.push_back(content);
 
-        if (iss.peek() != ',') {
-            if (iss.peek() == ';') return output;
+        const char& separator = iss.peek();
+        if (separator != ',') {
+            if (separator == ';') return output;
 
             return std::vector<std::string>();
         }
