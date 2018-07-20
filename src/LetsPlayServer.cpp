@@ -244,6 +244,7 @@ void LetsPlayServer::QueueThread() {
                         if (command.params.size() != 1) break;
 
                         const auto& newUsername = command.params.at(0);
+                        const auto oldUsername = command.user->username();
 
                         std::uint64_t maxUsernameLen, minUsernameLen;
                         {
@@ -272,30 +273,47 @@ void LetsPlayServer::QueueThread() {
                             }
                         }
 
-                        if (newUsername.size() > maxUsernameLen) {
-                            break;
-                        }
-                        if (newUsername.size() < minUsernameLen) {
-                            break;
-                        }
-                        if (!LetsPlayServer::isAsciiStr(newUsername)) break;
-                        if (newUsername.front() == ' ' ||
-                            newUsername.back() == ' ' ||
-                            (newUsername.find("  ") != std::string::npos)) {
+                        auto usernameValid =
+                            [](const bool isValid,
+                               const std::string& currentUsername) {
+                                return LetsPlayServer::encode(
+                                    "username", isValid, currentUsername);
+                            };
+
+                        // Size based checks
+                        if (newUsername.size() > maxUsernameLen ||
+                            newUsername.size() < minUsernameLen) {
+                            BroadcastOne(usernameValid(false, oldUsername),
+                                         command.hdl);
                             break;
                         }
 
-                        std::string oldUsername = command.user->username();
+                        // Content based checks
+                        if (newUsername.front() == ' ' ||
+                            newUsername.back() == ' ' ||
+                            !LetsPlayServer::isAsciiStr(newUsername) ||
+                            (newUsername.find("  ") != std::string::npos)) {
+                            BroadcastOne(usernameValid(false, oldUsername),
+                                         command.hdl);
+                            break;
+                        }
+
                         command.user->setUsername(newUsername);
 
                         if (oldUsername == "")
                             // Join
                             ;
-                        else
+                        else {
+                            BroadcastOne(usernameValid(true, newUsername),
+                                         command.hdl);
+
+                            // Tell everyone someone changed their username
+                            // TODO: BroadcastToEmu
                             BroadcastAll(
                                 LetsPlayServer::encode("username", oldUsername,
                                                        newUsername),
                                 websocketpp::frame::opcode::text);
+                        }
                     } break;
                     case kCommandType::List: {
                         if (command.params.size() != 0) break;
