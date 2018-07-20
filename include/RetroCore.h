@@ -28,8 +28,8 @@ class RetroCore {
             std::cerr << "Failed to load symbol '" << name << "'\n";
             std::exit(-3);
         } else {
-            std::clog << "Found symbol, storing into pointer at address "
-                      << std::addressof(sym) << '\n';
+            std::clog << "Found symbol, storing into pointer at address " << std::addressof(sym)
+                      << '\n';
         }
     }
 

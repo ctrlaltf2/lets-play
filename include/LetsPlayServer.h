@@ -51,12 +51,7 @@ enum class kCommandType {
 };
 
 namespace error {
-enum {
-    usernameTooLong,
-    usernameTooShort,
-    usernameInvalidChars,
-    connectInvalidEmu
-};
+enum { usernameTooLong, usernameTooShort, usernameInvalidChars, connectInvalidEmu };
 }  // namespace error
 
 /*
@@ -192,8 +187,7 @@ class LetsPlayServer {
      * @param hdl Who sent the message
      * @param msg The message sent
      */
-    void OnMessage(websocketpp::connection_hdl hdl,
-                   wcpp_server::message_ptr msg);
+    void OnMessage(websocketpp::connection_hdl hdl, wcpp_server::message_ptr msg);
 
     /*
      * Stops the main loop, closes all connections, and unbinds to the port
@@ -214,8 +208,7 @@ class LetsPlayServer {
      * out)
      * @param op The type of message to send
      */
-    void BroadcastAll(const std::string& message,
-                      websocketpp::frame::opcode::value op);
+    void BroadcastAll(const std::string& message, websocketpp::frame::opcode::value op);
 
     /*
      * Send a message to all users connected to an emu
@@ -232,8 +225,7 @@ class LetsPlayServer {
      * out)
      * @param hdl Who to send it to
      */
-    void BroadcastOne(const std::string& message,
-                      websocketpp::connection_hdl hdl);
+    void BroadcastOne(const std::string& message, websocketpp::connection_hdl hdl);
 
     // --- Functions called only by emulator controllers --- //
     /*

@@ -37,8 +37,7 @@ const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 
 void LetsPlayConfig::ReloadConfig() {
     if (std::unique_lock lk(mutex, std::try_to_lock);
-        std::filesystem::exists(m_configPath) &&
-        std::filesystem::is_regular_file(m_configPath)) {
+        std::filesystem::exists(m_configPath) && std::filesystem::is_regular_file(m_configPath)) {
         std::ifstream fi(m_configPath);
         fi >> config;
     } else {
@@ -48,8 +47,8 @@ void LetsPlayConfig::ReloadConfig() {
 
 void LetsPlayConfig::LoadFrom(const std::filesystem::path& path) {
     std::clog << "Loading file" << '\n';
-    if (std::unique_lock lk((mutex)); std::filesystem::exists(path) &&
-                                      std::filesystem::is_regular_file(path)) {
+    if (std::unique_lock lk((mutex));
+        std::filesystem::exists(path) && std::filesystem::is_regular_file(path)) {
         std::clog << "Valid path: " << path << '\n';
         m_configPath = path;
         ReloadConfig();

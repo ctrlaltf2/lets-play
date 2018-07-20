@@ -53,9 +53,8 @@ std::shared_mutex EmulatorController::m_generalMutex;
  *
  */
 
-void EmulatorController::Run(const std::string& corePath,
-                             const std::string& romPath, LetsPlayServer* server,
-                             EmuID_t t_id) {
+void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
+                             LetsPlayServer* server, EmuID_t t_id) {
     std::filesystem::path coreFile = corePath, romFile = romPath;
     if (!std::filesystem::is_regular_file(coreFile)) {
         std::cerr << "provided core path '" << corePath << "' was not valid.\n";
@@ -69,8 +68,7 @@ void EmulatorController::Run(const std::string& corePath,
     Core.Init(corePath.c_str());
     m_server = server;
     id = t_id;
-    proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected,
-                                    UserConnected,  GetFrame,
+    proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
                                     false,          &joypad};
     m_server->AddEmu(id, &proxy);
 
@@ -79,8 +77,7 @@ void EmulatorController::Run(const std::string& corePath,
         std::unique_lock<std::shared_mutex> lk(server->config.mutex);
         if (!server->config.config["serverConfig"]["emulators"].count(t_id)) {
             server->config.config["serverConfig"]["emulators"][t_id] =
-                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
-                                             ["template"];
+                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"];
         }
     }
 
@@ -96,8 +93,7 @@ void EmulatorController::Run(const std::string& corePath,
 
     std::clog << "Past initialization" << '\n';
 
-    retro_game_info info = {romPath.c_str(), nullptr,
-                            std::filesystem::file_size(romFile), nullptr};
+    retro_game_info info = {romPath.c_str(), nullptr, std::filesystem::file_size(romFile), nullptr};
     std::ifstream fo(romFile, std::ios::binary);
 
     retro_system_info system{};
@@ -121,8 +117,7 @@ void EmulatorController::Run(const std::string& corePath,
     // TODO: compressed roms and stuff
 
     if (!((*(Core.fLoadGame))(&info))) {
-        std::cerr << "Failed to load game -- Was the rom the correct? file type"
-                  << '\n';
+        std::cerr << "Failed to load game -- Was the rom the correct? file type" << '\n';
         return;
     }
 
@@ -134,14 +129,10 @@ void EmulatorController::Run(const std::string& corePath,
     {
         std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
         const auto& config = m_server->config.config;
-        if (config["serverConfig"]["emulators"][id]["overrideFramerate"]
-                .is_boolean() &&
-            config["serverConfig"]["emulators"][id]["overrideFramerate"]
-                .get<bool>() &&
-            config["serverConfig"]["emulators"][id]["fps"]
-                .is_number_unsigned()) {
-            fps = config["serverConfig"]["emulators"][id]["fps"]
-                      .get<std::uint64_t>();
+        if (config["serverConfig"]["emulators"][id]["overrideFramerate"].is_boolean() &&
+            config["serverConfig"]["emulators"][id]["overrideFramerate"].get<bool>() &&
+            config["serverConfig"]["emulators"][id]["fps"].is_number_unsigned()) {
+            fps = config["serverConfig"]["emulators"][id]["fps"].get<std::uint64_t>();
         }
     }
 
@@ -166,8 +157,7 @@ void EmulatorController::Run(const std::string& corePath,
         std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
     while (true) {
         std::this_thread::sleep_until(wait_time);
-        wait_time = std::chrono::steady_clock::now() +
-                    std::chrono::milliseconds(msWait);
+        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
         if (fps == -1) m_server->SendFrame(id);
     }
@@ -177,8 +167,7 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
     // std::cout << "OnEnvironment(): " << cmd << '\n';
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
-            const retro_pixel_format* fmt =
-                static_cast<retro_pixel_format*>(data);
+            const retro_pixel_format* fmt = static_cast<retro_pixel_format*>(data);
 
             if (*fmt > RETRO_PIXEL_FORMAT_RGB565) return false;
 
@@ -232,14 +221,14 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
     return true;
 }
 
-void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
-                                        unsigned height, size_t pitch) {
+void EmulatorController::OnVideoRefresh(const void* data, unsigned width, unsigned height,
+                                        size_t pitch) {
     std::unique_lock lk(m_videoMutex);
     if (width != m_videoFormat.width || height != m_videoFormat.height ||
         pitch != m_videoFormat.pitch) {
         std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
-                  << m_videoFormat.height << " to " << width << 'x' << height
-                  << ' ' << pitch << '\n';
+                  << m_videoFormat.height << " to " << width << 'x' << height << ' ' << pitch
+                  << '\n';
         m_videoFormat.width = width;
         m_videoFormat.height = height;
         m_videoFormat.pitch = pitch;
@@ -249,8 +238,8 @@ void EmulatorController::OnVideoRefresh(const void* data, unsigned width,
 
 void EmulatorController::OnPollInput() {}
 
-std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
-                                                 unsigned index, unsigned id) {
+std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device, unsigned index,
+                                                 unsigned id) {
     // std::cout << port << ' ' << index << ' ' << device << ' ' << id << ' '
     //<< joypad.isPressed(id) << '\n';
     if (port || index || device != RETRO_DEVICE_JOYPAD) return 0;
@@ -259,11 +248,9 @@ std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
     return joypad.isPressed(id);
 }
 
-void EmulatorController::OnLRAudioSample(std::int16_t left,
-                                         std::int16_t right) {}
+void EmulatorController::OnLRAudioSample(std::int16_t left, std::int16_t right) {}
 
-size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data,
-                                              size_t frames) {
+size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data, size_t frames) {
     return frames;
 }
 
@@ -289,26 +276,23 @@ void EmulatorController::TurnThread() {
         {
             std::shared_lock lk(m_server->config.mutex);
             if (nlohmann::json& data =
-                    m_server->config
-                        .config["serverConfig"]["emulators"][id]["turnLength"];
+                    m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
                 data.empty() || !data.is_number())
-                turnLength =
-                    LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]
-                                                 ["template"]["turnLength"];
+                turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]
+                                                          ["turnLength"];
             else
                 turnLength = data;
         }
 
-        const auto turnEnd = std::chrono::steady_clock::now() +
-                             std::chrono::milliseconds(turnLength);
+        const auto turnEnd =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
 
         while (currentUser && currentUser->hasTurn &&
                (std::chrono::steady_clock::now() < turnEnd)) {
             // FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
             // underflow or UB for the case where now() is greater than
             // turnEnd?
-            m_TurnNotifier.wait_for(lk,
-                                    turnEnd - std::chrono::steady_clock::now());
+            m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
         }
 
         if (currentUser) {
@@ -330,16 +314,14 @@ void EmulatorController::AddTurnRequest(LetsPlayUser* user) {
 
 void EmulatorController::UserDisconnected(LetsPlayUser* user) {
     --usersConnected;
-    if (std::unique_lock lk((m_TurnMutex));
-        m_TurnQueue.size() > 0 && m_TurnQueue[0] == user) {
+    if (std::unique_lock lk((m_TurnMutex)); m_TurnQueue.size() > 0 && m_TurnQueue[0] == user) {
         auto& currentUser = m_TurnQueue[0];
 
         if (currentUser->hasTurn) {  // Current turn is user
             m_TurnNotifier.notify_one();
         } else if (currentUser->requestedTurn) {  // In the queue
-            m_TurnQueue.erase(
-                std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
-                m_TurnQueue.end());
+            m_TurnQueue.erase(std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
+                              m_TurnQueue.end());
         };
 
         // Set the current user to nullptr so turnqueue knows not to try to
@@ -380,8 +362,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             m_videoFormat.rMask = 0xff000000;
             m_videoFormat.gMask = 0x00ff0000;
             m_videoFormat.bMask = 0x0000ff00;
-            m_videoFormat.aMask =
-                0x00000000;  // normally 0xff but who cares about alpha
+            m_videoFormat.aMask = 0x00000000;  // normally 0xff but who cares about alpha
 
             m_videoFormat.rShift = 16;
             m_videoFormat.gShift = 8;
@@ -438,30 +419,22 @@ Frame EmulatorController::GetFrame() {
             }
 
             // Calculate the rgb 0 - 255 values
-            const std::uint8_t& rMax =
-                1 << (m_videoFormat.aShift - m_videoFormat.rShift);
-            const std::uint8_t& gMax =
-                1 << (m_videoFormat.rShift - m_videoFormat.gShift);
-            const std::uint8_t& bMax =
-                1 << (m_videoFormat.gShift - m_videoFormat.bShift);
+            const std::uint8_t& rMax = 1 << (m_videoFormat.aShift - m_videoFormat.rShift);
+            const std::uint8_t& gMax = 1 << (m_videoFormat.rShift - m_videoFormat.gShift);
+            const std::uint8_t& bMax = 1 << (m_videoFormat.gShift - m_videoFormat.bShift);
 
-            const std::uint8_t& rVal =
-                (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
-            const std::uint8_t& gVal =
-                (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
-            const std::uint8_t& bVal =
-                (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
+            const std::uint8_t& rVal = (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
+            const std::uint8_t& gVal = (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
+            const std::uint8_t& bVal = (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
 
             std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
             std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
             std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
 
-            if (pixelSet.size() <
-                257) { /* 256 is the max size for a palette, if the number of
-                          unique pixels is more than 256, the pixelSet will
-                          contain 257 values and therefore not be used */
-                pixelSet.insert(
-                    RGBColor{rNormalized, gNormalized, bNormalized});
+            if (pixelSet.size() < 257) { /* 256 is the max size for a palette, if the number of
+                                            unique pixels is more than 256, the pixelSet will
+                                            contain 257 values and therefore not be used */
+                pixelSet.insert(RGBColor{rNormalized, gNormalized, bNormalized});
             }
 
             outVec[j++] = rNormalized;
