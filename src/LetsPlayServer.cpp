@@ -231,6 +231,9 @@ void LetsPlayServer::QueueThread() {
                         const auto& newUsername = command.params.at(0);
                         const auto oldUsername = command.user->username();
 
+                        // Ignore no change
+                        if (newUsername == oldUsername) break;
+
                         std::uint64_t maxUsernameLen, minUsernameLen;
                         {
                             std::shared_lock lk(config.mutex);
