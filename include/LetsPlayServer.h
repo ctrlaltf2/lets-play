@@ -225,7 +225,7 @@ class LetsPlayServer {
      * out)
      * @param hdl Who to send it to
      */
-    void BroadcastOne(const std::string& message, websocketpp::connection_hdl hdl);
+    void BroadcastOne(const std::string&& message, websocketpp::connection_hdl hdl);
 
     // --- Functions called only by emulator controllers --- //
     /*
@@ -246,7 +246,12 @@ class LetsPlayServer {
 
    private:
     /*
-     * Function for encoding messages
+     * Vector function for encoding messages
+     */
+    static std::string encode(const std::vector<std::string>& chunks);
+
+    /*
+     * Variadic function for encoding messages
      */
     template <typename Head, typename... Tail>
     static std::string encode(Head h, Tail... t) {
