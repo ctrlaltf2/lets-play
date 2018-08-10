@@ -269,9 +269,6 @@ void EmulatorController::TurnThread() {
         auto& currentUser = m_TurnQueue[0];
         std::string username = currentUser->username();
         currentUser->hasTurn = true;
-        m_server->BroadcastAll(id + ": " + username + " now has a turn!",
-                               websocketpp::frame::opcode::text);
-
         std::uint64_t turnLength;
         {
             std::shared_lock lk(m_server->config.mutex);
@@ -283,6 +280,9 @@ void EmulatorController::TurnThread() {
             else
                 turnLength = data;
         }
+        // TODO: UUID instead of username based identification
+        m_server->BroadcastAll(id + ": " + username + " now has a turn!",
+                               websocketpp::frame::opcode::text);
 
         const auto turnEnd =
             std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);

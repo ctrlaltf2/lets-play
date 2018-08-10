@@ -39,7 +39,6 @@ enum class kCommandType {
     Button,
     Turn,
     Connect,
-    Webp,
     Error,
     Admin,
     AddEmu,
