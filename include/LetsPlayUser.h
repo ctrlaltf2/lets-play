@@ -7,8 +7,17 @@ class LetsPlayUser;
 #include <string>
 #include <vector>
 
+#include "boost/uuid/uuid.hpp"
+#include "boost/uuid/uuid_generators.hpp"
+#include "boost/uuid/uuid_io.hpp"
+
 #include "Config.h"
 #include "LetsPlayServer.h"
+
+namespace uuid = boost::uuids;
+
+extern uuid::random_generator g_UUIDGen;
+extern std::mutex g_uuidMutex;
 
 /*
  * Class representing a connected user (across all emulators)
@@ -35,6 +44,11 @@ class LetsPlayUser {
      */
     std::mutex m_access;
 
+    /**
+     * UUID to identify the user
+     */
+    uuid::uuid m_uuid;
+
    public:
     /*
      * if the user has a turn on the
@@ -46,17 +60,7 @@ class LetsPlayUser {
      */
     std::atomic<bool> requestedTurn;
 
-    /*
-     * Whether or not the user supports webp and if webp should be sent instead
-     * of png
-     */
-    std::atomic<bool> supportsWebp;
-
-    LetsPlayUser()
-        : m_lastHeartbeat{std::chrono::steady_clock::now()},
-          hasTurn{false},
-          requestedTurn{false},
-          supportsWebp{false} {}
+    LetsPlayUser();
 
     /*
      * Returns true if the user's last heartbeat was over the limit for timeout
@@ -89,4 +93,9 @@ class LetsPlayUser {
      * Set the username
      */
     void setUsername(const std::string& name);
+
+    /*
+     * Get the uuid as a string
+     */
+    std::string uuid() const;
 };
