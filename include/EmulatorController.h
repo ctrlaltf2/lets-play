@@ -21,8 +21,6 @@ struct Frame;
 
 #include <websocketpp/frame.hpp>
 
-#include <webp/encode.h>
-
 #include "libretro.h"
 
 #include "LetsPlayServer.h"
@@ -75,23 +73,12 @@ struct Frame {
      */
     std::uint32_t width{0}, height{0};
 
-    /*
-     * Set of unique colors in the color data. Used for deciding whether or
-     * not to use indexed coloring for PNG images
-     */
-    std::set<RGBColor> palette;
-
     // Packed array, RGB
     std::shared_ptr<std::uint8_t[]> data;
 };
 
-// Why is every png library either 1) Overly verbose 2) Undocumented
-inline bool operator==(const png::color& a, const png::color& b) {
-    return (a.red == b.red) && (a.green == b.green) && (a.blue && b.blue);
-}
-
 /*
- * Class to be used once per thread, manages a libretro core, smulator, and its
+ * Class to be used once per thread, manages a libretro core, emulator, and its
  * own turns through callbacks
  */
 class EmulatorController {
