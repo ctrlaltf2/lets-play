@@ -13,3 +13,7 @@ cores/
 roms/
 libretro.so
 core
+
+# CLion
+.idea/
+cmake-build-debug/
