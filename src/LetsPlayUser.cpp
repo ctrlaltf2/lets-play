@@ -1,7 +1,7 @@
 #include "LetsPlayUser.h"
 
 std::mutex g_uuidMutex;
-uuid::random_generator g_UIDGen;
+uuid::random_generator g_UUIDGen;
 
 LetsPlayUser::LetsPlayUser()
     : m_lastHeartbeat{std::chrono::steady_clock::now()}, hasTurn{false}, requestedTurn{false} {
@@ -16,22 +16,22 @@ bool LetsPlayUser::shouldDisconnect() const {
 }
 
 EmuID_t LetsPlayUser::connectedEmu() {
-    std::unique_lock lk((m_access));
+    std::unique_lock lk(m_access);
     return m_connectedEmu;
 }
 
 void LetsPlayUser::setConnectedEmu(const EmuID_t& id) {
-    std::unique_lock lk((m_access));
+    std::unique_lock lk(m_access);
     m_connectedEmu = id;
 }
 
 std::string LetsPlayUser::username() {
-    std::unique_lock lk((m_access));
+    std::unique_lock lk(m_access);
     return m_username;
 }
 
 void LetsPlayUser::setUsername(const std::string& name) {
-    std::unique_lock lk((m_access));
+    std::unique_lock lk(m_access);
     m_username = name;
 }
 
