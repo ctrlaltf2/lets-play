@@ -2,20 +2,6 @@
 
 RetroCore::RetroCore() {}
 
-// RetroCore::RetroCore(const char* corePath) {
-//    void* hCore = dlopen(corePath, RTLD_NOW);
-//
-//    // TODO: Exception
-//    if (hCore == nullptr) {
-//        std::cerr << "Failed to load libretro core -- " << dlerror() << '\n';
-//        std::exit(-1);
-//    }
-//
-//    Init(hCore);
-//}
-
-// RetroCore::RetroCore(void* hCore) { Init(hCore); }
-
 void RetroCore::Init(const char* corePath) {
     std::clog << "Loading file from '" << corePath << "'\n";
     void* hCore = dlopen(corePath, RTLD_NOW);
