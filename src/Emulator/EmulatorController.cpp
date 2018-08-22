@@ -164,7 +164,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 }
 
 bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
-    // std::cout << "OnEnvironment(): " << cmd << '\n';
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt = static_cast<retro_pixel_format*>(data);
@@ -240,11 +239,8 @@ void EmulatorController::OnPollInput() {}
 
 std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device, unsigned index,
                                                  unsigned id) {
-    // std::cout << port << ' ' << index << ' ' << device << ' ' << id << ' '
-    //<< joypad.isPressed(id) << '\n';
     if (port || index || device != RETRO_DEVICE_JOYPAD) return 0;
 
-    if (joypad.isPressed(id)) std::clog << id << " Pressed!" << '\n';
     return joypad.isPressed(id);
 }
 
@@ -264,8 +260,7 @@ void EmulatorController::TurnThread() {
         }
 
         if (m_TurnThreadRunning == false) break;
-        // XXX: Unprotected access to top of the queue, only access
-        // threadsafe members
+
         auto& currentUser = m_TurnQueue[0];
         std::string username = currentUser->username();
         currentUser->hasTurn = true;
@@ -289,9 +284,9 @@ void EmulatorController::TurnThread() {
 
         while (currentUser && currentUser->hasTurn &&
                (std::chrono::steady_clock::now() < turnEnd)) {
-            // FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
-            // underflow or UB for the case where now() is greater than
-            // turnEnd?
+            /* FIXME: does turnEnd - std::chrono::steady_clock::now() cause
+             * underflow or UB for the case where now() is greater than
+             * turnEnd? */
             m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
         }
 
