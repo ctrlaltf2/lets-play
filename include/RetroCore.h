@@ -15,6 +15,7 @@ class RetroCore {
      */
     void* m_hCore = nullptr;
 
+    // TODO: On release, loading from dll for win32
     /**
      * Utility function for loading symbols
      */
@@ -63,20 +64,10 @@ class RetroCore {
      * core pointer invalid
      */
     RetroCore(const RetroCore&) = delete;
-    /**
-     * Create a RetroCore object based on a core path
-     * @param corePath Path to the core to load
-     */
-    // RetroCore(const char* corePath);
 
+    // TODO: On release, use constructor as intended with RAII
     /**
-     * Create a RetroCore object from an.already existing libretro.so handle
-     * @param hCore Handle to the already loaded libretro core
-     */
-    // RetroCore(void* hCore);
-
-    /**
-     * Initialize the RetroCore object (merges the two constructors)
+     * Initialize the RetroCore object
      */
     void Init(const char* hCore);
 
