@@ -159,7 +159,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         std::this_thread::sleep_until(wait_time);
         wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
         (*(Core.fRun))();
-        if (fps == -1) m_server->SendFrame(id);
+        if (fps == -1ull) m_server->SendFrame(id);
     }
 }
 
