@@ -278,6 +278,25 @@ void LetsPlayServer::QueueThread() {
                             break;
                         }
 
+                        // Check if username isn't already taken
+                        bool taken{false};
+                        {
+                            std::unique_lock lk(m_UsersMutex);
+                            for (auto& [hdl, user] : m_Users) {
+                                std::cout << user.uuid() << ' ' << command.user->uuid() << '\n';
+                                std::cout << user.username() << ' ' << newUsername << '\n';
+                                std::cout << std::boolalpha << !hdl.expired() << '\n';
+                                if (user.uuid() != command.user->uuid() &&
+                                    user.username() == newUsername && !hdl.expired()) {
+                                    BroadcastOne(usernameValid(false, oldUsername), command.hdl);
+                                    taken = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (taken) break;
+
+
                         command.user->setUsername(newUsername);
 
                         if (oldUsername == "")
