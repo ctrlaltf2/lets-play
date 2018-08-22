@@ -50,7 +50,6 @@ void LetsPlayServer::Run(std::uint16_t port) {
 }
 
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
-    websocketpp::lib::error_code err;
     {
         std::unique_lock lk((m_UsersMutex));
         m_Users[hdl].setUsername("");
