@@ -8,15 +8,13 @@ void LetsPlayServer::Run(std::uint16_t port) {
     server.reset(new wcpp_server);
 
     try {
-        server->set_access_channels(websocketpp::log::alevel::all);
-        server->clear_access_channels(websocketpp::log::alevel::frame_payload);
+        server->set_access_channels(websocketpp::log::alevel::connect | websocketpp::log::alevel::disconnect);
+        server->clear_access_channels(websocketpp::log::alevel::frame_payload | websocketpp::log::alevel::frame_header);
 
         server->init_asio();
 
         server->set_message_handler(std::bind(&LetsPlayServer::OnMessage, this, ::_1, ::_2));
-
         server->set_open_handler(std::bind(&LetsPlayServer::OnConnect, this, ::_1));
-
         server->set_close_handler(std::bind(&LetsPlayServer::OnDisconnect, this, ::_1));
 
         websocketpp::lib::error_code err;
