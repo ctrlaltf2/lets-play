@@ -17,7 +17,6 @@ std::atomic<std::uint64_t> EmulatorController::usersConnected{0};
 RetroPad EmulatorController::joypad;
 
 VideoFormat EmulatorController::m_videoFormat;
-Frame EmulatorController::m_keyFrame;
 const void *EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
@@ -248,9 +247,9 @@ std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
     return joypad.isPressed(id);
 }
 
-void EmulatorController::OnLRAudioSample(std::int16_t left, std::int16_t right) {}
+void EmulatorController::OnLRAudioSample(std::int16_t /*left*/, std::int16_t /*right*/) {}
 
-size_t EmulatorController::OnBatchAudioSample(const std::int16_t *data, size_t frames) {
+size_t EmulatorController::OnBatchAudioSample(const std::int16_t */*data*/, size_t frames) {
     return frames;
 }
 
@@ -270,7 +269,7 @@ void EmulatorController::TurnThread() {
         currentUser->hasTurn = true;
         std::uint64_t turnLength;
         {
-            std::shared_lock lk(m_server->config.mutex);
+            std::shared_lock lkk(m_server->config.mutex);
             if (nlohmann::json& data =
                     m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
                 data.empty() || !data.is_number())
@@ -313,7 +312,7 @@ void EmulatorController::AddTurnRequest(LetsPlayUser *user) {
 
 void EmulatorController::UserDisconnected(LetsPlayUser *user) {
     --usersConnected;
-    if (std::unique_lock lk((m_TurnMutex)); m_TurnQueue.size() > 0 && m_TurnQueue[0] == user) {
+    if (std::unique_lock lk((m_TurnMutex)); !m_TurnQueue.empty() && m_TurnQueue[0] == user) {
         auto& currentUser = m_TurnQueue[0];
 
         if (currentUser->hasTurn) {  // Current turn is user
@@ -331,9 +330,8 @@ void EmulatorController::UserDisconnected(LetsPlayUser *user) {
     }
 }
 
-void EmulatorController::UserConnected(LetsPlayUser *user) {
+void EmulatorController::UserConnected(LetsPlayUser */*user*/) {
     ++usersConnected;
-    return;
 }
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
@@ -398,7 +396,7 @@ Frame EmulatorController::GetFrame() {
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
     size_t j{0};
 
-    const std::uint8_t *i = static_cast<const std::uint8_t *>(m_currentBuffer);
+    const auto *i = static_cast<const std::uint8_t *>(m_currentBuffer);
     for (size_t h = 0; h < m_videoFormat.height; ++h) {
         for (size_t w = 0; w < m_videoFormat.width; ++w) {
             std::uint32_t pixel{0};

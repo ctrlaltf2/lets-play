@@ -10,10 +10,11 @@ LetsPlayUser::LetsPlayUser()
     g_uuidMutex.unlock();
 }
 
+/*
 bool LetsPlayUser::shouldDisconnect() const {
     return std::chrono::steady_clock::now() >
         (m_lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
-}
+} */
 
 EmuID_t LetsPlayUser::connectedEmu() {
     std::unique_lock lk(m_access);

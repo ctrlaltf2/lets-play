@@ -120,13 +120,6 @@ class EmulatorController {
     static VideoFormat m_videoFormat;
 
     /*
-     * Key frame, a frame similar to a video compression key frame that contains
-     * all the information for the last used frame. This is only updated when a
-     * keyframe or deltaframe are requested.
-     */
-    static Frame m_keyFrame;
-
-    /*
      * Pointer to the current video buffer
      */
     static const void *m_currentBuffer;

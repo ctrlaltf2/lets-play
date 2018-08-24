@@ -47,7 +47,7 @@ void LetsPlayConfig::ReloadConfig() {
 
 void LetsPlayConfig::LoadFrom(const std::filesystem::path& path) {
     std::clog << "Loading file" << '\n';
-    if (std::unique_lock lk((mutex));
+    if (std::unique_lock lk(mutex);
         std::filesystem::exists(path) && std::filesystem::is_regular_file(path)) {
         std::clog << "Valid path: " << path << '\n';
         m_configPath = path;

@@ -66,8 +66,8 @@ class LetsPlayUser {
     /*
      * Returns true if the user's last heartbeat was over the limit for timeout
      * @return True if the user should be disconnected
-     */
-    bool shouldDisconnect() const;
+     *
+    bool shouldDisconnect() const;*/
 
     // The reasoning behind the following redundant and
     // cs-major-just-introduced-to-java-classes-esque getters and setters is for
