@@ -1,6 +1,6 @@
 #include "RetroCore.h"
 
-RetroCore::RetroCore() {}
+RetroCore::RetroCore() = default;
 
 void RetroCore::Init(const char *corePath) {
     std::clog << "Loading file from '" << corePath << "'\n";

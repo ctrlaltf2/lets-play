@@ -71,7 +71,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
         user = &search->second;
     }
 
-    if (user && user->connectedEmu() != "") {
+    if (user && !user->connectedEmu().empty()) {
         {
             std::unique_lock lk((m_EmusMutex));
             m_Emus[user->connectedEmu()]->userDisconnected(user);
@@ -154,7 +154,7 @@ void LetsPlayServer::Shutdown() {
         std::clog << "Emptying queue..." << '\n';
         // Empty the queue ...
         std::unique_lock lk((m_QueueMutex));
-        while (m_WorkQueue.size()) m_WorkQueue.pop();
+        while (!m_WorkQueue.empty()) m_WorkQueue.pop();
         // ... Except for a shutdown command
         m_WorkQueue.push(Command{kCommandType::Shutdown, std::vector<std::string>(),
                                  websocketpp::connection_hdl(), ""});
@@ -195,7 +195,7 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Chat: {
                         // Chat has only one, the message
                         if (command.params.size() != 1) break;
-                        if (command.user->username() == "") break;
+                        if (command.user->username().empty()) break;
 
                         // Message only has values in the range of typeable
                         // ascii characters excluding \n and \t
@@ -203,7 +203,7 @@ void LetsPlayServer::QueueThread() {
 
                         std::uint64_t maxMessageSize;
                         {
-                            std::shared_lock lk(config.mutex);
+                            std::shared_lock lkk(config.mutex);
                             nlohmann::json& data = config.config["serverConfig"]["maxMessageSize"];
 
                             // TODO: Warning on invalid data type (logging
@@ -235,7 +235,7 @@ void LetsPlayServer::QueueThread() {
 
                         std::uint64_t maxUsernameLen, minUsernameLen;
                         {
-                            std::shared_lock lk(config.mutex);
+                            std::shared_lock lkk(config.mutex);
                             nlohmann::json& max =
                                 config.config["serverConfig"]["maxUsernameLength"];
                             nlohmann::json& min =
@@ -281,7 +281,7 @@ void LetsPlayServer::QueueThread() {
                         // Check if username isn't already taken
                         bool taken{false};
                         {
-                            std::unique_lock lk(m_UsersMutex);
+                            std::unique_lock lkk(m_UsersMutex);
                             for (auto&[hdl, user] : m_Users) {
                                 std::cout << user.uuid() << ' ' << command.user->uuid() << '\n';
                                 std::cout << user.username() << ' ' << newUsername << '\n';
@@ -298,7 +298,7 @@ void LetsPlayServer::QueueThread() {
 
                         command.user->setUsername(newUsername);
 
-                        if (oldUsername == "")
+                        if (oldUsername.empty())
                             // Join
                             ;
                         else {
@@ -313,12 +313,12 @@ void LetsPlayServer::QueueThread() {
                     }
                         break;
                     case kCommandType::List: {
-                        if (command.params.size() != 0) break;
+                        if (!command.params.empty()) break;
                         std::vector<std::string> message;
-                        message.push_back("list");
+                        message.emplace_back("list");
 
                         {
-                            std::unique_lock lk((m_UsersMutex));
+                            std::unique_lock lkk((m_UsersMutex));
                             for (auto&[hdl, user] : m_Users)
                                 if ((command.user->connectedEmu() == user.connectedEmu()) &&
                                     !hdl.expired())
@@ -329,11 +329,11 @@ void LetsPlayServer::QueueThread() {
                     }
                         break;
                     case kCommandType::Turn: {
-                        if (command.params.size() != 0) break;
-                        if (command.user->connectedEmu() == "" || command.user->requestedTurn)
+                        if (!command.params.empty()) break;
+                        if (command.user->connectedEmu().empty() || command.user->requestedTurn)
                             break;
 
-                        std::unique_lock lk((m_EmusMutex));
+                        std::unique_lock lkk(m_EmusMutex);
                         if (auto emu = m_Emus[command.emuID]; emu) {
                             command.user->requestedTurn = true;
                             emu->addTurnRequest(command.user);
@@ -343,17 +343,17 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Shutdown:break;
                     case kCommandType::Connect: {
                         if (command.params.size() != 1) break;
-                        if (command.user->username() == "")
+                        if (command.user->username().empty())
                             break;  // Must have a username to connect to an emu
 
                         // Check if the emu that the connect thing that was sent exists
-                        if (std::unique_lock lk((m_EmusMutex));
+                        if (std::unique_lock lkk(m_EmusMutex);
                             m_Emus.find(command.params[0]) == m_Emus.end()) {
                             if (websocketpp::lib::error_code ec; !command.hdl.expired()) {
-                                server->send(
-                                    command.hdl,
-                                    LetsPlayServer::encode("error", error::connectInvalidEmu),
-                                    websocketpp::frame::opcode::text, ec);
+                                server->send(command.hdl,
+                                             LetsPlayServer::encode("error", error::connectInvalidEmu),
+                                             websocketpp::frame::opcode::text,
+                                             ec);
                             }
                             break;
                         }
@@ -362,11 +362,11 @@ void LetsPlayServer::QueueThread() {
                         // switching once the transition between being
                         // connected to A and being connected to B is
                         // figured out
-                        if (command.user->connectedEmu() != "") break;
+                        if (!command.user->connectedEmu().empty()) break;
 
                         command.user->setConnectedEmu(command.params[0]);
                         {
-                            std::unique_lock lk((m_EmusMutex));
+                            std::unique_lock lkk(m_EmusMutex);
                             m_Emus[command.user->connectedEmu()]->userConnected(command.user);
                         }
                         BroadcastToEmu(command.user->connectedEmu(),
@@ -379,7 +379,7 @@ void LetsPlayServer::QueueThread() {
 
                         if (command.params[0].front() == '-') return;
 
-                        if (command.emuID != "") {
+                        if (!command.emuID.empty()) {
                             unsigned buttonID{0};
                             try {
                                 buttonID = std::stoi(command.params[1]);
@@ -390,7 +390,7 @@ void LetsPlayServer::QueueThread() {
                             }
                             if (buttonID > 15u) break;
 
-                            std::unique_lock lk(m_EmusMutex);
+                            std::unique_lock lkk(m_EmusMutex);
                             if (command.params[0] == "up") {
                                 m_Emus[command.emuID]->joypad->buttonRelease(buttonID);
                             } else if (command.params[0] == "down") {
@@ -409,7 +409,7 @@ void LetsPlayServer::QueueThread() {
                         const auto& romPath = command.params[2];
 
                         {
-                            std::unique_lock lk((m_EmuThreadMutex));
+                            std::unique_lock lkk(m_EmuThreadMutex);
                             m_EmulatorThreads.emplace_back(
                                 std::thread(EmulatorController::Run, corePath, romPath, this, id));
                         }
@@ -433,7 +433,7 @@ void LetsPlayServer::QueueThread() {
 void LetsPlayServer::BroadcastAll(const std::string& data, websocketpp::frame::opcode::value op) {
     std::unique_lock lk(m_UsersMutex, std::try_to_lock);
     for (auto&[hdl, user] : m_Users) {
-        if (websocketpp::lib::error_code ec; user.username() != "" && !hdl.expired())
+        if (websocketpp::lib::error_code ec; !user.username().empty() && !hdl.expired())
             server->send(hdl, data, op, ec);
     }
 }
@@ -447,8 +447,7 @@ void LetsPlayServer::BroadcastToEmu(const EmuID_t& id, const std::string& messag
                                     websocketpp::frame::opcode::value op) {
     std::unique_lock lk(m_UsersMutex, std::try_to_lock);
     for (auto&[hdl, user] : m_Users) {
-        if (websocketpp::lib::error_code ec;
-            user.connectedEmu() == id && user.username() != "" && !hdl.expired())
+        if (websocketpp::lib::error_code ec; user.connectedEmu() == id && !user.username().empty() && !hdl.expired())
             server->send(hdl, message, op, ec);
     }
 }
@@ -470,6 +469,7 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
         // -1ull, no overflows here
         iss >> length;
 
+        // TODO: Make the max received size equal to maxMessageSize (config) multiplied by len("\u{1AAAA}') plus len('4.chat,') + len(';'). Pass as a parameter to decode for keeping it static.
         if (length >= 1'000) {
             return std::vector<std::string>();
         }
@@ -479,7 +479,7 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
         iss.get();  // remove the period
 
         std::string content(length, 'x');
-        iss.read(content.data(), length);
+        iss.read(content.data(), static_cast<std::streamsize>(length));
         output.push_back(content);
 
         const char& separator = iss.peek();

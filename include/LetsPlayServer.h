@@ -50,7 +50,7 @@ enum class kCommandType {
 };
 
 namespace error {
-enum { usernameTooLong, usernameTooShort, usernameInvalidChars, connectInvalidEmu };
+enum {connectInvalidEmu };
 }  // namespace error
 
 /*
@@ -161,7 +161,7 @@ class LetsPlayServer {
      * @param configFile Path to the config.json file (defaults to
      * ~/.config/letsplay/config)
      */
-    LetsPlayServer(std::filesystem::path& configFile);
+    explicit LetsPlayServer(std::filesystem::path& configFile);
 
     /*
      * Blocking function that starts the LetsPlayServer on the given port
