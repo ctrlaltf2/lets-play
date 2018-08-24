@@ -1,4 +1,5 @@
 class LetsPlayUser;
+
 #pragma once
 #include <algorithm>
 #include <chrono>
@@ -49,7 +50,7 @@ class LetsPlayUser {
      */
     uuid::uuid m_uuid;
 
-   public:
+  public:
     /*
      * if the user has a turn on the
      */

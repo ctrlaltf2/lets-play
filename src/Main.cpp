@@ -10,7 +10,7 @@
 #include "LetsPlayServer.h"
 #include "RetroCore.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     std::uint16_t port{3074};
 
     std::string configPath{"~/.letsplay/config.json"};
@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
         program_options::options_description desc{"Options"};
         // clang-format off
         desc.add_options()("help,h", "Help")
-            ("config", program_options::value<std::string>(),   "Config file path")
-            ("port",   program_options::value<std::uint16_t>(), "Port to run the server on");
+            ("config", program_options::value<std::string>(), "Config file path")
+            ("port", program_options::value<std::uint16_t>(), "Port to run the server on");
         // clang-format on
 
         program_options::variables_map vm;
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         }
 
         if (configPath.front() == '~') {
-            const char* homePath = std::getenv("HOME");
+            const char *homePath = std::getenv("HOME");
             if (!homePath) {
                 std::cerr << "Tilde path was specified but couldn't retrieve "
                              "actual home path. Check if $HOME was declared.\n";

@@ -3,12 +3,12 @@
 
 EmuID_t EmulatorController::id;
 std::string EmulatorController::coreName;
-LetsPlayServer* EmulatorController::m_server{nullptr};
+LetsPlayServer *EmulatorController::m_server{nullptr};
 EmulatorControllerProxy EmulatorController::proxy;
 RetroCore EmulatorController::Core;
-char* EmulatorController::romData{nullptr};
+char *EmulatorController::romData{nullptr};
 
-std::vector<LetsPlayUser*> EmulatorController::m_TurnQueue;
+std::vector<LetsPlayUser *> EmulatorController::m_TurnQueue;
 std::mutex EmulatorController::m_TurnMutex;
 std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
@@ -18,7 +18,7 @@ RetroPad EmulatorController::joypad;
 
 VideoFormat EmulatorController::m_videoFormat;
 Frame EmulatorController::m_keyFrame;
-const void* EmulatorController::m_currentBuffer{nullptr};
+const void *EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
 
@@ -54,7 +54,7 @@ std::shared_mutex EmulatorController::m_generalMutex;
  */
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
-                             LetsPlayServer* server, EmuID_t t_id) {
+                             LetsPlayServer *server, EmuID_t t_id) {
     std::filesystem::path coreFile = corePath, romFile = romPath;
     if (!std::filesystem::is_regular_file(coreFile)) {
         std::cerr << "provided core path '" << corePath << "' was not valid.\n";
@@ -69,7 +69,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false,          &joypad};
+                                    false, &joypad};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -101,7 +101,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     if (!system.need_fullpath) {
         romData = new char[std::filesystem::file_size(romFile)];
-        info.data = static_cast<void*>(romData);
+        info.data = static_cast<void *>(romData);
 
         if (!info.data) {
             std::cerr << "Failed to allocate memory for the ROM\n";
@@ -163,45 +163,50 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     }
 }
 
-bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
+bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
-            const retro_pixel_format* fmt = static_cast<retro_pixel_format*>(data);
+            const retro_pixel_format *fmt = static_cast<retro_pixel_format *>(data);
 
             if (*fmt > RETRO_PIXEL_FORMAT_RGB565) return false;
 
             return SetPixelFormat(*fmt);
-        } break;
+        }
+            break;
             // clang-format off
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
             std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
-            if(!m_server->config.config["serverConfig"]["systemDirectory"].is_string())
+            if (!m_server->config.config["serverConfig"]["systemDirectory"].is_string())
                 break;
             nlohmann::json& dir = m_server->config.config["serverConfig"]["systemDirectory"];
             {
                 std::shared_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
                 systemDirectory = LetsPlayServer::escapeTilde(dir);
             }
-            *static_cast<const char**>(data) = systemDirectory.c_str();
-        } break;
+            *static_cast<const char **>(data) = systemDirectory.c_str();
+        }
+            break;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
             std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
-            if(!m_server->config.config["serverConfig"]["saveDirectory"].is_string())
+            if (!m_server->config.config["serverConfig"]["saveDirectory"].is_string())
                 break;
             nlohmann::json& dir = m_server->config.config["serverConfig"]["saveDirectory"];
             {
                 std::unique_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
                 saveDirectory = LetsPlayServer::escapeTilde(dir);
             }
-            *static_cast<const char**>(data) = saveDirectory.c_str();
-        } break;
+            *static_cast<const char **>(data) = saveDirectory.c_str();
+        }
+            break;
         case RETRO_ENVIRONMENT_GET_USERNAME: {
-            *static_cast<const char**>(data) = id.c_str();
-        } break;
+            *static_cast<const char **>(data) = id.c_str();
+        }
+            break;
         case RETRO_ENVIRONMENT_GET_OVERSCAN: { // We don't (usually) want overscan
             return false;
-        } break;
-        // Will be implemented
+        }
+            break;
+            // Will be implemented
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
         case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: // Use this instead of sleep_until?
@@ -213,14 +218,13 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void* data) {
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: // Some cores use this and it wouldn't be hard to implement with fstream and filesystem being a thing
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: // Some cores might not use audio, so don't even bother with sending the audio streams
         case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: // Might want this for support for more hardware accelerated cores
-        default:
-            return false;
+        default:return false;
             // clang-format on
     }
     return true;
 }
 
-void EmulatorController::OnVideoRefresh(const void* data, unsigned width, unsigned height,
+void EmulatorController::OnVideoRefresh(const void *data, unsigned width, unsigned height,
                                         size_t pitch) {
     std::unique_lock lk(m_videoMutex);
     if (width != m_videoFormat.width || height != m_videoFormat.height ||
@@ -246,7 +250,7 @@ std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device,
 
 void EmulatorController::OnLRAudioSample(std::int16_t left, std::int16_t right) {}
 
-size_t EmulatorController::OnBatchAudioSample(const std::int16_t* data, size_t frames) {
+size_t EmulatorController::OnBatchAudioSample(const std::int16_t *data, size_t frames) {
     return frames;
 }
 
@@ -271,7 +275,7 @@ void EmulatorController::TurnThread() {
                     m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
                 data.empty() || !data.is_number())
                 turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]
-                                                          ["turnLength"];
+                ["turnLength"];
             else
                 turnLength = data;
         }
@@ -283,7 +287,7 @@ void EmulatorController::TurnThread() {
             std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
 
         while (currentUser && currentUser->hasTurn &&
-               (std::chrono::steady_clock::now() < turnEnd)) {
+            (std::chrono::steady_clock::now() < turnEnd)) {
             /* FIXME: does turnEnd - std::chrono::steady_clock::now() cause
              * underflow or UB for the case where now() is greater than
              * turnEnd? */
@@ -301,13 +305,13 @@ void EmulatorController::TurnThread() {
     }
 }
 
-void EmulatorController::AddTurnRequest(LetsPlayUser* user) {
+void EmulatorController::AddTurnRequest(LetsPlayUser *user) {
     std::unique_lock lk((m_TurnMutex));
     m_TurnQueue.emplace_back(user);
     m_TurnNotifier.notify_one();
 }
 
-void EmulatorController::UserDisconnected(LetsPlayUser* user) {
+void EmulatorController::UserDisconnected(LetsPlayUser *user) {
     --usersConnected;
     if (std::unique_lock lk((m_TurnMutex)); m_TurnQueue.size() > 0 && m_TurnQueue[0] == user) {
         auto& currentUser = m_TurnQueue[0];
@@ -327,7 +331,7 @@ void EmulatorController::UserDisconnected(LetsPlayUser* user) {
     }
 }
 
-void EmulatorController::UserConnected(LetsPlayUser* user) {
+void EmulatorController::UserConnected(LetsPlayUser *user) {
     ++usersConnected;
     return;
 }
@@ -350,8 +354,8 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
             m_videoFormat.bitsPerPel = 16;
             return true;
-        // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
-        // out video buffer so thats a no go)
+            // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
+            // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
             std::clog << "XRGB8888\n";
             m_videoFormat.rMask = 0xff000000;
@@ -381,8 +385,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
             m_videoFormat.bitsPerPel = 16;
             return true;
-        default:
-            return false;
+        default:return false;
     }
     return false;
 }
@@ -395,7 +398,7 @@ Frame EmulatorController::GetFrame() {
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
     size_t j{0};
 
-    const std::uint8_t* i = static_cast<const std::uint8_t*>(m_currentBuffer);
+    const std::uint8_t *i = static_cast<const std::uint8_t *>(m_currentBuffer);
     for (size_t h = 0; h < m_videoFormat.height; ++h) {
         for (size_t w = 0; w < m_videoFormat.width; ++w) {
             std::uint32_t pixel{0};
@@ -417,9 +420,9 @@ Frame EmulatorController::GetFrame() {
             const std::uint8_t& gVal = (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
             const std::uint8_t& bVal = (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
 
-            std::uint8_t rNormalized = (rVal / (double)rMax) * 255;
-            std::uint8_t gNormalized = (gVal / (double)gMax) * 255;
-            std::uint8_t bNormalized = (bVal / (double)bMax) * 255;
+            std::uint8_t rNormalized = (rVal / (double) rMax) * 255;
+            std::uint8_t gNormalized = (gVal / (double) gMax) * 255;
+            std::uint8_t bNormalized = (bVal / (double) bMax) * 255;
 
             outVec[j++] = rNormalized;
             outVec[j++] = gNormalized;

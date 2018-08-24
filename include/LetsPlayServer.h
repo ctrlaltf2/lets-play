@@ -1,4 +1,5 @@
 class LetsPlayServer;
+
 #pragma once
 #include <algorithm>
 #include <atomic>
@@ -83,7 +84,7 @@ struct Command {
      * XXX: Possible data race for when the map internally reallocates, but
      * hasn't happened in tests
      */
-    LetsPlayUser* user{nullptr};
+    LetsPlayUser *user{nullptr};
 };
 
 class LetsPlayServer {
@@ -137,14 +138,14 @@ class LetsPlayServer {
      * Map that stores the id -> emulatorcontroller relation, also how
      * emulatorcontrollers are communicated with
      */
-    std::map<EmuID_t, EmulatorControllerProxy*> m_Emus;
+    std::map<EmuID_t, EmulatorControllerProxy *> m_Emus;
 
     /*
      * Make m_emus threadsafe
      */
     std::mutex m_EmusMutex;
 
-   public:
+  public:
     /*
      * Config object
      */
@@ -232,7 +233,7 @@ class LetsPlayServer {
      * @param emu Pointer to the POD struct containing the information necessary
      * for interacting with the newly added emulator controller
      */
-    void AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu);
+    void AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu);
 
     /*
      * Called when an emulator controller has a frame update
@@ -242,7 +243,7 @@ class LetsPlayServer {
 
     static std::string escapeTilde(std::string str);
 
-   private:
+  private:
     /*
      * Vector function for encoding messages
      */
@@ -251,7 +252,7 @@ class LetsPlayServer {
     /*
      * Variadic function for encoding messages
      */
-    template <typename Head, typename... Tail>
+    template<typename Head, typename... Tail>
     static std::string encode(Head h, Tail... t) {
         std::string encoded;
         encodeImpl(encoded, h, t...);
@@ -264,7 +265,7 @@ class LetsPlayServer {
      */
 
     // Base
-    template <typename T>
+    template<typename T>
     static void encodeImpl(std::string& encoded, const T& item) {
         // Convert item to a string
         std::ostringstream toString;
@@ -280,7 +281,7 @@ class LetsPlayServer {
     }
 
     // Recursive impl
-    template <typename Head, typename... Tail>
+    template<typename Head, typename... Tail>
     static void encodeImpl(std::string& encoded, Head h, Tail... t) {
         encodeImpl(encoded, h);
         encodeImpl(encoded, t...);

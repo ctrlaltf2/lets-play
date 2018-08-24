@@ -13,16 +13,16 @@ class RetroCore {
     /**
      * Handle to the dynamically loaded core lib
      */
-    void* m_hCore = nullptr;
+    void *m_hCore = nullptr;
 
     // TODO: On release, loading from dll for win32
     /**
      * Utility function for loading symbols
      */
-    template <typename Symbol>
-    static void Load(void* hCore, Symbol& sym, const char* name) {
+    template<typename Symbol>
+    static void Load(void *hCore, Symbol& sym, const char *name) {
         std::clog << "Loading '" << name << "'...\n";
-        sym = (Symbol)dlsym(hCore, name);
+        sym = (Symbol) dlsym(hCore, name);
 
         // TODO: Exception
         if (sym == nullptr) {
@@ -34,7 +34,7 @@ class RetroCore {
         }
     }
 
-   public:
+  public:
     // Callback registerers
     void (*fSetEnvironment)(retro_environment_t) = nullptr;
     void (*fSetVideoRefresh)(retro_video_refresh_t) = nullptr;
@@ -51,10 +51,10 @@ class RetroCore {
     void (*fRun)() = nullptr;
     void (*fUnloadGame)() = nullptr;
     unsigned (*fRetroAPIVersion)() = nullptr;
-    void (*fGetSystemInfo)(retro_system_info*) = nullptr;
-    void (*fGetAudioVideoInfo)(retro_system_av_info*) = nullptr;
+    void (*fGetSystemInfo)(retro_system_info *) = nullptr;
+    void (*fGetAudioVideoInfo)(retro_system_av_info *) = nullptr;
     void (*fSetControllerPortDevice)(unsigned, unsigned) = nullptr;
-    bool (*fLoadGame)(const retro_game_info*) = nullptr;
+    bool (*fLoadGame)(const retro_game_info *) = nullptr;
 
     RetroCore();
 
@@ -69,7 +69,7 @@ class RetroCore {
     /**
      * Initialize the RetroCore object
      */
-    void Init(const char* hCore);
+    void Init(const char *hCore);
 
     /**
      * Properly shuts down the retro core by calling deinit and similar
