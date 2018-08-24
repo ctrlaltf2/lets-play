@@ -1,4 +1,5 @@
 class LetsPlayConfig;
+
 #pragma once
 
 #include <cstddef>
@@ -18,7 +19,7 @@ class LetsPlayConfig {
      */
     std::filesystem::path m_configPath;
 
-   public:
+  public:
     /*
      * Mutex to make the config threadsafe, locked by threads that directly
      * access the config object

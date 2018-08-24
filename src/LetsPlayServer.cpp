@@ -24,7 +24,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         if (err)
             throw std::runtime_error(std::string("Failed to listen on port ") +
-                                     std::to_string(port));
+                std::to_string(port));
 
         m_QueueThreadRunning = true;
 
@@ -41,7 +41,6 @@ void LetsPlayServer::Run(std::uint16_t port) {
         server->run();
 
         this->Shutdown();
-
     } catch (websocketpp::exception const& e) {
         std::cerr << e.what() << '\n';
     } catch (...) {
@@ -60,7 +59,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     websocketpp::lib::error_code err;
     wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
 
-    LetsPlayUser* user{nullptr};
+    LetsPlayUser *user{nullptr};
     decltype(m_Users)::iterator search;
     {
         std::unique_lock lk((m_UsersMutex));
@@ -121,7 +120,7 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         return;
 
     EmuID_t emuID;
-    LetsPlayUser* user{nullptr};
+    LetsPlayUser *user{nullptr};
     if (std::unique_lock lk(m_UsersMutex); m_Users.find(hdl) != m_Users.end()) {
         user = &m_Users[hdl];
         emuID = user->connectedEmu();
@@ -177,7 +176,7 @@ void LetsPlayServer::Shutdown() {
     {
         std::clog << "Closing every connection..." << '\n';
         std::unique_lock lk((m_UsersMutex));
-        for ([[maybe_unused]] const auto& [hdl, user] : m_Users)
+        for ([[maybe_unused]] const auto&[hdl, user] : m_Users)
             server->close(hdl, websocketpp::close::status::normal, "Closing", err);
     }
 }
@@ -222,7 +221,8 @@ void LetsPlayServer::QueueThread() {
                         BroadcastAll(LetsPlayServer::encode("chat", command.user->username(),
                                                             command.params[0]),
                                      websocketpp::frame::opcode::text);
-                    } break;
+                    }
+                        break;
                     case kCommandType::Username: {
                         // Username has only one param, the username
                         if (command.params.size() != 1) break;
@@ -245,14 +245,14 @@ void LetsPlayServer::QueueThread() {
                             // system implemented)
                             if (!max.is_number_unsigned()) {
                                 maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]
-                                                                              ["maxUsernameLength"];
+                                ["maxUsernameLength"];
                             } else {
                                 maxUsernameLen = max;
                             }
 
                             if (!min.is_number_unsigned()) {
                                 minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]
-                                                                              ["minUsernameLength"];
+                                ["minUsernameLength"];
                             } else {
                                 minUsernameLen = min;
                             }
@@ -282,7 +282,7 @@ void LetsPlayServer::QueueThread() {
                         bool taken{false};
                         {
                             std::unique_lock lk(m_UsersMutex);
-                            for (auto& [hdl, user] : m_Users) {
+                            for (auto&[hdl, user] : m_Users) {
                                 std::cout << user.uuid() << ' ' << command.user->uuid() << '\n';
                                 std::cout << user.username() << ' ' << newUsername << '\n';
                                 std::cout << std::boolalpha << !hdl.expired() << '\n';
@@ -295,7 +295,6 @@ void LetsPlayServer::QueueThread() {
                             }
                         }
                         if (taken) break;
-
 
                         command.user->setUsername(newUsername);
 
@@ -311,7 +310,8 @@ void LetsPlayServer::QueueThread() {
                                 LetsPlayServer::encode("username", oldUsername, newUsername),
                                 websocketpp::frame::opcode::text);
                         }
-                    } break;
+                    }
+                        break;
                     case kCommandType::List: {
                         if (command.params.size() != 0) break;
                         std::vector<std::string> message;
@@ -319,14 +319,15 @@ void LetsPlayServer::QueueThread() {
 
                         {
                             std::unique_lock lk((m_UsersMutex));
-                            for (auto& [hdl, user] : m_Users)
+                            for (auto&[hdl, user] : m_Users)
                                 if ((command.user->connectedEmu() == user.connectedEmu()) &&
                                     !hdl.expired())
                                     message.push_back(user.username());
                         }
 
                         BroadcastOne(LetsPlayServer::encode(message), command.hdl);
-                    } break;
+                    }
+                        break;
                     case kCommandType::Turn: {
                         if (command.params.size() != 0) break;
                         if (command.user->connectedEmu() == "" || command.user->requestedTurn)
@@ -337,9 +338,9 @@ void LetsPlayServer::QueueThread() {
                             command.user->requestedTurn = true;
                             emu->addTurnRequest(command.user);
                         }
-                    } break;
-                    case kCommandType::Shutdown:
+                    }
                         break;
+                    case kCommandType::Shutdown:break;
                     case kCommandType::Connect: {
                         if (command.params.size() != 1) break;
                         if (command.user->username() == "")
@@ -371,7 +372,8 @@ void LetsPlayServer::QueueThread() {
                         BroadcastToEmu(command.user->connectedEmu(),
                                        LetsPlayServer::encode("join", command.user->username()),
                                        websocketpp::frame::opcode::text);
-                    } break;
+                    }
+                        break;
                     case kCommandType::Button: {  // up/down, id
                         if (command.params.size() != 2) return;
 
@@ -395,9 +397,10 @@ void LetsPlayServer::QueueThread() {
                                 m_Emus[command.emuID]->joypad->buttonPress(buttonID);
                             }
                         }
-                    } break;
+                    }
+                        break;
                     case kCommandType::AddEmu: {  // emu, libretro core
-                                                  // path, rom path
+                        // path, rom path
                         // TODO:: Add file path checks and admin check
                         if (command.params.size() != 3) break;
 
@@ -410,7 +413,8 @@ void LetsPlayServer::QueueThread() {
                             m_EmulatorThreads.emplace_back(
                                 std::thread(EmulatorController::Run, corePath, romPath, this, id));
                         }
-                    } break;
+                    }
+                        break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
                     case kCommandType::Admin:
@@ -418,8 +422,7 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Unknown:
                         // Unimplemented
                         break;
-                    default:
-                        break;
+                    default:break;
                 }
                 m_WorkQueue.pop();
             }
@@ -429,7 +432,7 @@ void LetsPlayServer::QueueThread() {
 
 void LetsPlayServer::BroadcastAll(const std::string& data, websocketpp::frame::opcode::value op) {
     std::unique_lock lk(m_UsersMutex, std::try_to_lock);
-    for (auto& [hdl, user] : m_Users) {
+    for (auto&[hdl, user] : m_Users) {
         if (websocketpp::lib::error_code ec; user.username() != "" && !hdl.expired())
             server->send(hdl, data, op, ec);
     }
@@ -443,14 +446,14 @@ void LetsPlayServer::BroadcastOne(const std::string&& data, websocketpp::connect
 void LetsPlayServer::BroadcastToEmu(const EmuID_t& id, const std::string& message,
                                     websocketpp::frame::opcode::value op) {
     std::unique_lock lk(m_UsersMutex, std::try_to_lock);
-    for (auto& [hdl, user] : m_Users) {
+    for (auto&[hdl, user] : m_Users) {
         if (websocketpp::lib::error_code ec;
             user.connectedEmu() == id && user.username() != "" && !hdl.expired())
             server->send(hdl, message, op, ec);
     }
 }
 
-void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy* emu) {
+void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu) {
     std::unique_lock lk(m_EmusMutex);
     m_Emus[id] = emu;
 }
@@ -507,7 +510,7 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
     thread_local static tjhandle _jpegCompressor = tjInitCompress();
     thread_local static long unsigned int _jpegBufferSize = 0;
-    thread_local static std::uint8_t* jpegData{nullptr};
+    thread_local static std::uint8_t *jpegData{nullptr};
     Frame frame = [&]() {
         std::unique_lock lk(m_EmusMutex);
         auto emu = m_Emus[id];
@@ -529,7 +532,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     _jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
 
     std::unique_lock lk(m_UsersMutex);
-    for (auto& [hdl, user] : m_Users) {
+    for (auto&[hdl, user] : m_Users) {
         if (user.connectedEmu() == id && !hdl.expired()) {
             websocketpp::lib::error_code ec;
             server->send(hdl, jpegData, jpegSize, websocketpp::frame::opcode::binary, ec);
@@ -539,7 +542,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
 
 std::string LetsPlayServer::escapeTilde(std::string str) {
     if (str.front() == '~') {
-        const char* homePath = std::getenv("HOME");
+        const char *homePath = std::getenv("HOME");
         if (!homePath) {
             std::cerr << "Tilde path was specified but couldn't retrieve "
                          "actual home path. Check if $HOME was declared.\n";

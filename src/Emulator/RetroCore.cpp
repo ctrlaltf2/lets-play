@@ -2,9 +2,9 @@
 
 RetroCore::RetroCore() {}
 
-void RetroCore::Init(const char* corePath) {
+void RetroCore::Init(const char *corePath) {
     std::clog << "Loading file from '" << corePath << "'\n";
-    void* hCore = dlopen(corePath, RTLD_NOW);
+    void *hCore = dlopen(corePath, RTLD_NOW);
 
     // TODO: Exception
     if (!hCore) {

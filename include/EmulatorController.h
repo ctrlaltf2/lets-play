@@ -1,4 +1,5 @@
 class EmulatorController;
+
 struct EmulatorControllerProxy;
 struct RGBColor;
 struct VideoFormat;
@@ -30,10 +31,10 @@ struct Frame;
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
-    std::function<void(LetsPlayUser*)> addTurnRequest, userDisconnected, userConnected;
+    std::function<void(LetsPlayUser *)> addTurnRequest, userDisconnected, userConnected;
     std::function<Frame()> getFrame;
     bool isReady{false};
-    RetroPad* joypad{nullptr};
+    RetroPad *joypad{nullptr};
 };
 
 struct VideoFormat {
@@ -85,12 +86,12 @@ class EmulatorController {
     /*
      * Pointer to the server managing the emulator controller
      */
-    static LetsPlayServer* m_server;
+    static LetsPlayServer *m_server;
 
     /*
      * Turn queue for this emulator
      */
-    static std::vector<LetsPlayUser*> m_TurnQueue;
+    static std::vector<LetsPlayUser *> m_TurnQueue;
 
     /*
      * Mutex for accessing the turn queue
@@ -128,7 +129,7 @@ class EmulatorController {
     /*
      * Pointer to the current video buffer
      */
-    static const void* m_currentBuffer;
+    static const void *m_currentBuffer;
 
     /*
      * Mutex for accessing m_screen or m_nextFrame or updating the buffer
@@ -142,7 +143,7 @@ class EmulatorController {
      */
     static std::shared_mutex m_generalMutex;
 
-   public:
+  public:
     /*
      * ID of the emulator controller / emulator
      */
@@ -166,7 +167,7 @@ class EmulatorController {
     /*
      * Rom data if loaded from file
      */
-    static char* romData;
+    static char *romData;
 
     /*
      * The joypad object storing the button state
@@ -189,7 +190,7 @@ class EmulatorController {
     /*
      * Kind of the constructor. Blocks when called.
      */
-    static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer* server,
+    static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer *server,
                     EmuID_t t_id);
 
     // libretro_core -> Controller ?> Server
@@ -198,10 +199,10 @@ class EmulatorController {
      * environment
      * @return (?) Possibly if the command was recognized
      */
-    static bool OnEnvironment(unsigned cmd, void* data);
+    static bool OnEnvironment(unsigned cmd, void *data);
     // Either:
     //  1) libretro_core -> Controller
-    static void OnVideoRefresh(const void* data, unsigned width, unsigned height, size_t stride);
+    static void OnVideoRefresh(const void *data, unsigned width, unsigned height, size_t stride);
     // Controller -> Server.getInput (input is TOGGLE)
     static void OnPollInput();
     // Controller -> libretro_core
@@ -210,7 +211,7 @@ class EmulatorController {
     // Controller -> Server
     static void OnLRAudioSample(std::int16_t left, std::int16_t right);
     // Controller -> Server
-    static size_t OnBatchAudioSample(const std::int16_t* data, size_t frames);
+    static size_t OnBatchAudioSample(const std::int16_t *data, size_t frames);
 
     /*
      * Thread that manages the turns for the users that are connected to the
@@ -221,17 +222,17 @@ class EmulatorController {
     /*
      * Adds a user to the turn request queue, invoked by parent LetsPlayServer
      */
-    static void AddTurnRequest(LetsPlayUser* user);
+    static void AddTurnRequest(LetsPlayUser *user);
 
     /*
      * Called when a user disonnects, updates turn queue if applicable
      */
-    static void UserDisconnected(LetsPlayUser* user);
+    static void UserDisconnected(LetsPlayUser *user);
 
     /*
      * Called when a user connects
      */
-    static void UserConnected(LetsPlayUser* user);
+    static void UserConnected(LetsPlayUser *user);
 
     /*
      * Called when the emulator requests/announces a change in the pixel format

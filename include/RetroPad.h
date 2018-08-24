@@ -1,4 +1,5 @@
 class RetroPad;
+
 #pragma once
 #include <atomic>
 #include <cstdint>
@@ -6,7 +7,7 @@ class RetroPad;
 class RetroPad {
     std::atomic<std::uint16_t> m_buttonState{0};
 
-   public:
+  public:
     /*
      * Update so that a button is pressed
      * @param id the RETRO_DEVICE_ID_JOYPAD id
