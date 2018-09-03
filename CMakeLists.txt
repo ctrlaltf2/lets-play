@@ -62,7 +62,7 @@ target_compile_options(letsplay
 
 target_link_libraries(letsplay
     PUBLIC
-        dl
+        ${CMAKE_DL_LIBS}
         pthread
         boost_system
         ${Boost_LIBRARIES}
