@@ -23,9 +23,12 @@ class LetsPlayServer;
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
+#include "nlohmann/json.hpp"
+
 #include "EmulatorController.h"
 #include "LetsPlayConfig.h"
 #include "LetsPlayUser.h"
+#include "Random.h"
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
 
@@ -225,6 +228,22 @@ class LetsPlayServer {
      * @param hdl Who to send it to
      */
     void BroadcastOne(const std::string&& message, websocketpp::connection_hdl hdl);
+
+    /*
+     * Generate and send a guest username for a user. Doesn't tell everyone on emu about join/username change.
+     * @param hdl Websocket handle for sending
+     * @param uuid User to give guest
+     */
+    // TODO: uuid -> hdl?
+    void GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUser* user);
+
+    /*
+     * Check if a username is taken.
+     * @param username The username to check
+     * @param uuid the UUID of the user being checked
+     * @return (bool) Whether or not the username is taken
+     */
+    bool UsernameTaken(const std::string& username, const std::string& uuid);
 
     // --- Functions called only by emulator controllers --- //
     /*

@@ -172,11 +172,11 @@ class EmulatorController {
      */
     static EmulatorControllerProxy proxy;
 
-    /*
+    /*!
      * The object that manages the libretro lower level functions. Used mostly
      * for loading symbols and storing function pointers.
      */
-    static RetroCore Core;
+    static RetroCore Core; /**<The object that manages the libretro lower level functions. Used mostly for loading symbols and storing function pointers.*/
 
     static std::atomic<std::uint64_t> usersConnected;
 
