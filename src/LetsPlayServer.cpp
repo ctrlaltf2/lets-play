@@ -369,14 +369,15 @@ void LetsPlayServer::QueueThread() {
                         // figured out
                         if (!command.user->connectedEmu().empty()) break;
 
+                        BroadcastToEmu(command.params[0],
+                                       LetsPlayServer::encode("join", command.user->username()),
+                                       websocketpp::frame::opcode::text);
+
                         command.user->setConnectedEmu(command.params[0]);
                         {
                             std::unique_lock lkk(m_EmusMutex);
                             m_Emus[command.user->connectedEmu()]->userConnected(command.user);
                         }
-                        BroadcastToEmu(command.user->connectedEmu(),
-                                       LetsPlayServer::encode("join", command.user->username()),
-                                       websocketpp::frame::opcode::text);
 
                         BroadcastOne(LetsPlayServer::encode("connect", true), command.hdl);
                     }
