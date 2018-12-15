@@ -25,8 +25,8 @@ class LetsPlayConfig {
      * access the config object
      */
     std::shared_mutex mutex;
-
     /*
+
      * Json object holding the current config info
      */
     nlohmann::json config;
