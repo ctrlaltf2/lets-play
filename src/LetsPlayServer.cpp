@@ -108,8 +108,6 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         t = kCommandType::Connect;
     else if (command == "turn")  // No params
         t = kCommandType::Turn;
-    else if (command == "button")
-        t = kCommandType::Button;
     else if (command == "add")
         t = kCommandType::AddEmu;
     else if (command == "shutdown")
@@ -125,7 +123,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
     }
 
     Command c{t, std::vector<std::string>(), hdl, emuID, user};
-    if (decoded.size() > 1) c.params = std::vector<std::string>(decoded.begin() + 1, decoded.end());
+    if (decoded.size() > 1)
+        c.params = std::vector<std::string>(decoded.begin() + 1, decoded.end());
 
     {
         std::unique_lock lk(m_QueueMutex);
@@ -228,84 +227,92 @@ void LetsPlayServer::QueueThread() {
                         const auto& newUsername = command.params.at(0);
                         const auto oldUsername = command.user->username();
 
-                        // Ignore no change
-                        if (newUsername == oldUsername) break;
+                        const bool justJoined = oldUsername.empty();
+
+                        // Ignore no change if haven't just joined
+                        if (newUsername == oldUsername && !justJoined) {
+                            // Treat as invalid if they haven't just joined and they tried to request a new username
+                            // that's the same as their current one
+                            BroadcastOne(
+                                LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                command.hdl);
+                        }
 
                         std::uint64_t maxUsernameLen, minUsernameLen;
                         {
                             std::shared_lock lkk(config.mutex);
-                            nlohmann::json& max =
-                                config.config["serverConfig"]["maxUsernameLength"];
-                            nlohmann::json& min =
-                                config.config["serverConfig"]["minUsernameLength"];
 
-                            // TODO: Warning on invalid data type (logging
-                            // system implemented)
-                            if (!max.is_number_unsigned()) {
-                                maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]
-                                ["maxUsernameLength"];
-                            } else {
+                            nlohmann::json& max = config.config["serverConfig"]["maxUsernameLength"],
+                                            min = config.config["serverConfig"]["minUsernameLength"];
+
+                            // TODO: Warning on invalid data type (logging system implemented)
+                            if (!max.is_number_unsigned())
+                                maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["maxUsernameLength"];
+                            else
                                 maxUsernameLen = max;
-                            }
 
-                            if (!min.is_number_unsigned()) {
-                                minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]
-                                ["minUsernameLength"];
-                            } else {
+
+                            if (!min.is_number_unsigned())
+                                minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["minUsernameLength"];
+                            else
                                 minUsernameLen = min;
-                            }
                         }
 
-                        auto usernameValid = [](const bool isValid,
-                                                const std::string& currentUsername) {
-                            return LetsPlayServer::encode("username", isValid, currentUsername);
-                        };
-
                         // Size based checks
-                        if (newUsername.size() > maxUsernameLen ||
-                            newUsername.size() < minUsernameLen) {
-                            BroadcastOne(usernameValid(false, oldUsername), command.hdl);
+                        if (newUsername.size() > maxUsernameLen
+                            || newUsername.size() < minUsernameLen) {
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user);
+                            else
+                                BroadcastOne(
+                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    command.hdl);
                             break;
                         }
 
                         // Content based checks
-                        if (newUsername.front() == ' ' || newUsername.back() == ' ' ||
-                            !LetsPlayServer::isAsciiStr(newUsername) ||
-                            (newUsername.find("  ") != std::string::npos)) {
-                            BroadcastOne(usernameValid(false, oldUsername), command.hdl);
+                        if (newUsername.front() == ' ' || newUsername.back() == ' ' // Spaces at beginning/end
+                            || !LetsPlayServer::isAsciiStr(newUsername)         // Non-ascii printable characters
+                            || (newUsername.find("  ") != std::string::npos)) { // Double spaces inside username
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user);
+                            else
+                                BroadcastOne(
+                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    command.hdl);
                             break;
                         }
 
-                        // Check if username isn't already taken
-                        bool taken{false};
-                        {
-                            std::unique_lock lkk(m_UsersMutex);
-                            for (auto&[hdl, user] : m_Users) {
-                                std::cout << user.uuid() << ' ' << command.user->uuid() << '\n';
-                                std::cout << user.username() << ' ' << newUsername << '\n';
-                                std::cout << std::boolalpha << !hdl.expired() << '\n';
-                                if (user.uuid() != command.user->uuid() &&
-                                    user.username() == newUsername && !hdl.expired()) {
-                                    BroadcastOne(usernameValid(false, oldUsername), command.hdl);
-                                    taken = true;
-                                    break;
-                                }
-                            }
+                        // Finally, check if username is already taken
+                        if (UsernameTaken(newUsername, command.user->uuid())) {
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user);
+                            else
+                                BroadcastOne(
+                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    command.hdl);
+                            break;
                         }
-                        if (taken) break;
+
+                        /*
+                         * If all checks were passed, set username and broadcast to the person that they have a new
+                         * username, and send a join/rename to everyone if the person just joined/has been around
+                         */
 
                         command.user->setUsername(newUsername);
+                        BroadcastOne(
+                            LetsPlayServer::encode("username", oldUsername, newUsername),
+                            command.hdl
+                        );
 
-                        if (oldUsername.empty())
-                            // Join
-                            ;
-                        else {
-                            BroadcastOne(usernameValid(true, newUsername), command.hdl);
-
-                            // Tell everyone someone changed their username
-                            // TODO: BroadcastToEmu
-                            BroadcastAll(
-                                LetsPlayServer::encode("username", oldUsername, newUsername),
+                        if (justJoined) { // Send a join message
+                            BroadcastToEmu(
+                                command.user->connectedEmu(),
+                                LetsPlayServer::encode("join", command.user->username()),
+                                websocketpp::frame::opcode::text);
+                        } else { // Tell everyone on the emu someone changed their username
+                            BroadcastToEmu(command.user->connectedEmu(),
+                                LetsPlayServer::encode("rename", oldUsername, newUsername),
                                 websocketpp::frame::opcode::text);
                         }
                     }
@@ -340,19 +347,15 @@ void LetsPlayServer::QueueThread() {
                         break;
                     case kCommandType::Shutdown:break;
                     case kCommandType::Connect: {
-                        if (command.params.size() != 1) break;
-                        if (command.user->username().empty())
-                            break;  // Must have a username to connect to an emu
+                        if (command.params.size() != 1 || command.user->username().empty()) {
+                            LetsPlayServer::BroadcastOne(LetsPlayServer::encode("connect", false), command.hdl);
+                            break;
+                        }
 
                         // Check if the emu that the connect thing that was sent exists
-                        if (std::unique_lock lkk(m_EmusMutex);
-                            m_Emus.find(command.params[0]) == m_Emus.end()) {
-                            if (websocketpp::lib::error_code ec; !command.hdl.expired()) {
-                                server->send(command.hdl,
-                                             LetsPlayServer::encode("error", error::connectInvalidEmu),
-                                             websocketpp::frame::opcode::text,
-                                             ec);
-                            }
+                        if (std::unique_lock lkk(m_EmusMutex); m_Emus.find(command.params[0]) == m_Emus.end()) {
+                            if (!command.hdl.expired())
+                                LetsPlayServer::BroadcastOne(LetsPlayServer::encode("connect", false), command.hdl);
                             break;
                         }
 
@@ -362,14 +365,50 @@ void LetsPlayServer::QueueThread() {
                         // figured out
                         if (!command.user->connectedEmu().empty()) break;
 
+                        BroadcastToEmu(command.params[0],
+                                       LetsPlayServer::encode("join", command.user->username()),
+                                       websocketpp::frame::opcode::text);
+
                         command.user->setConnectedEmu(command.params[0]);
                         {
                             std::unique_lock lkk(m_EmusMutex);
                             m_Emus[command.user->connectedEmu()]->userConnected(command.user);
                         }
-                        BroadcastToEmu(command.user->connectedEmu(),
-                                       LetsPlayServer::encode("join", command.user->username()),
-                                       websocketpp::frame::opcode::text);
+
+                        BroadcastOne(LetsPlayServer::encode("connect", true), command.hdl);
+
+                        std::uint64_t maxUsernameLen, minUsernameLen, maxMessageSize;
+                        {
+                            std::shared_lock lkk(config.mutex);
+
+                            nlohmann::json& max = config.config["serverConfig"]["maxUsernameLength"],
+                                            min = config.config["serverConfig"]["minUsernameLength"],
+                                            msgMax = config.config["serverConfig"]["maxMessageSize"];
+
+                            // TODO: Warning on invalid data type (logging system implemented)
+                            if (!max.is_number_unsigned())
+                                maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["maxUsernameLength"];
+                            else
+                                maxUsernameLen = max;
+
+
+                            if (!min.is_number_unsigned())
+                                minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["minUsernameLength"];
+                            else
+                                minUsernameLen = min;
+
+
+                            if (!msgMax.is_number_unsigned())
+                                maxMessageSize = LetsPlayConfig::defaultConfig["serverConfig"]["maxMessageSize"];
+                            else
+                                maxMessageSize = msgMax;
+
+                        }
+
+                        BroadcastOne(
+                            LetsPlayServer::encode("emuinfo", minUsernameLen, maxUsernameLen, maxMessageSize),
+                            command.hdl
+                            );
                     }
                         break;
                     case kCommandType::Button: {  // up/down, id
@@ -450,6 +489,34 @@ void LetsPlayServer::BroadcastToEmu(const EmuID_t& id, const std::string& messag
     }
 }
 
+void LetsPlayServer::GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUser* user) {
+    // TODO: Custom guest usernames? (i.e. being able to specify player##### in config)
+    std::string validUsername;
+    do {
+        validUsername = "guest";
+        validUsername += std::to_string(rnd::nextInt() % 100000);
+    } while(UsernameTaken(validUsername, user->uuid()));
+
+    const std::string oldUsername = user->username();
+    user->setUsername(validUsername);
+    // Send valid username
+    BroadcastOne(
+        LetsPlayServer::encode("username", oldUsername, validUsername),
+        hdl
+        );
+}
+
+bool LetsPlayServer::UsernameTaken(const std::string& username, const std::string& uuid) {
+    std::unique_lock lkk(m_UsersMutex);
+    for (auto&[hdl, user] : m_Users) {
+        if (user.uuid() != uuid &&
+            user.username() == username && !hdl.expired()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu) {
     std::unique_lock lk(m_EmusMutex);
     m_Emus[id] = emu;
@@ -467,7 +534,7 @@ std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
         // -1ull, no overflows here
         iss >> length;
 
-        // TODO: Make the max received size equal to maxMessageSize (config) multiplied by len("\u{1AAAA}') plus len('4.chat,') + len(';'). Pass as a parameter to decode for keeping it static.
+        // TODO: Make the max received size equal to maxMessageSize (config value) multiplied by len("\u{1AAAA}") + len('4.chat,') + len(';'). Pass as a parameter to decode for keeping it static.
         if (length >= 1'000) {
             return std::vector<std::string>();
         }
@@ -518,6 +585,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // currentBuffer was nullptr
     if (frame.width == 0 || frame.height == 0) return;
 
+    // TODO: Make this function faster by making this update less often
     unsigned quality = LetsPlayConfig::defaultConfig["serverConfig"]["jpegQuality"];
     if (std::shared_lock lk(config.mutex); config.config["serverConfig"].count("jpegQuality")) {
         nlohmann::json& value = config.config["serverConfig"]["jpegQuality"];
