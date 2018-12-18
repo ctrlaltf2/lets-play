@@ -21,6 +21,7 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     endif()
 endif()
 
+#[[ clang-tidy segfaults on LetsPlayServer.cpp; too complex?
 if(CMAKE_VERSION VERSION_GREATER 3.6)
     # Use clang-tidy if available
     option(CLANG_TIDY_FIX "Perform fixes for Clang-Tidy" OFF)
@@ -38,6 +39,7 @@ if(CMAKE_VERSION VERSION_GREATER 3.6)
         endif()
     endif()
 endif()
+]]
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/json/README.md")
     message(FATAL_ERROR "The json library submodule was not downloaded. Please manually update submodules and try again.")
