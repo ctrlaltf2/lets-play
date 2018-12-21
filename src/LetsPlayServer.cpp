@@ -203,8 +203,7 @@ void LetsPlayServer::QueueThread() {
                             std::shared_lock lkk(config.mutex);
                             nlohmann::json& data = config.config["serverConfig"]["maxMessageSize"];
 
-                            // TODO: Warning on invalid data type (logging
-                            // system implemented)
+                            // TODO: Warning on invalid data type (logging system implemented)
                             if (!data.is_number_unsigned()) {
                                 maxMessageSize =
                                     LetsPlayConfig::defaultConfig["serverConfig"]["maxMessageSize"];
@@ -452,6 +451,9 @@ void LetsPlayServer::QueueThread() {
                         }
                     }
                         break;
+                    case kCommandType::Pong:
+                        command.user->updateLastPong();
+                        break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
                     case kCommandType::Admin:
@@ -464,6 +466,26 @@ void LetsPlayServer::QueueThread() {
                 m_WorkQueue.pop();
             }
         }
+    }
+}
+
+void LetsPlayServer::PingThread() {
+    const auto ping = LetsPlayProtocol::encode("ping");
+    while(true) {
+        for (auto&[hdl, user] : m_Users) {
+            websocketpp::lib::error_code ec;
+
+            // Check if should d/c
+            if(user.shouldDisconnect()) {
+                server->close(hdl, websocketpp::close::status::normal, "", ec);
+                continue;
+            }
+
+            // Send a ping if not
+            if(!hdl.expired())
+                server->send(hdl, ping, websocketpp::frame::opcode::text);
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 }
 

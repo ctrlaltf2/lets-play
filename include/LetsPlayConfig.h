@@ -54,4 +54,6 @@ class LetsPlayConfig {
     void SaveConfig();
 
     ~LetsPlayConfig();
+
+    // TODO: Variadic function, string..., nlohmann::json::type. Warn or error onmismatched datatype or nonexistent value. Falls back on default config. A call might look like nlohmann::json val = config.pull("serverConfig", "emulators", "emu1", "turnLength", nlohmann::json::value_t::number_unsigned);
 };
