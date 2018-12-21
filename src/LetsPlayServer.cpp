@@ -405,15 +405,17 @@ void LetsPlayServer::QueueThread() {
                         }
 
                         BroadcastOne(
-                            LetsPlayServer::encode("emuinfo", minUsernameLen, maxUsernameLen, maxMessageSize),
+                            LetsPlayProtocol::encode("emuinfo", minUsernameLen, maxUsernameLen, maxMessageSize),
                             command.hdl
                             );
                     }
                         break;
                     case kCommandType::Button: {  // up/down, id
-                        if (command.params.size() != 2) return;
+                        if (command.params.size() != 2) break;
 
-                        if (command.params[0].front() == '-') return;
+                        if(!command.user->hasTurn) break;
+
+                        if (command.params[0].front() == '-') break;
 
                         if (!command.emuID.empty()) {
                             unsigned buttonID{0};
