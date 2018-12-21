@@ -74,7 +74,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
             std::unique_lock lk((m_EmusMutex));
             m_Emus[user->connectedEmu()]->userDisconnected(user);
         }
-        BroadcastToEmu(user->connectedEmu(), LetsPlayServer::encode("leave", user->username()),
+        BroadcastToEmu(user->connectedEmu(), LetsPlayProtocol::encode("leave", user->username()),
                        websocketpp::frame::opcode::text);
     }
 
@@ -88,7 +88,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
 
 void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::message_ptr msg) {
     const std::string& data = msg->get_payload();
-    const auto decoded = decode(data);
+    const auto decoded = LetsPlayProtocol::decode(data);
 
     if (decoded.empty()) return;
     // TODO: that switch case compile-time hash thing, its faster
@@ -214,7 +214,7 @@ void LetsPlayServer::QueueThread() {
 
                         if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
-                        BroadcastAll(LetsPlayServer::encode("chat", command.user->username(),
+                        BroadcastAll(LetsPlayProtocol::encode("chat", command.user->username(),
                                                             command.params[0]),
                                      websocketpp::frame::opcode::text);
                     }
@@ -233,7 +233,7 @@ void LetsPlayServer::QueueThread() {
                             // Treat as invalid if they haven't just joined and they tried to request a new username
                             // that's the same as their current one
                             BroadcastOne(
-                                LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                 command.hdl);
                         }
 
@@ -264,7 +264,7 @@ void LetsPlayServer::QueueThread() {
                                 GiveGuest(command.hdl, command.user);
                             else
                                 BroadcastOne(
-                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                     command.hdl);
                             break;
                         }
@@ -277,7 +277,7 @@ void LetsPlayServer::QueueThread() {
                                 GiveGuest(command.hdl, command.user);
                             else
                                 BroadcastOne(
-                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                     command.hdl);
                             break;
                         }
@@ -288,7 +288,7 @@ void LetsPlayServer::QueueThread() {
                                 GiveGuest(command.hdl, command.user);
                             else
                                 BroadcastOne(
-                                    LetsPlayServer::encode("username", oldUsername, oldUsername),
+                                    LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                     command.hdl);
                             break;
                         }
@@ -300,18 +300,18 @@ void LetsPlayServer::QueueThread() {
 
                         command.user->setUsername(newUsername);
                         BroadcastOne(
-                            LetsPlayServer::encode("username", oldUsername, newUsername),
+                            LetsPlayProtocol::encode("username", oldUsername, newUsername),
                             command.hdl
                         );
 
                         if (justJoined) { // Send a join message
                             BroadcastToEmu(
                                 command.user->connectedEmu(),
-                                LetsPlayServer::encode("join", command.user->username()),
+                                LetsPlayProtocol::encode("join", command.user->username()),
                                 websocketpp::frame::opcode::text);
                         } else { // Tell everyone on the emu someone changed their username
                             BroadcastToEmu(command.user->connectedEmu(),
-                                LetsPlayServer::encode("rename", oldUsername, newUsername),
+                                LetsPlayProtocol::encode("rename", oldUsername, newUsername),
                                 websocketpp::frame::opcode::text);
                         }
                     }
@@ -329,7 +329,7 @@ void LetsPlayServer::QueueThread() {
                                     message.push_back(user.username());
                         }
 
-                        BroadcastOne(LetsPlayServer::encode(message), command.hdl);
+                        BroadcastOne(LetsPlayProtocol::encode(message), command.hdl);
                     }
                         break;
                     case kCommandType::Turn: {
@@ -347,14 +347,14 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Shutdown:break;
                     case kCommandType::Connect: {
                         if (command.params.size() != 1 || command.user->username().empty()) {
-                            LetsPlayServer::BroadcastOne(LetsPlayServer::encode("connect", false), command.hdl);
+                            LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false), command.hdl);
                             break;
                         }
 
                         // Check if the emu that the connect thing that was sent exists
                         if (std::unique_lock lkk(m_EmusMutex); m_Emus.find(command.params[0]) == m_Emus.end()) {
                             if (!command.hdl.expired())
-                                LetsPlayServer::BroadcastOne(LetsPlayServer::encode("connect", false), command.hdl);
+                                LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false), command.hdl);
                             break;
                         }
 
@@ -365,7 +365,7 @@ void LetsPlayServer::QueueThread() {
                         if (!command.user->connectedEmu().empty()) break;
 
                         BroadcastToEmu(command.params[0],
-                                       LetsPlayServer::encode("join", command.user->username()),
+                                       LetsPlayProtocol::encode("join", command.user->username()),
                                        websocketpp::frame::opcode::text);
 
                         command.user->setConnectedEmu(command.params[0]);
@@ -374,7 +374,7 @@ void LetsPlayServer::QueueThread() {
                             m_Emus[command.user->connectedEmu()]->userConnected(command.user);
                         }
 
-                        BroadcastOne(LetsPlayServer::encode("connect", true), command.hdl);
+                        BroadcastOne(LetsPlayProtocol::encode("connect", true), command.hdl);
 
                         std::uint64_t maxUsernameLen, minUsernameLen, maxMessageSize;
                         {
@@ -523,7 +523,7 @@ void LetsPlayServer::GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUser* us
     user->setUsername(validUsername);
     // Send valid username
     BroadcastOne(
-        LetsPlayServer::encode("username", oldUsername, validUsername),
+        LetsPlayProtocol::encode("username", oldUsername, validUsername),
         hdl
         );
 }
@@ -544,42 +544,6 @@ void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu) {
     m_Emus[id] = emu;
 }
 
-std::vector<std::string> LetsPlayServer::decode(const std::string& input) {
-    std::vector<std::string> output;
-
-    if (input.back() != ';') return output;
-
-    std::istringstream iss{input};
-    while (iss) {
-        unsigned long long length{0};
-        // if length is greater than -1ull then length will just be equal to
-        // -1ull, no overflows here
-        iss >> length;
-
-        // TODO: Make the max received size equal to maxMessageSize (config value) multiplied by len("\u{1AAAA}") + len('4.chat,') + len(';'). Pass as a parameter to decode for keeping it static.
-        if (length >= 1'000) {
-            return std::vector<std::string>();
-        }
-
-        if (iss.peek() != '.') return std::vector<std::string>();
-
-        iss.get();  // remove the period
-
-        std::string content(length, 'x');
-        iss.read(content.data(), static_cast<std::streamsize>(length));
-        output.push_back(content);
-
-        const char& separator = iss.peek();
-        if (separator != ',') {
-            if (separator == ';') return output;
-
-            return std::vector<std::string>();
-        }
-
-        iss.get();
-    }
-    return std::vector<std::string>();
-}
 
 bool LetsPlayServer::isAsciiStr(const std::string& str) {
     return std::all_of(str.begin(), str.end(),
@@ -643,16 +607,3 @@ std::string LetsPlayServer::escapeTilde(std::string str) {
     return str;
 }
 
-std::string LetsPlayServer::encode(const std::vector<std::string>& chunks) {
-    std::ostringstream oss;
-    for (const auto& chunk : chunks) {
-        oss << chunk.size();
-        oss << '.';
-        oss << chunk;
-        oss << ',';
-    }
-
-    std::string out = oss.str();
-    out.back() = ';';
-    return out;
-}

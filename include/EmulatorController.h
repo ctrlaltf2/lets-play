@@ -25,6 +25,7 @@ struct Frame;
 
 #include "libretro.h"
 
+#include "LetsPlayProtocol.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
 #include "RetroCore.h"

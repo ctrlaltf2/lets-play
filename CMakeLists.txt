@@ -51,6 +51,7 @@ add_executable(letsplay
         src/LetsPlayConfig.cpp
         src/LetsPlayServer.cpp
         src/LetsPlayUser.cpp
+        src/LetsPlayProtocol.cpp
         # Emulator/
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp
