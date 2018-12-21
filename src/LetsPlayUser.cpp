@@ -4,17 +4,21 @@ std::mutex g_uuidMutex;
 uuid::random_generator g_UUIDGen;
 
 LetsPlayUser::LetsPlayUser()
-    : m_lastHeartbeat{std::chrono::steady_clock::now()}, hasTurn{false}, requestedTurn{false} {
+    : m_lastPong{std::chrono::steady_clock::now()}, hasTurn{false}, requestedTurn{false} {
     g_uuidMutex.lock();
     m_uuid = g_UUIDGen();
     g_uuidMutex.unlock();
 }
 
-/*
-bool LetsPlayUser::shouldDisconnect() const {
+bool LetsPlayUser::shouldDisconnect() {
     return std::chrono::steady_clock::now() >
-        (m_lastHeartbeat + std::chrono::seconds(c_heartbeatTimeout));
-} */
+        (m_lastPong + std::chrono::seconds(10));
+}
+
+void LetsPlayUser::updateLastPong() {
+    std::unique_lock lk(m_access);
+    m_lastPong = std::chrono::steady_clock::now();
+}
 
 EmuID_t LetsPlayUser::connectedEmu() {
     std::unique_lock lk(m_access);

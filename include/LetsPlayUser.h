@@ -25,10 +25,9 @@ extern std::mutex g_uuidMutex;
  */
 class LetsPlayUser {
     /*
-     * Time point of the last message sent (includes the no operation heartbeat
-     * message [to be implemented])
+     * Time point of the pong message sent
      */
-    std::chrono::time_point<std::chrono::steady_clock> m_lastHeartbeat;
+    std::chrono::time_point<std::chrono::steady_clock> m_lastPong;
 
     /*
      * Username for the user
@@ -52,7 +51,7 @@ class LetsPlayUser {
 
   public:
     /*
-     * if the user has a turn on the
+     * if the user has a turn on their emu
      */
     std::atomic<bool> hasTurn;
 
@@ -62,12 +61,6 @@ class LetsPlayUser {
     std::atomic<bool> requestedTurn;
 
     LetsPlayUser();
-
-    /*
-     * Returns true if the user's last heartbeat was over the limit for timeout
-     * @return True if the user should be disconnected
-     *
-    bool shouldDisconnect() const;*/
 
     // The reasoning behind the following redundant and
     // cs-major-just-introduced-to-java-classes-esque getters and setters is for
@@ -99,4 +92,14 @@ class LetsPlayUser {
      * Get the uuid as a string
      */
     std::string uuid() const;
+
+    /*
+     * Updates pong time
+     */
+    void updateLastPong();
+
+    /*
+     * Whether or not the user should disconnect (missed two pongs)
+     */
+    bool shouldDisconnect();
 };

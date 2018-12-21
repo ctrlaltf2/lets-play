@@ -12,6 +12,7 @@ struct Frame;
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <queue>

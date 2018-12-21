@@ -1,5 +1,4 @@
 #include "EmulatorController.h"
-#include <memory>
 
 EmuID_t EmulatorController::id;
 std::string EmulatorController::coreName;

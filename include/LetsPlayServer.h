@@ -43,6 +43,7 @@ enum class kCommandType {
     Turn,
     Connect,
     Error,
+    Pong,
     Admin,
     AddEmu,
     RemoveEmu,
@@ -199,15 +200,18 @@ class LetsPlayServer {
     void Shutdown();
 
     /*
-     * Function (to be run in a thread) that manages the queue and all of the
-     * incoming commands
+     * Thread function that manages the queue and all of the incoming commands
      */
     void QueueThread();
 
     /*
+     * Thread function that manages the ping sends and disconnects for users not responding to the ping
+     */
+    void PingThread();
+
+    /*
      * Send a message to all connected users
-     * @param message The message to send (isn't modified or encoded on the way
-     * out)
+     * @param message The message to send (isn't modified or encoded on the way out)
      * @param op The type of message to send
      */
     void BroadcastAll(const std::string& message, websocketpp::frame::opcode::value op);
@@ -223,8 +227,7 @@ class LetsPlayServer {
 
     /*
      * Send a message to just one user
-     * @param message The message to send (isn't modified or encoded on the way
-     * out)
+     * @param message The message to send (isn't modified or encoded on the way out)
      * @param hdl Who to send it to
      */
     void BroadcastOne(const std::string&& message, websocketpp::connection_hdl hdl);
