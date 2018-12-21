@@ -277,9 +277,16 @@ void EmulatorController::TurnThread() {
             else
                 turnLength = data;
         }
-        // TODO: UUID instead of username based identification
-        m_server->BroadcastAll(id + ": " + username + " now has a turn!",
-                               websocketpp::frame::opcode::text);
+
+        const std::string turnList = [&] {
+            std::vector<std::string> names{"turns"};
+            for (auto& user : m_TurnQueue) {
+                names.push_back(user->username());
+            }
+            return LetsPlayProtocol::encode(names);
+        }();
+
+        m_server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
 
         const auto turnEnd =
             std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
@@ -304,7 +311,18 @@ void EmulatorController::TurnThread() {
 }
 
 void EmulatorController::AddTurnRequest(LetsPlayUser *user) {
-    std::unique_lock lk((m_TurnMutex));
+    std::unique_lock lk(m_TurnMutex);
+
+    const std::string turnList = [&] {
+        std::vector<std::string> names{"turns"};
+        for (auto& user : m_TurnQueue) {
+            names.push_back(user->username());
+        }
+        return LetsPlayProtocol::encode(names);
+    }();
+
+    m_server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
+
     m_TurnQueue.emplace_back(user);
     m_TurnNotifier.notify_one();
 }
