@@ -60,6 +60,11 @@ class LetsPlayUser {
      */
     std::atomic<bool> requestedTurn;
 
+    /*
+     * Whether or not the user is connected to the socket anymore
+     */
+    std::atomic<bool> connected;
+
     LetsPlayUser();
 
     // The reasoning behind the following redundant and
