@@ -12,7 +12,6 @@ std::mutex EmulatorController::m_TurnMutex;
 std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
 std::thread EmulatorController::m_TurnThread;
-std::atomic<std::uint64_t> EmulatorController::usersConnected{0};
 RetroPad EmulatorController::joypad;
 
 VideoFormat EmulatorController::m_videoFormat;
@@ -347,8 +346,6 @@ void EmulatorController::SendTurnList() {
 }
 
 void EmulatorController::UserDisconnected(LetsPlayUserHdl user_hdl) {
-    --usersConnected;
-
     // Update flag in case the turn queue gets to the user before its removed from memory in m_server
     if (auto user = user_hdl.lock())
         user->connected = false;
@@ -358,7 +355,6 @@ void EmulatorController::UserDisconnected(LetsPlayUserHdl user_hdl) {
 }
 
 void EmulatorController::UserConnected(LetsPlayUserHdl) {
-    ++usersConnected;
 }
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
@@ -418,6 +414,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 Frame EmulatorController::GetFrame() {
     std::unique_lock lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
+
     // Reserve just enough space
     std::shared_ptr<std::uint8_t[]> outVec(
         new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);

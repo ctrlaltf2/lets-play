@@ -63,14 +63,6 @@ struct VideoFormat {
     std::atomic<std::uint32_t> width{0}, height{0}, pitch{0};
 };
 
-struct RGBColor {
-    std::uint8_t r{0}, g{0}, b{0};
-};
-
-inline bool operator<(const RGBColor& a, const RGBColor& b) {
-    return (a.r | (a.g << 8) | (a.b << 16)) < (b.r | (b.g << 8) | (b.b << 16));
-}
-
 struct Frame {
     /*
      * Width/height of the frame (px)
@@ -181,8 +173,6 @@ class EmulatorController {
      */
     static RetroCore Core;
 
-    static std::atomic<std::uint64_t> usersConnected;
-
     /*
      * Kind of the constructor. Blocks when called.
      */
@@ -190,22 +180,21 @@ class EmulatorController {
                     EmuID_t t_id);
 
     /*
-     * Callback for when the libretro core sends eztra info about the
+     * Callback for when the libretro core sends extra info about the
      * environment
      * @return (?) Possibly if the command was recognized
      */
     static bool OnEnvironment(unsigned cmd, void *data);
-    // Either:
-    //  1) libretro_core -> Controller
+
     static void OnVideoRefresh(const void *data, unsigned width, unsigned height, size_t stride);
-    // Controller -> Server.getInput (input is TOGGLE)
+
     static void OnPollInput();
-    // Controller -> libretro_core
+
     static std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
                                         unsigned id);
-    // Controller -> Server
+
     static void OnLRAudioSample(std::int16_t left, std::int16_t right);
-    // Controller -> Server
+
     static size_t OnBatchAudioSample(const std::int16_t *data, size_t frames);
 
     /*
