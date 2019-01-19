@@ -25,6 +25,7 @@ class LetsPlayServer;
 
 #include "nlohmann/json.hpp"
 
+#include "Common.h"
 #include "EmulatorController.h"
 #include "LetsPlayConfig.h"
 #include "LetsPlayProtocol.h"
@@ -84,12 +85,7 @@ struct Command {
      */
     EmuID_t emuID;
 
-    /*
-     * Pointer to the LetsPlayUser object inside of the hdl->user relation map
-     * XXX: Possible data race for when the map internally reallocates, but
-     * hasn't happened in tests
-     */
-    LetsPlayUser *user{nullptr};
+    LetsPlayUserHdl user_hdl;
 };
 
 class LetsPlayServer {
@@ -97,11 +93,11 @@ class LetsPlayServer {
      * Queue that holds the list of commands/actions to be executed
      */
     std::queue<Command> m_WorkQueue;
+
     /*
      * Map that maps connection_hdls to LetsPlayUsers
      */
-    std::map<websocketpp::connection_hdl, LetsPlayUser,
-             std::owner_less<websocketpp::connection_hdl>>
+    std::map<websocketpp::connection_hdl, std::shared_ptr<LetsPlayUser>, std::owner_less<websocketpp::connection_hdl>>
         m_Users;
 
     /*
@@ -239,7 +235,7 @@ class LetsPlayServer {
      * @param uuid User to give guest
      */
     // TODO: uuid -> hdl?
-    void GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUser* user);
+    void GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUserHdl user);
 
     /*
      * Check if a username is taken.

@@ -25,6 +25,7 @@ struct Frame;
 
 #include "libretro.h"
 
+#include "Common.h"
 #include "LetsPlayProtocol.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
@@ -33,7 +34,7 @@ struct Frame;
 
 // Because you can't pass a pointer to a static instance of a class...
 struct EmulatorControllerProxy {
-    std::function<void(LetsPlayUser *)> addTurnRequest, userDisconnected, userConnected;
+    std::function<void(LetsPlayUserHdl)> addTurnRequest, userDisconnected, userConnected;
     std::function<Frame()> getFrame;
     bool isReady{false};
     RetroPad *joypad{nullptr};
@@ -93,7 +94,7 @@ class EmulatorController {
     /*
      * Turn queue for this emulator
      */
-    static std::vector<LetsPlayUser *> m_TurnQueue;
+    static std::vector<LetsPlayUserHdl> m_TurnQueue;
 
     /*
      * Mutex for accessing the turn queue
@@ -178,7 +179,7 @@ class EmulatorController {
      * The object that manages the libretro lower level functions. Used mostly
      * for loading symbols and storing function pointers.
      */
-    static RetroCore Core; /**<The object that manages the libretro lower level functions. Used mostly for loading symbols and storing function pointers.*/
+    static RetroCore Core;
 
     static std::atomic<std::uint64_t> usersConnected;
 
@@ -188,7 +189,6 @@ class EmulatorController {
     static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer *server,
                     EmuID_t t_id);
 
-    // libretro_core -> Controller ?> Server
     /*
      * Callback for when the libretro core sends eztra info about the
      * environment
@@ -217,17 +217,22 @@ class EmulatorController {
     /*
      * Adds a user to the turn request queue, invoked by parent LetsPlayServer
      */
-    static void AddTurnRequest(LetsPlayUser *user);
+    static void AddTurnRequest(LetsPlayUserHdl user_hdl);
 
     /*
-     * Called when a user disonnects, updates turn queue if applicable
+     * Send the turn list
      */
-    static void UserDisconnected(LetsPlayUser *user);
+    static void SendTurnList();
+
+    /*
+     * Called when a user disconnects, updates turn queue if applicable
+     */
+    static void UserDisconnected(LetsPlayUserHdl user_hdl);
 
     /*
      * Called when a user connects
      */
-    static void UserConnected(LetsPlayUser *user);
+    static void UserConnected(LetsPlayUserHdl user_hdl);
 
     /*
      * Called when the emulator requests/announces a change in the pixel format

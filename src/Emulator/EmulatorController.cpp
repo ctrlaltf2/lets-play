@@ -7,7 +7,7 @@ EmulatorControllerProxy EmulatorController::proxy;
 RetroCore EmulatorController::Core;
 char *EmulatorController::romData{nullptr};
 
-std::vector<LetsPlayUser *> EmulatorController::m_TurnQueue;
+std::vector<LetsPlayUserHdl> EmulatorController::m_TurnQueue;
 std::mutex EmulatorController::m_TurnMutex;
 std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
@@ -254,7 +254,7 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t */*data*/, size
 
 void EmulatorController::TurnThread() {
     while (m_TurnThreadRunning) {
-        std::unique_lock lk((m_TurnMutex));
+        std::unique_lock lk(m_TurnMutex);
 
         // Wait for a nonempty queue
         while (m_TurnQueue.empty()) {
@@ -263,91 +263,101 @@ void EmulatorController::TurnThread() {
 
         if (m_TurnThreadRunning == false) break;
 
-        auto& currentUser = m_TurnQueue[0];
-        std::string username = currentUser->username();
-        currentUser->hasTurn = true;
-        std::uint64_t turnLength;
-        {
-            std::shared_lock lkk(m_server->config.mutex);
-            if (nlohmann::json& data =
-                    m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
-                data.empty() || !data.is_number())
-                turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]
-                ["turnLength"];
-            else
-                turnLength = data;
+        // x, 1, 2
+        // 1, x, 2
+        // x, x, 2
+        // x, x, x
+        // While someone in the turn queue has disconnected
+        while (m_TurnQueue[0].expired() || !m_TurnQueue[0].lock()->connected) {
+            if (m_TurnQueue.empty())
+                break;
+            m_TurnQueue.erase(m_TurnQueue.begin());
         }
 
-        const std::string turnList = [&] {
-            std::vector<std::string> names{"turns"};
-            for (auto& user : m_TurnQueue) {
-                names.push_back(user->username());
+        EmulatorController::SendTurnList();
+
+        // If everyone in the turn queue left and was removed by the above section's code, restart the turn loop at the top
+        if (m_TurnQueue.empty())
+            continue;
+
+        if (auto currentUser = m_TurnQueue[0].lock()) {
+            currentUser->hasTurn = true;
+
+            std::uint64_t turnLength;
+            {
+                std::shared_lock lkk(m_server->config.mutex);
+                if (nlohmann::json& data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
+                    data.empty() || !data.is_number())
+                    turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]["turnLength"];
+                else
+                    turnLength = data;
             }
-            return LetsPlayProtocol::encode(names);
-        }();
 
-        m_server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
+            const auto turnEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
 
-        const auto turnEnd =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
+            while ((currentUser.use_count() > 1) && currentUser->connected && currentUser->hasTurn
+                && (std::chrono::steady_clock::now() < turnEnd)) {
+                /* FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
+                 * underflow or UB for the case where now() is greater than
+                 * turnEnd? */
+                m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
+            }
 
-        while (currentUser && currentUser->hasTurn &&
-            (std::chrono::steady_clock::now() < turnEnd)) {
-            /* FIXME: does turnEnd - std::chrono::steady_clock::now() cause
-             * underflow or UB for the case where now() is greater than
-             * turnEnd? */
-            m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
-        }
-
-        if (currentUser) {
             currentUser->hasTurn = false;
             currentUser->requestedTurn = false;
+            /*m_server->BroadcastToEmu(id,
+                                     LetsPlayProtocol::encode("turnEnd", currentUser->username()),
+                                     websocketpp::frame::opcode::text);*/
         }
 
-        m_server->BroadcastAll(id + ": " + username + "'s turn has ended!",
-                               websocketpp::frame::opcode::text);
-        m_TurnQueue.erase(m_TurnQueue.begin());
+        if (!m_TurnQueue.empty())
+            m_TurnQueue.erase(m_TurnQueue.begin());
+
+        EmulatorController::SendTurnList();
     }
 }
 
-void EmulatorController::AddTurnRequest(LetsPlayUser *user) {
+void EmulatorController::AddTurnRequest(LetsPlayUserHdl user_hdl) {
+    // Add user to the list
     std::unique_lock lk(m_TurnMutex);
+    m_TurnQueue.emplace_back(user_hdl);
 
+    // Send off updated turn list
+    EmulatorController::SendTurnList();
+
+    // Wake up the turn thread to manage the changes
+    m_TurnNotifier.notify_one();
+}
+
+void EmulatorController::SendTurnList() {
     const std::string turnList = [&] {
+        // Majority of the time this won't lock because m_TurnMutex will have already been locked by the caller
+        std::unique_lock lk(m_TurnMutex, std::try_to_lock);
+
         std::vector<std::string> names{"turns"};
-        for (auto& user : m_TurnQueue) {
-            names.push_back(user->username());
+        for (auto user_hdl : m_TurnQueue) {
+            // If pointer hasn't been deleted and user is still connected
+            if (auto user = user_hdl.lock(); user && user->connected)
+                names.push_back(user->username());
         }
         return LetsPlayProtocol::encode(names);
     }();
 
     m_server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
+}
 
-    m_TurnQueue.emplace_back(user);
+void EmulatorController::UserDisconnected(LetsPlayUserHdl user_hdl) {
+    --usersConnected;
+
+    // Update flag in case the turn queue gets to the user before its removed from memory in m_server
+    if (auto user = user_hdl.lock())
+        user->connected = false;
+
+    // Wake up the turn thread in case that person had a turn when they disconnected
     m_TurnNotifier.notify_one();
 }
 
-void EmulatorController::UserDisconnected(LetsPlayUser *user) {
-    --usersConnected;
-    if (std::unique_lock lk((m_TurnMutex)); !m_TurnQueue.empty() && m_TurnQueue[0] == user) {
-        auto& currentUser = m_TurnQueue[0];
-
-        if (currentUser->hasTurn) {  // Current turn is user
-            m_TurnNotifier.notify_one();
-        } else if (currentUser->requestedTurn) {  // In the queue
-            m_TurnQueue.erase(std::remove(m_TurnQueue.begin(), m_TurnQueue.end(), user),
-                              m_TurnQueue.end());
-        };
-
-        // Set the current user to nullptr so turnqueue knows not to try to
-        // modify it, as it may be in an invalid state because the memory it
-        // points to (managed by a std::map) may be reallocated as part of an
-        // erase
-        currentUser = nullptr;
-    }
-}
-
-void EmulatorController::UserConnected(LetsPlayUser */*user*/) {
+void EmulatorController::UserConnected(LetsPlayUserHdl) {
     ++usersConnected;
 }
 

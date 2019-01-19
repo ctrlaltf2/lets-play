@@ -4,7 +4,7 @@ std::mutex g_uuidMutex;
 uuid::random_generator g_UUIDGen;
 
 LetsPlayUser::LetsPlayUser()
-    : m_lastPong{std::chrono::steady_clock::now()}, hasTurn{false}, requestedTurn{false} {
+    : m_lastPong{std::chrono::steady_clock::now()}, hasTurn{false}, requestedTurn{false}, connected{true} {
     g_uuidMutex.lock();
     m_uuid = g_UUIDGen();
     g_uuidMutex.unlock();
