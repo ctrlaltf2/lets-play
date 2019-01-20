@@ -1,3 +1,15 @@
+/**
+ * @file RetroCore.h
+ *
+ * @author ctrlaltf2
+ *
+ * @section LICENSE
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ */
 #pragma once
 #include <cstdlib>
 #include <functional>
@@ -7,15 +19,19 @@
 
 #include "libretro.h"
 
-// Loads a libretro core, acts as a storage/convenience class for the libretro
-// api
+/**
+ * @class RetroCore
+ *
+ * Class that loads libretro dynamic library functions into memory.
+ *
+ * @todo Make this cross platform.
+ */
 class RetroCore {
     /**
      * Handle to the dynamically loaded core lib
      */
     void *m_hCore = nullptr;
 
-    // TODO: On release, loading from dll for win32
     /**
      * Utility function for loading symbols
      */
@@ -30,7 +46,7 @@ class RetroCore {
             std::exit(-3);
         } else {
             std::clog << "Found symbol, storing into pointer at address " << std::addressof(sym)
-                      << '\n';
+                << '\n';
         }
     }
 
@@ -44,7 +60,6 @@ class RetroCore {
     void (*fSetAudioSampleBatch)(retro_audio_sample_batch_t) = nullptr;
 
     // libretro functions that do things
-
     void (*fInit)() = nullptr;
     void (*fDeinit)() = nullptr;
     void (*fReset)() = nullptr;
@@ -61,18 +76,18 @@ class RetroCore {
     /**
      * Delete the copy constructor because this can cause problems with the
      * destructor being called and closing the dynamic lib, therefore making the
-     * core pointer invalid
+     * core pointer invalid.
      */
     RetroCore(const RetroCore&) = delete;
 
     // TODO: On release, use constructor as intended with RAII
     /**
-     * Initialize the RetroCore object
+     * Initialize the RetroCore object.
      */
     void Init(const char *hCore);
 
     /**
-     * Properly shuts down the retro core by calling deinit and similar
+     * Properly shuts down the retro core by calling deinit and similar.
      */
     ~RetroCore();
 };
