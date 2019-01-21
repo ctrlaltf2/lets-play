@@ -13,6 +13,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         server->init_asio();
 
+        server->set_validate_handler(std::bind(&LetsPlayServer::OnValidate, this, ::_1));
         server->set_message_handler(std::bind(&LetsPlayServer::OnMessage, this, ::_1, ::_2));
         server->set_open_handler(std::bind(&LetsPlayServer::OnConnect, this, ::_1));
         server->set_close_handler(std::bind(&LetsPlayServer::OnDisconnect, this, ::_1));
@@ -30,7 +31,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         // Skip having to connect, change username, addemu
         {
-            std::unique_lock<std::mutex> lk((m_QueueMutex));
+            std::unique_lock<std::mutex> lk(m_QueueMutex);
             m_WorkQueue.push(Command{kCommandType::AddEmu, {"emu1", "./core", "./rom"}, {}, ""});
             m_QueueNotifier.notify_one();
         }
@@ -40,10 +41,27 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         this->Shutdown();
     } catch (websocketpp::exception const& e) {
-        std::cerr << e.what() << '\n';
+        logger.err(e.what(), '\n');
     } catch (...) {
         throw;
     }
+}
+
+bool LetsPlayServer::OnValidate(websocketpp::connection_hdl hdl) {
+    // TODO: Do bans here
+
+    websocketpp::lib::error_code err;
+    wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
+
+    boost::system::error_code ec;
+    const auto& ep = cptr->get_raw_socket().remote_endpoint(ec);
+    if (ec)
+        return false;
+
+    const boost::asio::ip::address& addr = ep.address();
+
+    logger.log('[', addr.to_string(), "] <", hdl.lock(), "> validate");
+    return true;
 }
 
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
@@ -51,22 +69,32 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         std::unique_lock lk(m_UsersMutex);
         std::shared_ptr<LetsPlayUser> user{new LetsPlayUser};
         user->setUsername("");
+
+        websocketpp::lib::error_code err;
+        wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
+
+        boost::system::error_code ec;
+        const auto& ep = cptr->get_raw_socket().remote_endpoint(ec);
+        if (!ec) {
+            const boost::asio::ip::address& addr = ep.address();
+            user->setIP(addr.to_string());
+        }
+
+        logger.log('[', user->IP(), "] <", hdl.lock(), "> connect");
+        logger.log('<', hdl.lock(), "> -> ", user->uuid(), " -> [", user->IP(), ']');
+
         m_Users[hdl] = user;
     }
 }
 
 void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
-    // TODO: Why was this here?
-    websocketpp::lib::error_code err;
-    wcpp_server::connection_ptr cptr = server->get_con_from_hdl(hdl, err);
-
     LetsPlayUserHdl user_hdl;
     decltype(m_Users)::iterator search;
     {
         std::unique_lock lk(m_UsersMutex);
         search = m_Users.find(hdl);
         if (search == m_Users.end()) {
-            std::clog << "Couldn't find user who left in list" << '\n';
+            logger.log("Couldn't find user who left in list\n");
             return;
         }
         user_hdl = search->second;
@@ -75,16 +103,19 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     if (auto user = user_hdl.lock(); user && !user->connectedEmu().empty()) {
         {
             std::unique_lock lk(m_EmusMutex);
-            // TODO: Check if emu exists?
+            // TODO: Check if emu exists
             m_Emus[user->connectedEmu()]->userDisconnected(user_hdl);
         }
         BroadcastToEmu(user->connectedEmu(),
                        LetsPlayProtocol::encode("leave", user->username()),
                        websocketpp::frame::opcode::text);
+
+        logger.log(user->uuid(), " (", user->username(), ") left.");
     }
 
     {
         std::unique_lock lk(m_UsersMutex);
+
         // Double check is on purpose
         search = m_Users.find(hdl);
         if (search != m_Users.end()) m_Users.erase(search);
@@ -127,6 +158,9 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
             emuID = user->connectedEmu();
     }
 
+    if (auto user = user_hdl.lock())
+        logger.log(user->uuid(), " (", user->username(), ") raw: '", data, '\'');
+
     Command c{t, std::vector<std::string>(), hdl, emuID, user_hdl};
     if (decoded.size() > 1)
         c.params = std::vector<std::string>(decoded.begin() + 1, decoded.end());
@@ -140,7 +174,6 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
 }
 
 void LetsPlayServer::Shutdown() {
-    std::clog << "Shutdown()" << '\n';
     // Run this function once
     static bool shuttingdown = false;
 
@@ -151,9 +184,9 @@ void LetsPlayServer::Shutdown() {
 
     // Stop the work thread loop
     m_QueueThreadRunning = false;
-    std::clog << "Stopping work thread..." << '\n';
+    logger.log("Stopping work thread...");
     {
-        std::clog << "Emptying queue..." << '\n';
+        logger.log("Emptying the queue...");
         // Empty the queue ...
         std::unique_lock lk((m_QueueMutex));
         while (!m_WorkQueue.empty()) m_WorkQueue.pop();
@@ -162,22 +195,22 @@ void LetsPlayServer::Shutdown() {
                                  websocketpp::connection_hdl(), ""});
     }
 
-    std::clog << "Stopping listen..." << '\n';
+    logger.log("Stopping listen...");
     // Stop listening so the queue doesn't grow any more
     websocketpp::lib::error_code err;
     server->stop_listening(err);
     if (err)
-        std::cerr << "Error stopping listen " << err.message() << '\n';
+        logger.err("Error stopping listen ", err.message());
     // Wake up the turn and work threads
-    std::clog << "Waking up work thread..." << '\n';
+    logger.log("Waking up work thread...");
     m_QueueNotifier.notify_one();
     // Wait until they stop looping
-    std::clog << "Waiting for work thread to stop..." << '\n';
+    logger.log("Waiting for work thread to stop...");
     m_QueueThread.join();
 
     // Close every connection
     {
-        std::clog << "Closing every connection..." << '\n';
+        logger.log("Closing every connection...");
         std::unique_lock lk(m_UsersMutex);
         for ([[maybe_unused]] const auto&[hdl, _] : m_Users)
             if (!hdl.expired())
@@ -229,6 +262,7 @@ void LetsPlayServer::QueueThread() {
                                     LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
                                     websocketpp::frame::opcode::text
                                 );
+                                logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
                             }
                         }
                     }
@@ -250,6 +284,12 @@ void LetsPlayServer::QueueThread() {
                                 BroadcastOne(
                                     LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                     command.hdl);
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           ") failed username change to : '",
+                                           newUsername,
+                                           '\'');
                             }
 
                             std::uint64_t maxUsernameLen, minUsernameLen;
@@ -276,10 +316,17 @@ void LetsPlayServer::QueueThread() {
                                 || newUsername.size() < minUsernameLen) {
                                 if (justJoined)
                                     GiveGuest(command.hdl, command.user_hdl);
-                                else
+                                else {
                                     BroadcastOne(
                                         LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                         command.hdl);
+                                    logger.log(user->uuid(),
+                                               " (",
+                                               user->username(),
+                                               ") failed username change to '",
+                                               newUsername,
+                                               "' due to length.");
+                                }
                                 break;
                             }
 
@@ -289,10 +336,17 @@ void LetsPlayServer::QueueThread() {
                                 || (newUsername.find("  ") != std::string::npos)) { // Double spaces inside username
                                 if (justJoined)
                                     GiveGuest(command.hdl, command.user_hdl);
-                                else
+                                else {
                                     BroadcastOne(
                                         LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                         command.hdl);
+                                    logger.log(user->uuid(),
+                                               " (",
+                                               user->username(),
+                                               ") failed username change to '",
+                                               newUsername,
+                                               "' due to content.");
+                                }
                                 break;
                             }
 
@@ -300,10 +354,17 @@ void LetsPlayServer::QueueThread() {
                             if (UsernameTaken(newUsername, user->uuid())) {
                                 if (justJoined)
                                     GiveGuest(command.hdl, command.user_hdl);
-                                else
+                                else {
                                     BroadcastOne(
                                         LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                         command.hdl);
+                                    logger.log(user->uuid(),
+                                               " (",
+                                               user->username(),
+                                               ") failed username change to '",
+                                               newUsername,
+                                               "' because its already taken.");
+                                }
                                 break;
                             }
 
@@ -318,21 +379,37 @@ void LetsPlayServer::QueueThread() {
                                 command.hdl
                             );
 
+                            logger.log(user->uuid(), " (", user->username(), ") set username to '", newUsername, '\'');
+
                             if (justJoined) { // Send a join message
                                 BroadcastToEmu(
                                     user->connectedEmu(),
                                     LetsPlayProtocol::encode("join", user->username()),
                                     websocketpp::frame::opcode::text);
+
+                                logger.log(user->uuid(), " (", user->username(), ") joined.");
                             } else { // Tell everyone on the emu someone changed their username
                                 BroadcastToEmu(user->connectedEmu(),
                                                LetsPlayProtocol::encode("rename", oldUsername, newUsername),
                                                websocketpp::frame::opcode::text);
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           "): ",
+                                           oldUsername,
+                                           " is now known as ",
+                                           newUsername);
                             }
                         }
                     }
                         break;
                     case kCommandType::List: {
                         if (!command.params.empty()) break;
+
+                        if (auto user = command.user_hdl.lock()) {
+                            logger.log(user->uuid(), " (", user->username(), ") requested a user list.");
+                        }
+
                         std::vector<std::string> message;
                         message.emplace_back("list");
 
@@ -353,6 +430,15 @@ void LetsPlayServer::QueueThread() {
                         if (!command.params.empty()) break;
 
                         if (auto user = command.user_hdl.lock()) {
+                            logger.log(user->uuid(),
+                                       " (",
+                                       user->username(),
+                                       ") requested a turn."
+                                       "user->requestedTurn: ",
+                                       (user->requestedTurn) == true,
+                                       " user->connectedEmu: ",
+                                       user->connectedEmu());
+
                             if (user->connectedEmu().empty() || user->requestedTurn)
                                 break;
 
@@ -369,14 +455,21 @@ void LetsPlayServer::QueueThread() {
                         if (auto user = command.user_hdl.lock()) {
                             if (command.params.size() != 1 || user->username().empty()) {
                                 LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false), command.hdl);
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           ") failed to connect to an emulator (1st check).");
                                 break;
                             }
 
                             // Check if the emu that the connect thing that was sent exists
                             if (std::unique_lock lkk(m_EmusMutex); m_Emus.find(command.params[0]) == m_Emus.end()) {
-                                if (!command.hdl.expired())
-                                    LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false),
-                                                                 command.hdl);
+                                LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false),
+                                                             command.hdl);
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           ") tried to connect to an emulator that doesn't exst.");
                                 break;
                             }
 
@@ -397,6 +490,8 @@ void LetsPlayServer::QueueThread() {
                             }
 
                             BroadcastOne(LetsPlayProtocol::encode("connect", true), command.hdl);
+
+                            logger.log(user->uuid(), " (", user->username(), ") connected to ", command.params[0]);
 
                             std::uint64_t maxUsernameLen, minUsernameLen, maxMessageSize;
                             {
@@ -434,6 +529,14 @@ void LetsPlayServer::QueueThread() {
                         if (command.params.size() != 2) break;
 
                         if (auto user = command.user_hdl.lock(); user && !user->hasTurn) break;
+
+                        if (auto user = command.user_hdl.lock())
+                            logger.log(user->uuid(),
+                                       " (",
+                                       user->username(),
+                                       ") sent a button press with value '",
+                                       command.params[0],
+                                       '\'');
 
                         if (command.params[0].front() == '-') break;
 
@@ -551,6 +654,7 @@ void LetsPlayServer::GiveGuest(websocketpp::connection_hdl hdl, LetsPlayUserHdl 
             LetsPlayProtocol::encode("username", oldUsername, validUsername),
             hdl
         );
+        logger.log(user->uuid(), " (", oldUsername, ") given new username '", user->username(), '\'');
     }
 }
 
