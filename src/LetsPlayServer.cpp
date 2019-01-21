@@ -530,7 +530,11 @@ void LetsPlayServer::QueueThread() {
                             }
 
                             BroadcastOne(
-                                LetsPlayProtocol::encode("emuinfo", minUsernameLen, maxUsernameLen, maxMessageSize),
+                                LetsPlayProtocol::encode("emuinfo",
+                                                         minUsernameLen,
+                                                         maxUsernameLen,
+                                                         maxMessageSize,
+                                                         user->connectedEmu()),
                                 command.hdl
                             );
                         }
