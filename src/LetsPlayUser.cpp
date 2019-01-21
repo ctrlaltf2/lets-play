@@ -1,3 +1,6 @@
+
+#include <LetsPlayUser.h>
+
 #include "LetsPlayUser.h"
 
 std::mutex g_uuidMutex;
@@ -40,4 +43,18 @@ void LetsPlayUser::setUsername(const std::string& name) {
     m_username = name;
 }
 
-std::string LetsPlayUser::uuid() const { return uuid::to_string(m_uuid); }
+std::string LetsPlayUser::IP() const {
+    return m_ip;
+}
+
+void LetsPlayUser::setIP(const std::string& ip) {
+    std::unique_lock lk(m_access);
+    m_ip = ip;
+}
+
+std::string LetsPlayUser::uuid() const {
+    std::string s = uuid::to_string(m_uuid);
+    s.insert(s.begin(), '{');
+    s += '}';
+    return s;
+}

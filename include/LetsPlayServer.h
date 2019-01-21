@@ -42,6 +42,7 @@ class LetsPlayServer;
 #include "LetsPlayConfig.h"
 #include "LetsPlayProtocol.h"
 #include "LetsPlayUser.h"
+#include "Logging.hpp"
 #include "Random.h"
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
@@ -191,6 +192,13 @@ class LetsPlayServer {
     std::shared_ptr<wcpp_server> server;
 
     /**
+     * Logger object
+     *
+     * @note thread-safe
+     */
+    Logger logger;
+
+    /**
      * Constructor
      * @param configFile Path to the config.json file (defaults to
      * ~/.config/letsplay/config)
@@ -202,6 +210,12 @@ class LetsPlayServer {
      * @param port The port to attempt to start the server on
      */
     void Run(const std::uint16_t port);
+
+    /**
+     * Callback for validates
+     */
+
+    bool OnValidate(websocketpp::connection_hdl hdl);
 
     /**
      * Callback for new connections
