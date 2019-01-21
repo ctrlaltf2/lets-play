@@ -84,6 +84,16 @@ class LetsPlayUser {
      */
     std::atomic<bool> connected;
 
+    /**
+     * Whether or not the user is an authenticated admin
+     */
+    std::atomic<bool> hasAdmin;
+
+    /**
+     * How many admin attempts the user has made
+     */
+    std::atomic<std::uint32_t> adminAttempts;
+
     LetsPlayUser();
 
     /*

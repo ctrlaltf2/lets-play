@@ -145,8 +145,10 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         t = kCommandType::Turn;
     else if (command == "add")
         t = kCommandType::AddEmu;
+    else if (command == "admin")
+        t = kCommandType::Admin;
     else if (command == "shutdown")
-        this->Shutdown();
+        t = kCommandType::Shutdown;
     else
         return;
 
@@ -160,6 +162,15 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
 
     if (auto user = user_hdl.lock())
         logger.log(user->uuid(), " (", user->username(), ") raw: '", data, '\'');
+
+    if (auto user = user_hdl.lock()) {
+        if (t == kCommandType::Shutdown) {
+            if (!user->hasAdmin)
+                return;
+            else
+                this->Shutdown();
+        }
+    }
 
     Command c{t, std::vector<std::string>(), hdl, emuID, user_hdl};
     if (decoded.size() > 1)
@@ -562,8 +573,13 @@ void LetsPlayServer::QueueThread() {
                         break;
                     case kCommandType::AddEmu: {  // emu, libretro core
                         // path, rom path
-                        // TODO:: Add file path checks and admin check
+                        // TODO:: Add file path checks
                         if (command.params.size() != 3) break;
+
+                        if (auto user = command.user_hdl.lock()) {
+                            if (!user->hasAdmin)
+                                break;
+                        }
 
                         auto& id = command.params[0];
                         const auto& corePath = command.params[1];
@@ -576,13 +592,56 @@ void LetsPlayServer::QueueThread() {
                         }
                     }
                         break;
+                    case kCommandType::Admin: {
+                        if (command.params.size() != 1) break;
+
+                        if (auto user = command.user_hdl.lock()) {
+                            if (user->adminAttempts >= 3)
+                                break;
+                        }
+
+                        std::string salt, expectedHash;
+                        {
+                            std::shared_lock lkk(config.mutex);
+
+                            nlohmann::json& jsalt = config.config["serverConfig"]["salt"],
+                                jhash = config.config["serverConfig"]["adminHash"];
+
+                            if (!jsalt.is_string()) {
+                                jsalt = LetsPlayConfig::defaultConfig["serverConfig"]["salt"];
+                            }
+
+                            if (!jhash.is_string()) {
+                                jhash = LetsPlayConfig::defaultConfig["serverConfig"]["adminHash"];
+                            }
+
+                            salt = jsalt;
+                            expectedHash = jhash;
+                        }
+                        std::string hashed = md5(command.params[0] + salt);
+
+                        logger.log(salt, ' ', expectedHash, ' ', hashed);
+
+                        if (auto user = command.user_hdl.lock()) {
+                            if (hashed == expectedHash) {
+                                user->hasAdmin = true;
+                            } else {
+                                user->adminAttempts++;
+                            }
+
+                            BroadcastOne(
+                                LetsPlayProtocol::encode("admin", (user->hasAdmin) == true),
+                                command.hdl
+                            );
+                        }
+                    }
+                        break;
                     case kCommandType::Pong:
                         if (auto user = command.user_hdl.lock())
                             user->updateLastPong();
                         break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
-                    case kCommandType::Admin:
                     case kCommandType::Config:
                     case kCommandType::Unknown:
                         // Unimplemented

@@ -14,6 +14,8 @@ const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
                 "turnLength": 10000
             }
         },
+        "salt": "ncft9PlmVA",
+        "adminHash": "be23396d825c5a17c57c7738ac4b98a5",
         "jpegQuality": 80,
         "heartbeatTimeout": 3000,
         "maxMessageSize": 100,
