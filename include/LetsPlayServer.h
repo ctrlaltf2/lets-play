@@ -37,6 +37,8 @@ class LetsPlayServer;
 
 #include "nlohmann/json.hpp"
 
+#include "md5.h"
+
 #include "Common.h"
 #include "EmulatorController.h"
 #include "LetsPlayConfig.h"

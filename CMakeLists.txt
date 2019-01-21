@@ -56,7 +56,7 @@ add_executable(letsplay
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp
             src/Emulator/RetroPad.cpp
-        include/Random.h src/Random.cpp include/Logging.hpp)
+        include/Random.h src/Random.cpp include/Logging.hpp include/md5.h src/md5.cpp)
 
 set_target_properties(letsplay
     PROPERTIES
