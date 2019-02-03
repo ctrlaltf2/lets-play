@@ -40,7 +40,7 @@ struct Frame;
 
 #include "libretro.h"
 
-#include "Common.h"
+#include "common/typedefs.h"
 #include "LetsPlayProtocol.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"

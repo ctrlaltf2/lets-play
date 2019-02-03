@@ -1,10 +1,11 @@
 #include <chrono>
-#include <filesystem>
 #include <iostream>
 #include <string>
 #include <thread>
 
 #include "boost/program_options.hpp"
+
+#include "common/filesystem.h"
 
 #include "EmulatorController.h"
 #include "LetsPlayServer.h"
@@ -14,7 +15,7 @@ int main(int argc, char **argv) {
     std::uint16_t port{3074};
 
     std::string configPath{"~/.letsplay/config.json"};
-    std::filesystem::path configFilePath;
+    lib::filesystem::path configFilePath;
 
     try {
         using namespace boost;
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
         }
         configFilePath = configPath;
 
-        if (!std::filesystem::exists(configFilePath)) {
+        if (!lib::filesystem::exists(configFilePath)) {
             std::cerr << "Warning: config file doesn't exist" << '\n';
         }
     } catch (const boost::program_options::error& e) {

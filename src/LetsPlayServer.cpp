@@ -1,6 +1,6 @@
 #include "LetsPlayServer.h"
 
-LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) { config.LoadFrom(configFile); }
+LetsPlayServer::LetsPlayServer(lib::filesystem::path& configFile) { config.LoadFrom(configFile); }
 
 void LetsPlayServer::Run(std::uint16_t port) {
     if (port == 0) return;
