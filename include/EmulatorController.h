@@ -154,7 +154,7 @@ struct Frame {
      * Packed RGB array containing the data of the frame
      * @note Doesn't have a pitch
      */
-    std::shared_ptr<std::uint8_t[]> data;
+    std::vector<std::uint8_t> data;
 };
 
 /**

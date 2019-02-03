@@ -415,9 +415,8 @@ Frame EmulatorController::GetFrame() {
     std::unique_lock lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
 
-    // Reserve just enough space
-    std::shared_ptr<std::uint8_t[]> outVec(
-        new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
+    std::vector<std::uint8_t> outVec(m_videoFormat.width * m_videoFormat.height * 3);
+
     size_t j{0};
 
     const auto *i = static_cast<const std::uint8_t *>(m_currentBuffer);
