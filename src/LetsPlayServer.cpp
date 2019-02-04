@@ -1,6 +1,6 @@
 #include "LetsPlayServer.h"
 
-LetsPlayServer::LetsPlayServer(std::filesystem::path& configFile) { config.LoadFrom(configFile); }
+LetsPlayServer::LetsPlayServer(lib::filesystem::path& configFile) { config.LoadFrom(configFile); }
 
 void LetsPlayServer::Run(std::uint16_t port) {
     if (port == 0) return;
@@ -771,7 +771,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
         if (value.is_number() && (value <= 100) && (value >= 1)) quality = value;
     }
     long unsigned int jpegSize = _jpegBufferSize;
-    tjCompress2(_jpegCompressor, frame.data.get(), frame.width, frame.width * 3, frame.height,
+    tjCompress2(_jpegCompressor, frame.data.data(), frame.width, frame.width * 3, frame.height,
                 TJPF_RGB, &jpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
 
     _jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;

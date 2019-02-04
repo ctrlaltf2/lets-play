@@ -24,7 +24,7 @@ class LetsPlayUser;
 #include "boost/uuid/uuid_generators.hpp"
 #include "boost/uuid/uuid_io.hpp"
 
-#include "Common.h"
+#include "common/typedefs.h"
 #include "LetsPlayServer.h"
 
 namespace uuid = boost::uuids;

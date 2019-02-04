@@ -18,7 +18,6 @@ class LetsPlayConfig;
 #pragma once
 
 #include <cstddef>
-#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -27,6 +26,8 @@ class LetsPlayConfig;
 #include <variant>
 
 #include "nlohmann/json.hpp"
+
+#include "common/filesystem.h"
 
 /**
  * @class LetsPlayConfig
@@ -39,7 +40,7 @@ class LetsPlayConfig {
     /**
      * Path to the config file
      */
-    std::filesystem::path m_configPath;
+    lib::filesystem::path m_configPath;
 
   public:
     /**
@@ -73,7 +74,7 @@ class LetsPlayConfig {
      *
      * @param path The path to load the file from
      */
-    void LoadFrom(const std::filesystem::path& path);
+    void LoadFrom(const lib::filesystem::path& path);
 
     /**
      * Writes the current config to the disk
