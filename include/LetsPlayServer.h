@@ -17,7 +17,6 @@ class LetsPlayServer;
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
-#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -39,7 +38,8 @@ class LetsPlayServer;
 
 #include "md5.h"
 
-#include "Common.h"
+#include "common/filesystem.h"
+#include "common/typedefs.h"
 #include "EmulatorController.h"
 #include "LetsPlayConfig.h"
 #include "LetsPlayProtocol.h"
@@ -205,7 +205,7 @@ class LetsPlayServer {
      * @param configFile Path to the config.json file (defaults to
      * ~/.config/letsplay/config)
      */
-    explicit LetsPlayServer(std::filesystem::path& configFile);
+    explicit LetsPlayServer(lib::filesystem::path& configFile);
 
     /**
      * Blocking function that starts the LetsPlayServer on the given port

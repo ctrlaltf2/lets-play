@@ -52,12 +52,12 @@ std::shared_mutex EmulatorController::m_generalMutex;
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
                              LetsPlayServer *server, EmuID_t t_id) {
-    std::filesystem::path coreFile = corePath, romFile = romPath;
-    if (!std::filesystem::is_regular_file(coreFile)) {
+    lib::filesystem::path coreFile = corePath, romFile = romPath;
+    if (!lib::filesystem::is_regular_file(coreFile)) {
         std::cerr << "provided core path '" << corePath << "' was not valid.\n";
         return;
     }
-    if (!std::filesystem::is_regular_file(romFile)) {
+    if (!lib::filesystem::is_regular_file(romFile)) {
         std::cerr << "provided rom path '" << romPath << "' was not valid.\n";
         return;
     }
@@ -90,21 +90,21 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     std::clog << "Past initialization" << '\n';
 
-    retro_game_info info = {romPath.c_str(), nullptr, std::filesystem::file_size(romFile), nullptr};
-    std::ifstream fo(romFile, std::ios::binary);
+    retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(lib::filesystem::file_size(romFile)), nullptr};
+    std::ifstream fo(romFile.string(), std::ios::binary);
 
     retro_system_info system{};
     (*(Core.fGetSystemInfo))(&system);
 
     if (!system.need_fullpath) {
-        romData = new char[std::filesystem::file_size(romFile)];
+        romData = new char[lib::filesystem::file_size(romFile)];
         info.data = static_cast<void *>(romData);
 
         if (!info.data) {
             std::cerr << "Failed to allocate memory for the ROM\n";
             return;
         }
-        if (!fo.read(romData, std::filesystem::file_size(romFile))) {
+        if (!fo.read(romData, lib::filesystem::file_size(romFile))) {
             std::cerr << "Failed to load data from the file -- Do you have the "
                          "right access rights?\n";
             return;
@@ -415,9 +415,8 @@ Frame EmulatorController::GetFrame() {
     std::unique_lock lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
 
-    // Reserve just enough space
-    std::shared_ptr<std::uint8_t[]> outVec(
-        new std::uint8_t[m_videoFormat.width * m_videoFormat.height * 3]);
+    std::vector<std::uint8_t> outVec(m_videoFormat.width * m_videoFormat.height * 3);
+
     size_t j{0};
 
     const auto *i = static_cast<const std::uint8_t *>(m_currentBuffer);

@@ -4,7 +4,13 @@ project(letsplay
     DESCRIPTION "Emulator thing"
 )
 
-find_package(Boost 1.62 COMPONENTS program_options REQUIRED)
+option(UseSTLFilesystem "Use std::filesystem instead of boost::filesystem" OFF)
+
+if(NOT UseSTLFilesystem)
+    find_package(Boost 1.62 COMPONENTS program_options filesystem REQUIRED)
+else()
+    find_package(Boost 1.62 COMPONENTS program_options REQUIRED)
+endif()
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -52,11 +58,13 @@ add_executable(letsplay
         src/LetsPlayServer.cpp
         src/LetsPlayUser.cpp
         src/LetsPlayProtocol.cpp
+        src/md5.cpp
+        src/Random.cpp
         # Emulator/
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp
             src/Emulator/RetroPad.cpp
-        include/Random.h src/Random.cpp include/Logging.hpp include/md5.h src/md5.cpp)
+)
 
 set_target_properties(letsplay
     PROPERTIES
@@ -84,6 +92,7 @@ target_compile_features(letsplay
 target_include_directories(letsplay
     PUBLIC
         include
+        include/common
         ${Boost_INCLUDE_DIR}
         external/json/single_include
 )
@@ -100,12 +109,29 @@ target_compile_options(letsplay
         -Wfatal-errors
 )
 
-target_link_libraries(letsplay
-    PUBLIC
-        ${CMAKE_DL_LIBS}
-        pthread
-        boost_system
-        ${Boost_LIBRARIES}
-        stdc++fs
-        turbojpeg
-)
+if(UseSTLFilesystem)
+    target_link_libraries(letsplay
+        PUBLIC
+            ${CMAKE_DL_LIBS}
+            pthread
+            boost_system
+            ${Boost_LIBRARIES}
+            stdc++fs
+            turbojpeg
+    )
+else()
+    target_link_libraries(letsplay
+        PUBLIC
+            ${CMAKE_DL_LIBS}
+            pthread
+            boost_system
+            ${Boost_LIBRARIES}
+            turbojpeg
+            atomic
+    )
+
+    target_compile_definitions(letsplay
+        PRIVATE
+            USE_BOOST_FILESYSTEM
+    )
+endif()

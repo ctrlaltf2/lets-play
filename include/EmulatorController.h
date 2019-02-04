@@ -40,7 +40,7 @@ struct Frame;
 
 #include "libretro.h"
 
-#include "Common.h"
+#include "common/typedefs.h"
 #include "LetsPlayProtocol.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
@@ -154,7 +154,7 @@ struct Frame {
      * Packed RGB array containing the data of the frame
      * @note Doesn't have a pitch
      */
-    std::shared_ptr<std::uint8_t[]> data;
+    std::vector<std::uint8_t> data;
 };
 
 /**
