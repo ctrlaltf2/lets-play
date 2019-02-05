@@ -4,11 +4,18 @@ RetroCore::RetroCore() = default;
 
 void RetroCore::Init(const char *corePath) {
     std::clog << "Loading file from '" << corePath << "'\n";
+
+#ifdef WIN32
+    void *hCore = LoadLibrary(corePath);
+    const std::string errInfo = "Windows error code " + std::to_string(GetLastError());
+#else
     void *hCore = dlopen(corePath, RTLD_NOW);
+    const std::string errInfo = dlerror();
+#endif
 
     // TODO: Exception
     if (!hCore) {
-        std::cerr << "Failed to load libretro core -- " << dlerror() << '\n';
+        std::cerr << "Failed to load libretro core -- " << errInfo << '\n';
         std::exit(-1);
     }
 
@@ -39,6 +46,10 @@ RetroCore::~RetroCore() {
     if (m_hCore) {
         (*(this->fUnloadGame))();
         (*(this->fDeinit))();
+#ifdef WIN32
+        FreeLibrary(static_cast<HMODULE>(hCore));
+#else
         dlclose(m_hCore);
+#endif
     }
 }

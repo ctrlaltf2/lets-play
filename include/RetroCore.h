@@ -15,7 +15,11 @@
 #include <functional>
 #include <iostream>
 
+#ifdef WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 
 #include "libretro.h"
 
@@ -38,7 +42,11 @@ class RetroCore {
     template<typename Symbol>
     static void Load(void *hCore, Symbol& sym, const char *name) {
         std::clog << "Loading '" << name << "'...\n";
+#ifdef WIN32
+        sym = (Symbol) GetProcAddress(static_cast<HMODULE>(hCore), name);
+#else
         sym = (Symbol) dlsym(hCore, name);
+#endif
 
         // TODO: Exception
         if (sym == nullptr) {
