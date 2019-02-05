@@ -79,6 +79,9 @@ target_compile_features(letsplay
         cxx_auto_type
         cxx_binary_literals
         cxx_constexpr
+        cxx_decltype
+        cxx_deleted_functions
+        cxx_digit_separators
         cxx_generic_lambdas
         cxx_lambdas
         cxx_nonstatic_member_init
@@ -87,6 +90,7 @@ target_compile_features(letsplay
         cxx_raw_string_literals
         cxx_right_angle_brackets
         cxx_std_17
+        cxx_variadic_templates
 )
 
 target_include_directories(letsplay
@@ -112,26 +116,21 @@ target_compile_options(letsplay
 if(UseSTLFilesystem)
     target_link_libraries(letsplay
         PUBLIC
-            ${CMAKE_DL_LIBS}
-            pthread
-            boost_system
-            ${Boost_LIBRARIES}
             stdc++fs
-            turbojpeg
     )
 else()
-    target_link_libraries(letsplay
-        PUBLIC
-            ${CMAKE_DL_LIBS}
-            pthread
-            boost_system
-            ${Boost_LIBRARIES}
-            turbojpeg
-            atomic
-    )
-
     target_compile_definitions(letsplay
         PRIVATE
             USE_BOOST_FILESYSTEM
     )
 endif()
+
+target_link_libraries(letsplay
+    PUBLIC
+        ${CMAKE_DL_LIBS}
+        pthread
+        boost_system
+        ${Boost_LIBRARIES}
+        turbojpeg
+        atomic
+)
