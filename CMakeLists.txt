@@ -125,9 +125,15 @@ else()
     )
 endif()
 
+if(UNIX)
+    target_link_libraries(letsplay
+        PUBLIC
+            ${CMAKE_DL_LIBS}
+    )
+endif()
+
 target_link_libraries(letsplay
     PUBLIC
-        ${CMAKE_DL_LIBS}
         pthread
         boost_system
         ${Boost_LIBRARIES}
