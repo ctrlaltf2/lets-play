@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
+#include <type_traits>
 
 #ifdef WIN32
 #include <windows.h>
@@ -31,6 +32,8 @@
  * @todo Make this cross platform.
  */
 class RetroCore {
+    template<class T>
+        using fn = typename std::add_pointer<T>::type;
     /**
      * Handle to the dynamically loaded core lib
      */
@@ -60,24 +63,24 @@ class RetroCore {
 
   public:
     // Callback registerers
-    void (*fSetEnvironment)(retro_environment_t) = nullptr;
-    void (*fSetVideoRefresh)(retro_video_refresh_t) = nullptr;
-    void (*fSetInputPoll)(retro_input_poll_t) = nullptr;
-    void (*fSetInputState)(retro_input_state_t) = nullptr;
-    void (*fSetAudioSample)(retro_audio_sample_t) = nullptr;
-    void (*fSetAudioSampleBatch)(retro_audio_sample_batch_t) = nullptr;
+    fn<void(retro_environment_t)>           fSetEnvironment{nullptr};
+    fn<void(retro_video_refresh_t)>         fSetVideoRefresh {nullptr};
+    fn<void(retro_input_poll_t)>            fSetInputPoll{nullptr};
+    fn<void(retro_input_state_t)>           fSetInputState{nullptr};
+    fn<void(retro_audio_sample_t)>          fSetAudioSample{nullptr};
+    fn<void(retro_audio_sample_batch_t)>    fSetAudioSampleBatch{nullptr};
 
     // libretro functions that do things
-    void (*fInit)() = nullptr;
-    void (*fDeinit)() = nullptr;
-    void (*fReset)() = nullptr;
-    void (*fRun)() = nullptr;
-    void (*fUnloadGame)() = nullptr;
-    unsigned (*fRetroAPIVersion)() = nullptr;
-    void (*fGetSystemInfo)(retro_system_info *) = nullptr;
-    void (*fGetAudioVideoInfo)(retro_system_av_info *) = nullptr;
-    void (*fSetControllerPortDevice)(unsigned, unsigned) = nullptr;
-    bool (*fLoadGame)(const retro_game_info *) = nullptr;
+    fn<void()> fInit{nullptr};
+    fn<void()> fDeinit{nullptr};
+    fn<void()> fReset{nullptr};
+    fn<void()> fRun{nullptr};
+    fn<void()> fUnloadGame{nullptr};
+    fn<void(retro_system_info *)> fGetSystemInfo{nullptr};
+    fn<void(retro_system_av_info *)> fGetAudioVideoInfo{nullptr};
+    fn<void(unsigned, unsigned)> fSetControllerPortDevice{nullptr};
+    fn<bool(const retro_game_info*)> fLoadGame{nullptr};
+    fn<unsigned()> fRetroAPIVersion{nullptr};
 
     RetroCore();
 
