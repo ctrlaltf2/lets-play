@@ -25,12 +25,12 @@ std::shared_mutex EmulatorController::m_generalMutex;
 
 // LetsPlay filesystem layout
 /*
- * letsplayfolder/ (~/.letsplay?)
- *     cores/
+ * letsplayhome/
+ *     cores/ (autoupdate?)
  *         mgba_libretro.so
  *         vbam_libretro.so
  *         ...
- *     roms/
+ *     roms/ (should they differentiate by system? can they?)
  *         gba/
  *             Super\ Mario\ Advance\ 1.gba
  *             ...
@@ -62,7 +62,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         return;
     }
     std::clog << "Started " << t_id << '\n';
-    Core.Init(corePath.c_str());
+    Core.Load(coreFile.string().c_str());
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
@@ -80,13 +80,13 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     server->config.SaveConfig();
 
-    (*(Core.fSetEnvironment))(OnEnvironment);
-    (*(Core.fSetVideoRefresh))(OnVideoRefresh);
-    (*(Core.fSetInputPoll))(OnPollInput);
-    (*(Core.fSetInputState))(OnGetInputState);
-    (*(Core.fSetAudioSample))(OnLRAudioSample);
-    (*(Core.fSetAudioSampleBatch))(OnBatchAudioSample);
-    (*(Core.fInit))();
+    Core.SetEnvironment(OnEnvironment);
+    Core.SetVideoRefresh(OnVideoRefresh);
+    Core.SetInputPoll(OnPollInput);
+    Core.SetInputState(OnGetInputState);
+    Core.SetAudioSample(OnLRAudioSample);
+    Core.SetAudioSampleBatch(OnBatchAudioSample);
+    Core.Init();
 
     std::clog << "Past initialization" << '\n';
 
@@ -94,7 +94,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     std::ifstream fo(romFile.string(), std::ios::binary);
 
     retro_system_info system{};
-    (*(Core.fGetSystemInfo))(&system);
+    Core.GetSystemInfo(&system);
 
     if (!system.need_fullpath) {
         romData = new char[lib::filesystem::file_size(romFile)];
@@ -113,7 +113,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     // TODO: compressed roms and stuff
 
-    if (!((*(Core.fLoadGame))(&info))) {
+    if (!Core.LoadGame(&info)) {
         std::cerr << "Failed to load game -- Was the rom the correct? file type" << '\n';
         return;
     }
@@ -121,7 +121,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     m_TurnThreadRunning = true;
     m_TurnThread = std::thread(EmulatorController::TurnThread);
 
-    (*(Core.fGetAudioVideoInfo))(&m_avinfo);
+    Core.GetAudioVideoInfo(&m_avinfo);
     std::uint64_t fps = -1ull;
     {
         std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
@@ -155,7 +155,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     while (true) {
         std::this_thread::sleep_until(wait_time);
         wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
-        (*(Core.fRun))();
+        Core.Run();
         if (fps == -1ull) m_server->SendFrame(id);
     }
 }

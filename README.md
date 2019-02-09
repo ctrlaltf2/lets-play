@@ -10,10 +10,12 @@ Why thanks for asking, a A web-based collaborative RetroArch frontend is just a 
  - Compiler with support for C++17
  - websocketpp
  - Boost
-    - program_options
+    - Program Options
     - UUID
     - Asio (for websocketpp)
     - Filesystem
+    - DLL
+    - Function
  - turbojpeg
 
 # Building

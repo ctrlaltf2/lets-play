@@ -16,11 +16,8 @@
 #include <iostream>
 #include <type_traits>
 
-#ifdef WIN32
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
+#include "boost/function.hpp"
+#include "boost/dll/import.hpp"
 
 #include "libretro.h"
 
@@ -32,55 +29,26 @@
  * @todo Make this cross platform.
  */
 class RetroCore {
-    template<class T>
-        using fn = typename std::add_pointer<T>::type;
-    /**
-     * Handle to the dynamically loaded core lib
-     */
-    void *m_hCore = nullptr;
-
-    /**
-     * Utility function for loading symbols
-     */
-    template<typename Symbol>
-    static void Load(void *hCore, Symbol& sym, const char *name) {
-        std::clog << "Loading '" << name << "'...\n";
-#ifdef WIN32
-        sym = (Symbol) GetProcAddress(static_cast<HMODULE>(hCore), name);
-#else
-        sym = (Symbol) dlsym(hCore, name);
-#endif
-
-        // TODO: Exception
-        if (sym == nullptr) {
-            std::cerr << "Failed to load symbol '" << name << "'\n";
-            std::exit(-3);
-        } else {
-            std::clog << "Found symbol, storing into pointer at address " << std::addressof(sym)
-                << '\n';
-        }
-    }
-
   public:
-    // Callback registerers
-    fn<void(retro_environment_t)>           fSetEnvironment{nullptr};
-    fn<void(retro_video_refresh_t)>         fSetVideoRefresh {nullptr};
-    fn<void(retro_input_poll_t)>            fSetInputPoll{nullptr};
-    fn<void(retro_input_state_t)>           fSetInputState{nullptr};
-    fn<void(retro_audio_sample_t)>          fSetAudioSample{nullptr};
-    fn<void(retro_audio_sample_batch_t)>    fSetAudioSampleBatch{nullptr};
+    // Callback registrars
+    boost::function<void(retro_environment_t)> SetEnvironment;
+    boost::function<void(retro_video_refresh_t)> SetVideoRefresh;
+    boost::function<void(retro_input_poll_t)> SetInputPoll;
+    boost::function<void(retro_input_state_t)> SetInputState;
+    boost::function<void(retro_audio_sample_t)> SetAudioSample;
+    boost::function<void(retro_audio_sample_batch_t)> SetAudioSampleBatch;
 
     // libretro functions that do things
-    fn<void()> fInit{nullptr};
-    fn<void()> fDeinit{nullptr};
-    fn<void()> fReset{nullptr};
-    fn<void()> fRun{nullptr};
-    fn<void()> fUnloadGame{nullptr};
-    fn<void(retro_system_info *)> fGetSystemInfo{nullptr};
-    fn<void(retro_system_av_info *)> fGetAudioVideoInfo{nullptr};
-    fn<void(unsigned, unsigned)> fSetControllerPortDevice{nullptr};
-    fn<bool(const retro_game_info*)> fLoadGame{nullptr};
-    fn<unsigned()> fRetroAPIVersion{nullptr};
+    boost::function<void()> Init;
+    boost::function<void()> Deinit;
+    boost::function<void()> Reset;
+    boost::function<void()> Run;
+    boost::function<void()> UnloadGame;
+    boost::function<void(retro_system_info *)> GetSystemInfo;
+    boost::function<void(retro_system_av_info *)> GetAudioVideoInfo;
+    boost::function<void(unsigned, unsigned)> SetControllerPortDevice;
+    boost::function<bool(const retro_game_info *)> LoadGame;
+    boost::function<unsigned()> RetroAPIVersion;
 
     RetroCore();
 
@@ -95,7 +63,7 @@ class RetroCore {
     /**
      * Initialize the RetroCore object.
      */
-    void Init(const char *hCore);
+    void Load(const char *corePath);
 
     /**
      * Properly shuts down the retro core by calling deinit and similar.
