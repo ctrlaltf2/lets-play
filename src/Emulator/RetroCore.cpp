@@ -2,59 +2,37 @@
 
 RetroCore::RetroCore() = default;
 
-void RetroCore::Init(const char *corePath) {
+void RetroCore::Load(const char *corePath) {
+    namespace dll = boost::dll;
+
     std::clog << "Loading file from '" << corePath << "'\n";
 
-    std::string errInfo;
-#ifdef WIN32
-    void *hCore = LoadLibrary(corePath);
-    
-    if(!hCore)
-        errInfo = "Windows error code " + std::to_string(GetLastError());
-#else
-    void *hCore = dlopen(corePath, RTLD_NOW);
+    try {
+        SetEnvironment = dll::import<void(retro_environment_t)>(corePath, "retro_set_environment");
+        SetVideoRefresh = dll::import<void(retro_video_refresh_t)>(corePath, "retro_set_video_refresh");
+        SetInputPoll = dll::import<void(retro_input_poll_t)>(corePath, "retro_set_input_poll");
+        SetInputState = dll::import<void(retro_input_state_t)>(corePath, "retro_set_input_state");
+        SetAudioSample = dll::import<void(retro_audio_sample_t)>(corePath, "retro_set_audio_sample");
+        SetAudioSampleBatch = dll::import<void(retro_audio_sample_batch_t)>(corePath, "retro_set_audio_sample_batch");
 
-    if(!hCore)
-        errInfo = dlerror();
-#endif
-
-    // TODO: Exception
-    if (!hCore) {
-        std::cerr << "Failed to load libretro core -- " << errInfo << '\n';
-        std::exit(-1);
+        Init = dll::import<void()>(corePath, "retro_init");
+        Deinit = dll::import<void()>(corePath, "retro_deinit");
+        Reset = dll::import<void()>(corePath, "retro_reset");
+        Run = dll::import<void()>(corePath, "retro_run");
+        RetroAPIVersion = dll::import<unsigned()>(corePath, "retro_api_version");
+        GetSystemInfo = dll::import<void(retro_system_info *)>(corePath, "retro_get_system_info");
+        GetAudioVideoInfo = dll::import<void(retro_system_av_info *)>(corePath, "retro_get_system_av_info");
+        SetControllerPortDevice = dll::import<void(unsigned, unsigned)>(corePath,
+                                                                        "retro_set_controller_port_device");
+        LoadGame = dll::import<bool(const retro_game_info *)>(corePath, "retro_load_game");
+        UnloadGame = dll::import<void()>(corePath, "retro_unload_game");
+    } catch (const boost::system::system_error &e) {
+        std::cerr << "failed to load a libretro function: " << e.what() << '\n';
+        std::exit(-3);
     }
-
-    this->m_hCore = hCore;
-
-    // Load functions from hCore
-
-    RetroCore::Load(this->m_hCore, fSetEnvironment, "retro_set_environment");
-    RetroCore::Load(this->m_hCore, fSetVideoRefresh, "retro_set_video_refresh");
-    RetroCore::Load(this->m_hCore, fSetInputPoll, "retro_set_input_poll");
-    RetroCore::Load(this->m_hCore, fSetInputState, "retro_set_input_state");
-    RetroCore::Load(this->m_hCore, fSetAudioSample, "retro_set_audio_sample");
-    RetroCore::Load(this->m_hCore, fSetAudioSampleBatch, "retro_set_audio_sample_batch");
-
-    RetroCore::Load(this->m_hCore, fInit, "retro_init");
-    RetroCore::Load(this->m_hCore, fDeinit, "retro_deinit");
-    RetroCore::Load(this->m_hCore, fRetroAPIVersion, "retro_api_version");
-    RetroCore::Load(this->m_hCore, fGetSystemInfo, "retro_get_system_info");
-    RetroCore::Load(this->m_hCore, fGetAudioVideoInfo, "retro_get_system_av_info");
-    RetroCore::Load(this->m_hCore, fSetControllerPortDevice, "retro_set_controller_port_device");
-    RetroCore::Load(this->m_hCore, fReset, "retro_reset");
-    RetroCore::Load(this->m_hCore, fRun, "retro_run");
-    RetroCore::Load(this->m_hCore, fLoadGame, "retro_load_game");
-    RetroCore::Load(this->m_hCore, fUnloadGame, "retro_unload_game");
 }
 
 RetroCore::~RetroCore() {
-    if (m_hCore) {
-        (*(this->fUnloadGame))();
-        (*(this->fDeinit))();
-#ifdef WIN32
-        FreeLibrary(static_cast<HMODULE>(hCore));
-#else
-        dlclose(m_hCore);
-#endif
-    }
+    UnloadGame();
+    Deinit();
 }
