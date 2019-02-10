@@ -65,6 +65,15 @@ int main(int argc, char **argv) {
         std::cerr << e.what() << '\n';
     }
     LetsPlayServer server(configFilePath);
-    server.Run(port);
+
+    bool retry{true};
+    while (retry) {
+        try {
+            server.Run(port);
+            retry = false;
+        } catch (const std::runtime_error &e) {
+            port++;
+        }
+    }
     std::cout << "Server >>didn't<< crash while shutting down" << '\n';
 }
