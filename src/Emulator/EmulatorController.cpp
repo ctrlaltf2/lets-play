@@ -302,14 +302,16 @@ void EmulatorController::TurnThread() {
                 m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
             }
 
-            currentUser->hasTurn = false;
-            currentUser->requestedTurn = false;
+            if (m_TurnQueue.size() > 1) {
+                currentUser->hasTurn = false;
+                currentUser->requestedTurn = false;
+            }
             /*m_server->BroadcastToEmu(id,
                                      LetsPlayProtocol::encode("turnEnd", currentUser->username()),
                                      websocketpp::frame::opcode::text);*/
         }
 
-        if (!m_TurnQueue.empty())
+        if (m_TurnQueue.size() > 1)
             m_TurnQueue.erase(m_TurnQueue.begin());
 
         EmulatorController::SendTurnList();
