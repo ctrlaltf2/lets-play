@@ -64,7 +64,7 @@ add_executable(letsplay
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp
             src/Emulator/RetroPad.cpp
-)
+        )
 
 set_target_properties(letsplay
     PROPERTIES
