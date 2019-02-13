@@ -540,37 +540,57 @@ void LetsPlayServer::QueueThread() {
                         }
                     }
                         break;
-                    case kCommandType::Button: {  // up/down, id
-                        if (command.params.size() != 2) break;
+                    case kCommandType::Button: {  // button/leftStick/rightStick, button id, value as int16
+                        if (command.params.size() != 3) break;
 
                         if (auto user = command.user_hdl.lock(); user && !user->hasTurn) break;
+
+                        const auto &buttonType = command.params[0];
+                        std::int16_t id, value;
+
+                        // Spaghet
+                        {
+                            std::stringstream ss{command.params[1]};
+                            ss >> id;
+                            if (!ss)
+                                break;
+                        }
+                        {
+                            std::stringstream ss{command.params[2]};
+                            ss >> value;
+                            if (!ss)
+                                break;
+                        }
 
                         if (auto user = command.user_hdl.lock())
                             logger.log(user->uuid(),
                                        " (",
                                        user->username(),
-                                       ") sent a button press with value '",
-                                       command.params[0],
+                                       ") sent a '",
+                                       buttonType,
+                                       "' update with id '",
+                                       id,
+                                       "' and value '",
+                                       value,
                                        '\'');
 
-                        if (command.params[0].front() == '-') break;
+                        if (id < 0)
+                            break;
 
                         if (!command.emuID.empty()) {
-                            unsigned buttonID{0};
-                            try {
-                                buttonID = std::stoi(command.params[1]);
-                            } catch (const std::invalid_argument& e) {
-                                break;
-                            } catch (const std::out_of_range& e) {
-                                break;
-                            }
-                            if (buttonID > 15u) break;
-
                             std::unique_lock lkk(m_EmusMutex);
-                            if (command.params[0] == "up") {
-                                m_Emus[command.emuID]->joypad->buttonRelease(buttonID);
-                            } else if (command.params[0] == "down") {
-                                m_Emus[command.emuID]->joypad->buttonPress(buttonID);
+                            if (buttonType == "button") {
+                                if (id > 15)
+                                    break;
+                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_BUTTON, id, value);
+                            } else if (buttonType == "leftStick") {
+                                if (id > 1)
+                                    break;
+                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_LEFT, id, value);
+                            } else if (buttonType == "rightStick") {
+                                if (id > 1)
+                                    break;
+                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_RIGHT, id, value);
                             }
                         }
                     }

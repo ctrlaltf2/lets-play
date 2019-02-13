@@ -240,9 +240,17 @@ void EmulatorController::OnPollInput() {}
 
 std::int16_t EmulatorController::OnGetInputState(unsigned port, unsigned device, unsigned index,
                                                  unsigned id) {
-    if (port || index || device != RETRO_DEVICE_JOYPAD) return 0;
+    if (port != 0)
+        return 0;
 
-    return joypad.isPressed(id);
+    switch (device) {
+        case RETRO_DEVICE_JOYPAD:
+            return joypad.isPressed(id);
+        case RETRO_DEVICE_ANALOG:
+            return joypad.analogValue(index, id);
+        default:
+            return 0;
+    }
 }
 
 void EmulatorController::OnLRAudioSample(std::int16_t /*left*/, std::int16_t /*right*/) {}
@@ -285,8 +293,8 @@ void EmulatorController::TurnThread() {
             std::uint64_t turnLength;
             {
                 std::shared_lock lkk(m_server->config.mutex);
-                if (nlohmann::json& data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
-                    data.empty() || !data.is_number())
+                if (nlohmann::json &data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
+                        data.empty() || !data.is_number())
                     turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]["turnLength"];
                 else
                     turnLength = data;
@@ -295,7 +303,7 @@ void EmulatorController::TurnThread() {
             const auto turnEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
 
             while ((currentUser.use_count() > 1) && currentUser->connected && currentUser->hasTurn
-                && (std::chrono::steady_clock::now() < turnEnd)) {
+                   && (std::chrono::steady_clock::now() < turnEnd)) {
                 /* FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
                  * underflow or UB for the case where now() is greater than
                  * turnEnd? */
