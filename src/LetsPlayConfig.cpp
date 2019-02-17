@@ -38,8 +38,8 @@ const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 // clang-format on
 
 void LetsPlayConfig::ReloadConfig() {
-    if (std::unique_lock lk(mutex, std::try_to_lock);
-        lib::filesystem::exists(m_configPath) && lib::filesystem::is_regular_file(m_configPath)) {
+    std::unique_lock<std::shared_timed_mutex> lk(mutex, std::try_to_lock);
+    if (lib::filesystem::exists(m_configPath) && lib::filesystem::is_regular_file(m_configPath)) {
         std::ifstream fi(m_configPath.string());
         fi >> config;
     } else {
@@ -49,8 +49,8 @@ void LetsPlayConfig::ReloadConfig() {
 
 void LetsPlayConfig::LoadFrom(const lib::filesystem::path& path) {
     std::clog << "Loading file" << '\n';
-    if (std::unique_lock lk(mutex);
-        lib::filesystem::exists(path) && lib::filesystem::is_regular_file(path)) {
+    std::unique_lock<std::shared_timed_mutex> lk(mutex);
+    if (lib::filesystem::exists(path) && lib::filesystem::is_regular_file(path)) {
         std::clog << "Valid path: " << path << '\n';
         m_configPath = path;
         ReloadConfig();
@@ -60,9 +60,11 @@ void LetsPlayConfig::LoadFrom(const lib::filesystem::path& path) {
 }
 
 void LetsPlayConfig::SaveConfig() {
-    std::shared_lock lk(mutex);
+    std::shared_lock<std::shared_timed_mutex> lk(mutex);
     std::ofstream fo(m_configPath.string());
     fo << std::setw(4) << config;
 }
 
-LetsPlayConfig::~LetsPlayConfig() { SaveConfig(); }
+LetsPlayConfig::~LetsPlayConfig() {
+    SaveConfig();
+}

@@ -34,7 +34,6 @@ struct Frame;
 #include <set>
 #include <shared_mutex>
 #include <string>
-#include <variant>
 
 #include <websocketpp/frame.hpp>
 
@@ -226,7 +225,7 @@ class EmulatorController {
     /**
      * General mutex for things that won't really go off at once and get blocked.
      */
-    static std::shared_mutex m_generalMutex;
+    static std::shared_timed_mutex m_generalMutex;
 
   public:
     /**

@@ -7,7 +7,7 @@ A web-based collaborative RetroArch frontend
 Why thanks for asking, a A web-based collaborative RetroArch frontend is just a fancy phrase for a video game you can play online, collaboratively, with strangers by taking turns at the controller (so to speak). Users connect using [the web portion](https://github.com/ctrlaltf2/lets-play-client) which connects to this, the backend, and are then able to interact with an emulator that (usually) runs a retro video game system of some sort.
 
 # Requirements
- - Compiler with support for C++17
+ - Compiler with support for C++14
  - websocketpp
  - Boost
     - Program Options

@@ -21,9 +21,7 @@ class LetsPlayConfig;
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <mutex>
 #include <shared_mutex>
-#include <variant>
 
 #include "nlohmann/json.hpp"
 
@@ -48,7 +46,7 @@ class LetsPlayConfig {
      *
      * @note This is locked by threads that directly access the config object.
      */
-    std::shared_mutex mutex;
+    std::shared_timed_mutex mutex;
 
     /**
      * JSON object holding the current config info
