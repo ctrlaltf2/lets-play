@@ -68,7 +68,7 @@ add_executable(letsplay
 
 set_target_properties(letsplay
     PROPERTIES
-        CXX_STANDARD 17
+        CXX_STANDARD 14
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
         RUNTIME_OUTPUT_DIRECTORY bin
@@ -89,7 +89,7 @@ target_compile_features(letsplay
         cxx_range_for
         cxx_raw_string_literals
         cxx_right_angle_brackets
-        cxx_std_17
+        cxx_std_14
         cxx_variadic_templates
 )
 

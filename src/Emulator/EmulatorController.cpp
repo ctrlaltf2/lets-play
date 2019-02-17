@@ -21,7 +21,7 @@ retro_system_av_info EmulatorController::m_avinfo;
 
 std::string EmulatorController::saveDirectory;
 std::string EmulatorController::systemDirectory;
-std::shared_mutex EmulatorController::m_generalMutex;
+std::shared_timed_mutex EmulatorController::m_generalMutex;
 
 // LetsPlay filesystem layout
 /*
@@ -71,7 +71,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     // Add emu specific config if it doesn't already exist
     {
-        std::unique_lock<std::shared_mutex> lk(server->config.mutex);
+        std::unique_lock<std::shared_timed_mutex> lk(server->config.mutex);
         if (!server->config.config["serverConfig"]["emulators"].count(t_id)) {
             server->config.config["serverConfig"]["emulators"][t_id] =
                 LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"];
@@ -124,7 +124,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.GetAudioVideoInfo(&m_avinfo);
     std::uint64_t fps = -1ull;
     {
-        std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+        std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
         const auto& config = m_server->config.config;
         if (config["serverConfig"]["emulators"][id]["overrideFramerate"].is_boolean() &&
             config["serverConfig"]["emulators"][id]["overrideFramerate"].get<bool>() &&
@@ -172,24 +172,24 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
             break;
             // clang-format off
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
-            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
             if (!m_server->config.config["serverConfig"]["systemDirectory"].is_string())
                 break;
             nlohmann::json& dir = m_server->config.config["serverConfig"]["systemDirectory"];
             {
-                std::shared_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
+                std::shared_lock<std::shared_timed_mutex> lkk(m_generalMutex, std::try_to_lock);
                 systemDirectory = LetsPlayServer::escapeTilde(dir);
             }
             *static_cast<const char **>(data) = systemDirectory.c_str();
         }
             break;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
-            std::shared_lock<std::shared_mutex> lk(m_server->config.mutex);
+            std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
             if (!m_server->config.config["serverConfig"]["saveDirectory"].is_string())
                 break;
             nlohmann::json& dir = m_server->config.config["serverConfig"]["saveDirectory"];
             {
-                std::unique_lock<std::shared_mutex> lkk(m_generalMutex, std::try_to_lock);
+                std::unique_lock<std::shared_timed_mutex> lkk(m_generalMutex, std::try_to_lock);
                 saveDirectory = LetsPlayServer::escapeTilde(dir);
             }
             *static_cast<const char **>(data) = saveDirectory.c_str();
@@ -223,7 +223,7 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
 
 void EmulatorController::OnVideoRefresh(const void *data, unsigned width, unsigned height,
                                         size_t pitch) {
-    std::unique_lock lk(m_videoMutex);
+    std::unique_lock<std::mutex> lk(m_videoMutex);
     if (width != m_videoFormat.width || height != m_videoFormat.height ||
         pitch != m_videoFormat.pitch) {
         std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
@@ -261,7 +261,7 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t */*data*/, size
 
 void EmulatorController::TurnThread() {
     while (m_TurnThreadRunning) {
-        std::unique_lock lk(m_TurnMutex);
+        std::unique_lock<std::mutex> lk(m_TurnMutex);
 
         // Wait for a nonempty queue
         while (m_TurnQueue.empty()) {
@@ -270,10 +270,6 @@ void EmulatorController::TurnThread() {
 
         if (m_TurnThreadRunning == false) break;
 
-        // x, 1, 2
-        // 1, x, 2
-        // x, x, 2
-        // x, x, x
         // While someone in the turn queue has disconnected
         while (m_TurnQueue[0].expired() || !m_TurnQueue[0].lock()->connected) {
             if (m_TurnQueue.empty())
@@ -292,9 +288,9 @@ void EmulatorController::TurnThread() {
 
             std::uint64_t turnLength;
             {
-                std::shared_lock lkk(m_server->config.mutex);
-                if (nlohmann::json &data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
-                        data.empty() || !data.is_number())
+                std::shared_lock<std::shared_timed_mutex> lkk(m_server->config.mutex);
+                nlohmann::json &data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
+                if (data.empty() || !data.is_number())
                     turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]["turnLength"];
                 else
                     turnLength = data;
@@ -328,7 +324,7 @@ void EmulatorController::TurnThread() {
 
 void EmulatorController::AddTurnRequest(LetsPlayUserHdl user_hdl) {
     // Add user to the list
-    std::unique_lock lk(m_TurnMutex);
+    std::unique_lock<std::mutex> lk(m_TurnMutex);
     m_TurnQueue.emplace_back(user_hdl);
 
     // Send off updated turn list
@@ -341,12 +337,13 @@ void EmulatorController::AddTurnRequest(LetsPlayUserHdl user_hdl) {
 void EmulatorController::SendTurnList() {
     const std::string turnList = [&] {
         // Majority of the time this won't lock because m_TurnMutex will have already been locked by the caller
-        std::unique_lock lk(m_TurnMutex, std::try_to_lock);
+        std::unique_lock<std::mutex> lk(m_TurnMutex, std::try_to_lock);
 
         std::vector<std::string> names{"turns"};
         for (auto user_hdl : m_TurnQueue) {
             // If pointer hasn't been deleted and user is still connected
-            if (auto user = user_hdl.lock(); user && user->connected)
+            auto user = user_hdl.lock();
+            if (user && user->connected)
                 names.push_back(user->username());
         }
         return LetsPlayProtocol::encode(names);
@@ -416,13 +413,13 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
             m_videoFormat.bitsPerPel = 16;
             return true;
-        default:return false;
+        default:
+            return false;
     }
-    return false;
 }
 
 Frame EmulatorController::GetFrame() {
-    std::unique_lock lk(m_videoMutex);
+    std::unique_lock<std::mutex> lk(m_videoMutex);
     if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
 
     std::vector<std::uint8_t> outVec(m_videoFormat.width * m_videoFormat.height * 3);

@@ -27,17 +27,17 @@ std::vector<std::string> LetsPlayProtocol::decode(const std::string& input) {
         iss >> length;
 
         // TODO: Make the max received size equal to maxMessageSize (config value) multiplied by len("\u{1AAAA}") + len('4.chat,') + len(';'). Pass as a parameter to decode for keeping it static.
-        if (length >= 1'000) {
+        if (!iss || length >= 1'000) {
             return std::vector<std::string>();
         }
 
         if (iss.peek() != '.') return std::vector<std::string>();
 
         iss.get();  // remove the period
-
-        std::string content(length, 'x');
+//
+        std::vector<char> content(length + 1, '\0');
         iss.read(content.data(), static_cast<std::streamsize>(length));
-        output.push_back(content);
+        output.push_back(std::string(content.data()));
 
         const char& separator = iss.peek();
         if (separator != ',') {
