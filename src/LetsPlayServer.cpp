@@ -812,8 +812,8 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
     thread_local static tjhandle _jpegCompressor = tjInitCompress();
-    thread_local static long unsigned int _jpegBufferSize = 0;
-    thread_local static std::uint8_t *jpegData{nullptr};
+    thread_local static long unsigned int _jpegBufferSize = 20000000;
+    thread_local static std::vector<std::uint8_t> jpegData(20000000); // 20MB jpeg buffer
     thread_local static unsigned i{0};
     thread_local static auto quality = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
                                                                  "serverConfig", "jpegQuality");
@@ -835,10 +835,13 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     }
 
     long unsigned int jpegSize = _jpegBufferSize;
+    std::uint8_t *cjpegData = &jpegData[1];
     tjCompress2(_jpegCompressor, frame.data.data(), frame.width, frame.width * 3, frame.height,
-                TJPF_RGB, &jpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
+                TJPF_RGB, &cjpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
 
-    _jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
+    //_jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
+
+    jpegData[0] = kBinaryMessageType::Screen;
 
     std::unique_lock<std::mutex> lk(m_UsersMutex);
     for (auto &pair : m_Users) {
@@ -847,7 +850,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
 
         if (user->connectedEmu() == id && user->connected && !hdl.expired()) {
             websocketpp::lib::error_code ec;
-            server->send(hdl, jpegData, jpegSize, websocketpp::frame::opcode::binary, ec);
+            server->send(hdl, jpegData.data(), jpegSize + 1, websocketpp::frame::opcode::binary, ec);
         }
     }
 }
