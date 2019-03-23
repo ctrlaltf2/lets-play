@@ -154,6 +154,16 @@ class LetsPlayServer {
     std::condition_variable m_QueueNotifier;
 
     /**
+     * If true, the SaveThread will keep running
+     */
+    std::atomic<bool> m_SaveThreadRunning;
+
+    /**
+     * Thread that regularly saves emulators
+     */
+    std::thread m_SaveThread;
+
+    /**
      * Map that maps connection_hdls to LetsPlayUsers
      */
     std::map<websocketpp::connection_hdl, std::shared_ptr<LetsPlayUser>, std::owner_less<websocketpp::connection_hdl>>
@@ -274,6 +284,11 @@ class LetsPlayServer {
      * Thread function that manages the queue and all of the incoming commands
      */
     void QueueThread();
+
+    /**
+     * Thread function that regularly saves emulators according to the interval defined in the configuration
+     */
+    void SaveThread();
 
     /**
      * Thread function that manages the ping sends and disconnects for users not responding to the ping

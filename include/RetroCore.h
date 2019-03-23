@@ -48,6 +48,9 @@ class RetroCore {
     boost::function<void(retro_system_av_info *)> GetAudioVideoInfo;
     boost::function<void(unsigned, unsigned)> SetControllerPortDevice;
     boost::function<bool(const retro_game_info *)> LoadGame;
+    boost::function<size_t()> SaveStateSize;
+    boost::function<bool(void *, size_t)> SaveState;
+    boost::function<bool(const void *, size_t)> LoadState;
     boost::function<unsigned()> RetroAPIVersion;
 
     RetroCore();

@@ -22,33 +22,6 @@ retro_system_av_info EmulatorController::m_avinfo;
 lib::filesystem::path EmulatorController::saveDirectory;
 std::shared_timed_mutex EmulatorController::m_generalMutex;
 
-// LetsPlay filesystem layout
-/*
- * letsplayhome/
- *     cores/ (autoupdate?)
- *         mgba_libretro.so
- *         vbam_libretro.so
- *         ...
- *     roms/ (should they differentiate by system? can they?)
- *         gba/
- *             Super\ Mario\ Advance\ 1.gba
- *             ...
- *         n64/
- *             Super\ Mario\ 64.n64
- *             ...
- *     system/
- *         some_required_bios.bin
- *         ...
- *     emulators/
- *         gba1/ (automatically created)
- *             state0.sav
- *             emulator_specific_file
- *         snes1/
- *             state0.frz
- *         ...
- *
- */
-
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
                              LetsPlayServer *server, EmuID_t t_id) {
     lib::filesystem::path coreFile = corePath, romFile = romPath;
@@ -65,7 +38,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false, &joypad};
+                                    false, &joypad, Save};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -120,6 +93,10 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         std::cerr << "Failed to load game -- Was the rom the correct? file type" << '\n';
         return;
     }
+
+
+    // Load state if applicable
+    Load();
 
     m_TurnThreadRunning = true;
     m_TurnThread = std::thread(EmulatorController::TurnThread);
@@ -430,4 +407,41 @@ Frame EmulatorController::GetFrame() {
     }
 
     return Frame{m_videoFormat.width, m_videoFormat.height, outVec};
+}
+
+void EmulatorController::Save() {
+    std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
+    auto size = Core.SaveStateSize();
+
+    if (size == 0) { // Not supported by the loaded core
+        m_server->logger.log("Warning: emu with the id ", id,
+                             " doesn't support saving. Skipping save procedure for it.");
+        return;
+    }
+
+    std::vector<unsigned char> saveData(size);
+
+    if (!Core.SaveState(saveData.data(), size)) {
+        m_server->logger.log("Warning: emu with the id ", id, " failed to serialize data with size ", size);
+        return;
+    } else {
+        auto saveFile = saveDirectory / "letsplay.state";
+        std::ofstream fo(saveFile.string(), std::ios::binary);
+        fo.write(reinterpret_cast<char *>(saveData.data()), size);
+    }
+}
+
+void EmulatorController::Load() {
+    std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
+    auto saveFile = saveDirectory / "letsplay.state";
+
+    if (!lib::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it
+
+    auto saveFileSize = lib::filesystem::file_size(saveFile);
+    std::vector<unsigned char> saveData(saveFileSize);
+
+    std::ifstream fi(saveFile.string(), std::ios::binary);
+    fi.read(reinterpret_cast<char *>(saveData.data()), saveFileSize);
+
+    Core.LoadState(saveData.data(), saveFileSize);
 }
