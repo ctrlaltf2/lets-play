@@ -123,15 +123,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     Core.GetAudioVideoInfo(&m_avinfo);
     std::uint64_t fps = -1ull;
-    {
-        std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
-        const auto& config = m_server->config.config;
-        if (config["serverConfig"]["emulators"][id]["overrideFramerate"].is_boolean() &&
-            config["serverConfig"]["emulators"][id]["overrideFramerate"].get<bool>() &&
-            config["serverConfig"]["emulators"][id]["fps"].is_number_unsigned()) {
-            fps = config["serverConfig"]["emulators"][id]["fps"].get<std::uint64_t>();
-        }
-    }
 
     auto &config = m_server->config;
     if (config.get<bool>(nlohmann::json::value_t::boolean, "serverConfig", "emulators", id, "overrideFramerate")) {
