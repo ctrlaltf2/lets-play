@@ -56,6 +56,7 @@ struct EmulatorControllerProxy {
     std::function<Frame()> getFrame;
     bool isReady{false};
     RetroPad *joypad{nullptr};
+    std::function<void()> save;
 };
 
 /**
@@ -384,4 +385,14 @@ class EmulatorController {
      * @return The frame representing the current video buffer.
      */
     static Frame GetFrame();
+
+    /**
+     * Called by the server periodically to save the emulator state
+     */
+    static void Save();
+
+    /**
+     * Called on emulator controller startup, tries to load save state if possible
+     */
+    static void Load();
 };

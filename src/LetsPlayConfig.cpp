@@ -20,6 +20,7 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
         "jpegQuality": 80,
         "heartbeatTimeout": 3000,
         "maxMessageSize": 100,
+        "minutesBetweenSaves": 5,
         "maxUsernameLength": 15,
         "minUsernameLength": 3,
         "syncInterval": 5000

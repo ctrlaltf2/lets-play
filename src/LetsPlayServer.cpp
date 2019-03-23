@@ -31,6 +31,9 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
+        m_SaveThreadRunning = true;
+        m_SaveThread = std::thread{[&]() { this->SaveThread(); }};
+
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
@@ -647,6 +650,17 @@ void LetsPlayServer::QueueThread() {
                 m_WorkQueue.pop();
             }
         }
+    }
+}
+
+void LetsPlayServer::SaveThread() {
+    const auto waitTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
+                                                    "minutesBetweenSaves");
+    while (m_SaveThreadRunning) {
+        std::this_thread::sleep_for(std::chrono::minutes(waitTime));
+        std::unique_lock<std::mutex> lk(m_EmusMutex);
+        for (auto &emu : m_Emus)
+            emu.second->save();
     }
 }
 

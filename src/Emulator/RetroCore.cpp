@@ -26,6 +26,10 @@ void RetroCore::Load(const char *corePath) {
                                                                         "retro_set_controller_port_device");
         LoadGame = dll::import<bool(const retro_game_info *)>(corePath, "retro_load_game");
         UnloadGame = dll::import<void()>(corePath, "retro_unload_game");
+
+        SaveStateSize = dll::import<size_t()>(corePath, "retro_serialize_size");
+        SaveState = dll::import<bool(void *, size_t)>(corePath, "retro_serialize");
+        LoadState = dll::import<bool(const void *, size_t)>(corePath, "retro_unserialize");
     } catch (const boost::system::system_error &e) {
         std::cerr << "failed to load a libretro function: " << e.what() << '\n';
         std::exit(-3);
