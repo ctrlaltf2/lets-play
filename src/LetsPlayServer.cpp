@@ -261,19 +261,8 @@ void LetsPlayServer::QueueThread() {
                             // ascii characters excluding \n and \t
                             if (!LetsPlayServer::isAsciiStr(command.params[0])) break;
 
-                            std::uint64_t maxMessageSize;
-                            {
-                                std::shared_lock<std::shared_timed_mutex> lkk(config.mutex);
-                                nlohmann::json& data = config.config["serverConfig"]["maxMessageSize"];
-
-                                // TODO: Warning on invalid data type (logging system implemented)
-                                if (!data.is_number_unsigned()) {
-                                    maxMessageSize =
-                                        LetsPlayConfig::defaultConfig["serverConfig"]["maxMessageSize"];
-                                } else {
-                                    maxMessageSize = data;
-                                }
-                            }
+                            auto maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                            "serverConfig", "maxMessageSize");
 
                             if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
@@ -310,24 +299,10 @@ void LetsPlayServer::QueueThread() {
                                            '\'');
                             }
 
-                            std::uint64_t maxUsernameLen, minUsernameLen;
-                            {
-                                std::shared_lock<std::shared_timed_mutex> lkk(config.mutex);
-
-                                nlohmann::json& max = config.config["serverConfig"]["maxUsernameLength"],
-                                    min = config.config["serverConfig"]["minUsernameLength"];
-
-                                // TODO: Warning on invalid data type (logging system implemented)
-                                if (!max.is_number_unsigned())
-                                    maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["maxUsernameLength"];
-                                else
-                                    maxUsernameLen = max;
-
-                                if (!min.is_number_unsigned())
-                                    minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["minUsernameLength"];
-                                else
-                                    minUsernameLen = min;
-                            }
+                            auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                            "serverConfig", "maxUsernameLength"),
+                                    minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                               "serverConfig", "minUsernameLength");
 
                             // Size based checks
                             if (newUsername.size() > maxUsernameLen
@@ -527,30 +502,12 @@ void LetsPlayServer::QueueThread() {
 
                             logger.log(user->uuid(), " (", user->username(), ") connected to ", command.params[0]);
 
-                            std::uint64_t maxUsernameLen, minUsernameLen, maxMessageSize;
-                            {
-                                std::shared_lock<std::shared_timed_mutex> lkk(config.mutex);
-
-                                nlohmann::json& max = config.config["serverConfig"]["maxUsernameLength"],
-                                    min = config.config["serverConfig"]["minUsernameLength"],
-                                    msgMax = config.config["serverConfig"]["maxMessageSize"];
-
-                                // TODO: Warning on invalid data type (logging system implemented)
-                                if (!max.is_number_unsigned())
-                                    maxUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["maxUsernameLength"];
-                                else
-                                    maxUsernameLen = max;
-
-                                if (!min.is_number_unsigned())
-                                    minUsernameLen = LetsPlayConfig::defaultConfig["serverConfig"]["minUsernameLength"];
-                                else
-                                    minUsernameLen = min;
-
-                                if (!msgMax.is_number_unsigned())
-                                    maxMessageSize = LetsPlayConfig::defaultConfig["serverConfig"]["maxMessageSize"];
-                                else
-                                    maxMessageSize = msgMax;
-                            }
+                            auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                            "serverConfig", "maxUsernameLength"),
+                                    minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                               "serverConfig", "minUsernameLength"),
+                                    maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                               "serverConfig", "maxMessageSize");
 
                             BroadcastOne(
                                 LetsPlayProtocol::encode("emuinfo",
@@ -568,7 +525,7 @@ void LetsPlayServer::QueueThread() {
 
                         {
                             auto user = command.user_hdl.lock();
-                            if (user && !user->hasTurn) break;
+                            if (user && !user->hasTurn && !user->hasAdmin) break;
                         }
 
 
@@ -651,27 +608,13 @@ void LetsPlayServer::QueueThread() {
                                 break;
                         }
 
-                        std::string salt, expectedHash;
-                        {
-                            std::shared_lock<std::shared_timed_mutex> lkk(config.mutex);
+                        auto salt = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "salt"),
+                                expectedHash = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig",
+                                                                       "adminHash");
 
-                            nlohmann::json& jsalt = config.config["serverConfig"]["salt"],
-                                jhash = config.config["serverConfig"]["adminHash"];
-
-                            if (!jsalt.is_string()) {
-                                jsalt = LetsPlayConfig::defaultConfig["serverConfig"]["salt"];
-                            }
-
-                            if (!jhash.is_string()) {
-                                jhash = LetsPlayConfig::defaultConfig["serverConfig"]["adminHash"];
-                            }
-
-                            salt = jsalt;
-                            expectedHash = jhash;
-                        }
                         std::string hashed = md5(command.params[0] + salt);
 
-                        logger.log(salt, ' ', expectedHash, ' ', hashed);
+                        // TODO: Log failed admin attempts
 
                         if (auto user = command.user_hdl.lock()) {
                             if (hashed == expectedHash) {
@@ -814,6 +757,9 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     thread_local static tjhandle _jpegCompressor = tjInitCompress();
     thread_local static long unsigned int _jpegBufferSize = 0;
     thread_local static std::uint8_t *jpegData{nullptr};
+    thread_local static unsigned i{0};
+    thread_local static auto quality = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                 "serverConfig", "jpegQuality");
     Frame frame = [&]() {
         std::unique_lock<std::mutex> lk(m_EmusMutex);
         auto emu = m_Emus[id];
@@ -823,15 +769,14 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     // currentBuffer was nullptr
     if (frame.width == 0 || frame.height == 0) return;
 
-    // TODO: Make this function faster by making this update less often
-    unsigned quality = LetsPlayConfig::defaultConfig["serverConfig"]["jpegQuality"];
-    {
-        std::shared_lock<std::shared_timed_mutex> lk(config.mutex);
-        if (config.config["serverConfig"].count("jpegQuality")) {
-            nlohmann::json &value = config.config["serverConfig"]["jpegQuality"];
-            if (value.is_number() && (value <= 100) && (value >= 1)) quality = value;
-        }
+    // update quality value from config every 120 frames
+    if ((++i %= 120) == 0) {
+        auto q = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig", "jpegQuality");
+
+        if (q > 100 || q < 1) quality = 95;
+        else quality = q;
     }
+
     long unsigned int jpegSize = _jpegBufferSize;
     tjCompress2(_jpegCompressor, frame.data.data(), frame.width, frame.width * 3, frame.height,
                 TJPF_RGB, &jpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);

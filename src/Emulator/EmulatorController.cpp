@@ -133,11 +133,17 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         }
     }
 
+    auto &config = m_server->config;
+    if (config.get<bool>(nlohmann::json::value_t::boolean, "serverConfig", "emulators", id, "overrideFramerate")) {
+        fps = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig", "emulators", id,
+                                        "fps");
+    }
+
+
     // TODO: Manage this thread
     if (fps != -1ull) {
         std::thread t([&]() {
             using namespace std::chrono;
-            auto nextKeyFrame = steady_clock::now();
 
             while (true) {
                 server->SendFrame(id);
@@ -161,6 +167,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 }
 
 bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
+    auto &config = m_server->config;
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format *fmt = static_cast<retro_pixel_format *>(data);
@@ -169,30 +176,16 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
 
             return SetPixelFormat(*fmt);
         }
-            break;
-            // clang-format off
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
-            std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
-            if (!m_server->config.config["serverConfig"]["systemDirectory"].is_string())
-                break;
-            nlohmann::json& dir = m_server->config.config["serverConfig"]["systemDirectory"];
-            {
-                std::shared_lock<std::shared_timed_mutex> lkk(m_generalMutex, std::try_to_lock);
-                systemDirectory = LetsPlayServer::escapeTilde(dir);
-            }
-            *static_cast<const char **>(data) = systemDirectory.c_str();
+            auto sysDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "systemDirectory");
+            // TODO: Does this do a dangling pointer thing?
+            *static_cast<const char **>(data) = sysDir.c_str();
         }
             break;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
-            std::shared_lock<std::shared_timed_mutex> lk(m_server->config.mutex);
-            if (!m_server->config.config["serverConfig"]["saveDirectory"].is_string())
-                break;
-            nlohmann::json& dir = m_server->config.config["serverConfig"]["saveDirectory"];
-            {
-                std::unique_lock<std::shared_timed_mutex> lkk(m_generalMutex, std::try_to_lock);
-                saveDirectory = LetsPlayServer::escapeTilde(dir);
-            }
-            *static_cast<const char **>(data) = saveDirectory.c_str();
+            auto saveDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "saveDirectory");
+            // TODO: Does this do a dangling pointer thing?
+            *static_cast<const char **>(data) = saveDir.c_str();
         }
             break;
         case RETRO_ENVIRONMENT_GET_USERNAME: {
@@ -202,7 +195,6 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_OVERSCAN: { // We don't (usually) want overscan
             return false;
         }
-            break;
             // Will be implemented
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
@@ -286,16 +278,9 @@ void EmulatorController::TurnThread() {
         if (auto currentUser = m_TurnQueue[0].lock()) {
             currentUser->hasTurn = true;
 
-            std::uint64_t turnLength;
-            {
-                std::shared_lock<std::shared_timed_mutex> lkk(m_server->config.mutex);
-                nlohmann::json &data = m_server->config.config["serverConfig"]["emulators"][id]["turnLength"];
-                if (data.empty() || !data.is_number())
-                    turnLength = LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"]["turnLength"];
-                else
-                    turnLength = data;
-            }
-
+            // TOOD: Fallback on template instead of id if invalid value? What happens to the value if its not in the emu's config?
+            const auto turnLength = m_server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                        "serverConfig", "emulators", id, "turnLength");
             const auto turnEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
 
             while ((currentUser.use_count() > 1) && currentUser->connected && currentUser->hasTurn
@@ -310,9 +295,7 @@ void EmulatorController::TurnThread() {
                 currentUser->hasTurn = false;
                 currentUser->requestedTurn = false;
             }
-            /*m_server->BroadcastToEmu(id,
-                                     LetsPlayProtocol::encode("turnEnd", currentUser->username()),
-                                     websocketpp::frame::opcode::text);*/
+
         }
 
         if (m_TurnQueue.size() > 1)

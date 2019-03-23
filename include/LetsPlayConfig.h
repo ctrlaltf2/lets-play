@@ -57,7 +57,7 @@ class LetsPlayConfig {
      * Default config, if a value isn't contained in the (possibly loaded)
      * m_config, the server will fall back on these values
      */
-    static const nlohmann::json defaultConfig;
+    static nlohmann::json defaultConfig;
 
     /**
      * Loads the file from the path m_configPath and reloads the config
@@ -82,4 +82,33 @@ class LetsPlayConfig {
     ~LetsPlayConfig();
 
     // TODO: Variadic function, string..., nlohmann::json::type. Warn or error onmismatched datatype or nonexistent value. Falls back on default config. A call might look like nlohmann::json val = config.pull("serverConfig", "emulators", "emu1", "turnLength", nlohmann::json::value_t::number_unsigned);
+    // 1
+    template<typename ReturnType, typename... Keys>
+    ReturnType get(nlohmann::json::value_t expectedType, std::string key, Keys... k) {
+        std::lock_guard<std::shared_timed_mutex> lk(mutex);
+        try {
+            nlohmann::json j = get(config[key], k...);
+            ReturnType rt = j.get<ReturnType>();
+            if (j.type() != expectedType) { // not in config or is wrong data type
+                j = get(LetsPlayConfig::defaultConfig[key], k...);
+                rt = j.get<ReturnType>();
+            }
+            return rt;
+
+        } catch (const nlohmann::json::type_error &e) {
+            nlohmann::json j = get(LetsPlayConfig::defaultConfig[key], k...);
+            return j.get<ReturnType>();
+        }
+    }
+
+    // 2, n-1
+    template<typename... Keys>
+    nlohmann::json &get(nlohmann::json &j, std::string key, Keys... k) {
+        return get(j[key], k...);
+    }
+
+    // n;
+    nlohmann::json &get(nlohmann::json &j, std::string key) {
+        return j[key];
+    }
 };
