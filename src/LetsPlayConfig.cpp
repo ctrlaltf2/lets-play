@@ -2,7 +2,7 @@
 
 // clang-format off
 // All durations are in ms
-const nlohmann::json LetsPlayConfig::defaultConfig = R"json(
+nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 {
     "serverConfig": {
         "emulators": {
