@@ -243,12 +243,7 @@ class EmulatorController {
     /**
      * Location of the save directory, loaded from config.
      */
-    static std::string saveDirectory;
-
-    /**
-     * Location of the system directory, loaded from config.
-     */
-    static std::string systemDirectory;
+    static lib::filesystem::path saveDirectory;
 
     /**
      * Rom data if loaded from file.

@@ -200,6 +200,31 @@ class LetsPlayServer {
      */
     Logger logger;
 
+    /*
+     * ---- Filesystem constants ----
+     */
+
+    /**
+     * Data dir / emulators
+     */
+    lib::filesystem::path emuDirectory;
+
+    /**
+     * Data dir / system
+     */
+    lib::filesystem::path systemDirectory;
+
+    /**
+     * Data dir / roms
+     */
+    lib::filesystem::path romDirectory;
+
+    /**
+     * Data dir / cores
+     */
+    lib::filesystem::path coreDirectory;
+
+
     /**
      * Constructor
      * @param configFile Path to the config.json file (defaults to
@@ -294,6 +319,13 @@ class LetsPlayServer {
      * @return Whether or not the username is taken
      */
     bool UsernameTaken(const std::string& username, const std::string& uuid);
+
+    /**
+     * Sets up directories listed in the config file so that they exist and can be written to.
+     *
+     * @note Called only on server run
+     */
+    void SetupLetsPlayDirectories();
 
     // --- Functions called only by emulator controllers --- //
     /**
