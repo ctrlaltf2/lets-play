@@ -88,6 +88,18 @@ enum class kCommandType {
 };
 
 /**
+ * @enum kBinaryMessageType
+ *
+ * Enum for outgoing binary message types. Used clientside to differentiate binary payloads.
+ */
+enum kBinaryMessageType {
+    /** Screen update message **/
+            Screen,
+    /** Emulator preview message **/
+            Preview,
+};
+
+/**
  * @struct Command
  *
  * POD class for the action queue
