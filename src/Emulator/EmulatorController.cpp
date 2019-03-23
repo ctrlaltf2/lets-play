@@ -19,8 +19,7 @@ const void *EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
 
-std::string EmulatorController::saveDirectory;
-std::string EmulatorController::systemDirectory;
+lib::filesystem::path EmulatorController::saveDirectory;
 std::shared_timed_mutex EmulatorController::m_generalMutex;
 
 // LetsPlay filesystem layout
@@ -77,6 +76,10 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                 LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"];
         }
     }
+
+    // Create emu folder if it doesn't already exist
+    saveDirectory = m_server->emuDirectory / id;
+    lib::filesystem::create_directories(saveDirectory);
 
     server->config.SaveConfig();
 
@@ -167,25 +170,18 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
 
             return SetPixelFormat(*fmt);
         }
-        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: {  // Path to the system directory (letsplayfolder/system)
-            auto sysDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "systemDirectory");
-            // TODO: Does this do a dangling pointer thing?
-            *static_cast<const char **>(data) = sysDir.c_str();
-        }
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // system dir, dataDir / system
+            *static_cast<const char **>(data) = m_server->systemDirectory.string().c_str();
             break;
-        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: { // Directory to store saves in
-            auto saveDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "saveDirectory");
-            // TODO: Does this do a dangling pointer thing?
-            *static_cast<const char **>(data) = saveDir.c_str();
-        }
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir, dataDir / emulators / emu_id
+            m_server->logger.log(saveDirectory.string());
+            *static_cast<const char **>(data) = saveDirectory.string().c_str();
             break;
-        case RETRO_ENVIRONMENT_GET_USERNAME: {
+        case RETRO_ENVIRONMENT_GET_USERNAME:
             *static_cast<const char **>(data) = id.c_str();
-        }
             break;
-        case RETRO_ENVIRONMENT_GET_OVERSCAN: { // We don't (usually) want overscan
+        case RETRO_ENVIRONMENT_GET_OVERSCAN: // We don't (usually) want overscan
             return false;
-        }
             // Will be implemented
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core

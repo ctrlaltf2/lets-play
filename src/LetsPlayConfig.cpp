@@ -16,14 +16,13 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
         },
         "salt": "ncft9PlmVA",
         "adminHash": "be23396d825c5a17c57c7738ac4b98a5",
+        "dataDirectory": "System Default",
         "jpegQuality": 80,
         "heartbeatTimeout": 3000,
         "maxMessageSize": 100,
         "maxUsernameLength": 15,
         "minUsernameLength": 3,
-        "saveDirectory": "~/.letsplay/save/",
-        "syncInterval": 5000,
-        "systemDirectory": "~/.letsplay/system/"
+        "syncInterval": 5000
     },
     "coreConfig": {
         "Snes9x": {
@@ -48,19 +47,18 @@ void LetsPlayConfig::ReloadConfig() {
 }
 
 void LetsPlayConfig::LoadFrom(const lib::filesystem::path& path) {
-    std::clog << "Loading file" << '\n';
     std::unique_lock<std::shared_timed_mutex> lk(mutex);
+    m_configPath = path;
     if (lib::filesystem::exists(path) && lib::filesystem::is_regular_file(path)) {
-        std::clog << "Valid path: " << path << '\n';
-        m_configPath = path;
         ReloadConfig();
     } else {
-        // Warn or exception
+        config = LetsPlayConfig::defaultConfig;
+        SaveConfig();
     }
 }
 
 void LetsPlayConfig::SaveConfig() {
-    std::shared_lock<std::shared_timed_mutex> lk(mutex);
+    std::shared_lock<std::shared_timed_mutex> lk(mutex, std::try_to_lock);
     std::ofstream fo(m_configPath.string());
     fo << std::setw(4) << config;
 }

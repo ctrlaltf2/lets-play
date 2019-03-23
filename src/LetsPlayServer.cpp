@@ -7,6 +7,8 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
     server.reset(new wcpp_server);
 
+    SetupLetsPlayDirectories();
+
     try {
         server->set_access_channels(websocketpp::log::alevel::connect | websocketpp::log::alevel::disconnect);
         server->clear_access_channels(websocketpp::log::alevel::frame_payload | websocketpp::log::alevel::frame_header);
@@ -735,6 +737,47 @@ bool LetsPlayServer::UsernameTaken(const std::string& username, const std::strin
     return false;
 }
 
+void LetsPlayServer::SetupLetsPlayDirectories() {
+    /* Example dir setup
+     * Looks for config.json in ($XDG_CONFIG_HOME || ~/.config)/letsplay/ (will be %AppData%\Lets Play\config.json on windows)
+     * dataDir saved to ($XDG_DATA_HOME || $HOME/.local/share)/letsplay/ (will be %AppData%\Lets Play\Data on windows)
+     *
+     * dataDir/
+     *      system/ (catch-all for throwing in bios and stuff
+     *          gba_bios.bin
+     *          snes_bios.bin
+     *      emulators/ (folder for all emulators)
+     *          emu1/ (example)
+     *              state01.dat
+     *          snes/ (example)
+     *              save.frz
+     *      cores/ (dir for looking for cores to load, autopopulate in the future???)
+     *          snes9x.so
+     *      roms/ (dir to search for roms
+     *          Earthbound.smc
+     *          Super\ Mario\ Advance\ 2.gba
+     *
+    */
+    auto dataDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "dataDirectory");
+
+    lib::filesystem::path dataPath;
+    if (dataDir == "System Default") {
+        const char *cXDGDataHome = std::getenv("XDG_DATA_HOME");
+        if (cXDGDataHome) { // Using XDG standard
+            dataPath = lib::filesystem::path(cXDGDataHome) / "letsplay";
+        } else { // If not, fall back to what XDG *would* use
+            dataPath = lib::filesystem::path(std::getenv("HOME")) / ".local" / "share" / "letsplay";
+        }
+    } else {
+        dataPath = dataDir;
+    }
+
+    lib::filesystem::create_directories(systemDirectory = dataPath / "system");
+    lib::filesystem::create_directories(emuDirectory = dataPath / "emulators");
+    lib::filesystem::create_directories(romDirectory = dataPath / "roms");
+    lib::filesystem::create_directories(coreDirectory = dataPath / "cores");
+}
+
 void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu) {
     std::unique_lock<std::mutex> lk(m_EmusMutex);
     m_Emus[id] = emu;
@@ -799,9 +842,9 @@ std::string LetsPlayServer::escapeTilde(std::string str) {
     if (str.front() == '~') {
         const char *homePath = std::getenv("HOME");
         if (!homePath) {
-            std::cerr << "Tilde path was specified but couldn't retrieve "
-                         "actual home path. Check if $HOME was declared.\n";
-            return ".";
+            throw std::invalid_argument("Tilde path was specified but couldn't retrieve "
+                                        "actual home path. Check if $HOME was declared.\n");
+
         }
 
         str.erase(0, 1);

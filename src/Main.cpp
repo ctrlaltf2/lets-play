@@ -14,8 +14,12 @@
 int main(int argc, char **argv) {
     std::uint16_t port{3074};
 
-    std::string configPath{"~/.letsplay/config.json"};
-    lib::filesystem::path configFilePath;
+    lib::filesystem::path configPath; // default: ($XDG_CONFIG_HOME || $HOME/.config)/letsplay/config.json
+    const char *cXDGConfigHome = std::getenv("XDG_CONFIG_HOME");
+    if (cXDGConfigHome)
+        configPath = lib::filesystem::path(cXDGConfigHome) / "letsplay" / "config.json";
+    else
+        configPath = lib::filesystem::path(std::getenv("HOME")) / ".config" / "letsplay" / "config.json";
 
     try {
         using namespace boost;
@@ -39,32 +43,16 @@ int main(int argc, char **argv) {
         }
 
         if (vm.count("config")) {
-            configPath = vm["config"].as<std::string>();
+            configPath = LetsPlayServer::escapeTilde(vm["config"].as<std::string>());
         }
 
-        if (configPath.front() == '~') {
-            const char *homePath = std::getenv("HOME");
-            if (!homePath) {
-                std::cerr << "Tilde path was specified but couldn't retrieve "
-                             "actual home path. Check if $HOME was declared.\n";
-                return -1;
-            }
+        if (lib::filesystem::create_directories(configPath.parent_path()))
+            std::cerr << "Warning: Config file didn't initially exist. Creating directories." << '\n';
 
-            std::clog << configPath << __LINE__ << '\n';
-            configPath.erase(0, 1);
-            std::clog << configPath << __LINE__ << '\n';
-            configPath.insert(0, homePath);
-            std::clog << configPath << __LINE__ << '\n';
-        }
-        configFilePath = configPath;
-
-        if (!lib::filesystem::exists(configFilePath)) {
-            std::cerr << "Warning: config file doesn't exist" << '\n';
-        }
     } catch (const boost::program_options::error& e) {
         std::cerr << e.what() << '\n';
     }
-    LetsPlayServer server(configFilePath);
+    LetsPlayServer server(configPath);
 
     bool retry{true};
     while (retry) {
