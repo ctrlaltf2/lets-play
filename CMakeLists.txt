@@ -60,6 +60,7 @@ add_executable(letsplay
         src/LetsPlayProtocol.cpp
         src/md5.cpp
         src/Random.cpp
+        src/Scheduler.cpp
         # Emulator/
             src/Emulator/EmulatorController.cpp
             src/Emulator/RetroCore.cpp
