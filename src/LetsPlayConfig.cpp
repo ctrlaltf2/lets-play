@@ -14,13 +14,17 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
                 "turnLength": 10000
             }
         },
+        "backups": {
+            "permanentBackupInterval": 1440,
+            "minsPerState": 5,
+            "stateHistoryLength": 288
+        },
         "salt": "ncft9PlmVA",
         "adminHash": "be23396d825c5a17c57c7738ac4b98a5",
         "dataDirectory": "System Default",
         "jpegQuality": 80,
         "heartbeatTimeout": 3000,
         "maxMessageSize": 100,
-        "minutesBetweenSaves": 5,
         "maxUsernameLength": 15,
         "minUsernameLength": 3,
         "syncInterval": 5000

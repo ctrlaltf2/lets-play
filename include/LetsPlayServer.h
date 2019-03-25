@@ -40,6 +40,7 @@ class LetsPlayServer;
 #include "LetsPlayUser.h"
 #include "Logging.hpp"
 #include "Random.h"
+#include "Scheduler.h"
 
 typedef websocketpp::server<websocketpp::config::asio> wcpp_server;
 
@@ -201,6 +202,11 @@ class LetsPlayServer {
      */
     std::mutex m_EmusMutex;
 
+    /**
+     * Scheduler for periodic tasks
+     */
+    Scheduler m_scheduler;
+
   public:
     LetsPlayConfig config;
 
@@ -292,14 +298,19 @@ class LetsPlayServer {
     void QueueThread();
 
     /**
-     * Thread function that regularly saves emulators according to the interval defined in the configuration
+     * Task function that periodically saves emulators according to the interval defined in the configuration
      */
-    void SaveThread();
+    void SaveTask();
 
     /**
-     * Thread function that manages the ping sends and disconnects for users not responding to the ping
+     * Task function that periodically makes permanent backups of the current emulator state
      */
-    void PingThread();
+    void BackupTask();
+
+    /**
+     * Task function that manages the ping sends and disconnects for users not responding with a pong
+     */
+    void PingTask();
 
     /**
      * Send a message to all connected users

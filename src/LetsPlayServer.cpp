@@ -31,9 +31,17 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
-        m_SaveThreadRunning = true;
-        m_SaveThread = std::thread{[&]() { this->SaveThread(); }};
+        logger.log("Pre schedule");
+        auto savePeriod = std::chrono::minutes(
+                config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
+                                          "backups", "minsPerState"));
+        std::function<void()> saveFunc = [&]() {
+            this->SaveTask();
+        };
+        m_scheduler.Schedule(saveFunc, savePeriod);
 
+
+        logger.log("Post schedule");
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
@@ -653,18 +661,18 @@ void LetsPlayServer::QueueThread() {
     }
 }
 
-void LetsPlayServer::SaveThread() {
-    const auto waitTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
-                                                    "minutesBetweenSaves");
-    while (m_SaveThreadRunning) {
-        std::this_thread::sleep_for(std::chrono::minutes(waitTime));
-        std::unique_lock<std::mutex> lk(m_EmusMutex);
-        for (auto &emu : m_Emus)
-            emu.second->save();
-    }
+void LetsPlayServer::SaveTask() {
+    logger.log("SaveTask called");
+    std::unique_lock<std::mutex> lk(m_EmusMutex);
+    for (auto &emu : m_Emus)
+        emu.second->save();
 }
 
-void LetsPlayServer::PingThread() {
+void LetsPlayServer::BackupTask() {
+
+}
+
+void LetsPlayServer::PingTask() {
     const auto ping = LetsPlayProtocol::encode("ping");
     while(true) {
         for (auto &pair : m_Users) {
