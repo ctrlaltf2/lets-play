@@ -31,7 +31,6 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
-        logger.log("Pre schedule");
         auto savePeriod = std::chrono::minutes(
                 config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
                                           "backups", "minsPerState"));
@@ -40,8 +39,6 @@ void LetsPlayServer::Run(std::uint16_t port) {
         };
         m_scheduler.Schedule(saveFunc, savePeriod);
 
-
-        logger.log("Post schedule");
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
@@ -662,7 +659,6 @@ void LetsPlayServer::QueueThread() {
 }
 
 void LetsPlayServer::SaveTask() {
-    logger.log("SaveTask called");
     std::unique_lock<std::mutex> lk(m_EmusMutex);
     for (auto &emu : m_Emus)
         emu.second->save();

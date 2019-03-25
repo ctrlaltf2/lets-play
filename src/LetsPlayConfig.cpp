@@ -17,7 +17,7 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
         "backups": {
             "permanentBackupInterval": 1440,
             "minsPerState": 5,
-            "stateHistoryLength": 288
+            "maxHistorySize": 288
         },
         "salt": "ncft9PlmVA",
         "adminHash": "be23396d825c5a17c57c7738ac4b98a5",
