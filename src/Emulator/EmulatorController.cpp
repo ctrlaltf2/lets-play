@@ -51,8 +51,8 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     }
 
     // Create emu folder if it doesn't already exist
-    saveDirectory = m_server->emuDirectory / id;
-    lib::filesystem::create_directories(saveDirectory);
+    lib::filesystem::create_directories(saveDirectory = m_server->emuDirectory / id);
+    lib::filesystem::create_directories(saveDirectory / "temporary");
 
     server->config.SaveConfig();
 
@@ -93,7 +93,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         std::cerr << "Failed to load game -- Was the rom the correct? file type" << '\n';
         return;
     }
-
 
     // Load state if applicable
     Load();
@@ -414,26 +413,65 @@ void EmulatorController::Save() {
     auto size = Core.SaveStateSize();
 
     if (size == 0) { // Not supported by the loaded core
-        m_server->logger.log("Warning: emu with the id ", id,
-                             " doesn't support saving. Skipping save procedure for it.");
+        m_server->logger.log(id, ": Warning; Saving for this core unsupported. Skipping save procedure.");
         return;
     }
 
     std::vector<unsigned char> saveData(size);
 
     if (!Core.SaveState(saveData.data(), size)) {
-        m_server->logger.log("Warning: emu with the id ", id, " failed to serialize data with size ", size);
+        m_server->logger.log(id, ": Warning; Failed to serialize data with size ", size, ".");
         return;
-    } else {
-        auto saveFile = saveDirectory / "letsplay.state";
-        std::ofstream fo(saveFile.string(), std::ios::binary);
-        fo.write(reinterpret_cast<char *>(saveData.data()), size);
     }
+
+    auto newSaveFile = saveDirectory / "temporary" / "current.state";
+
+    if (lib::filesystem::exists(newSaveFile)) { // Move current file to a backup if if exists
+        m_server->logger.log(id, ": Existing state detected; Moving to new state.");
+        namespace chrono = std::chrono;
+
+        auto tp = chrono::system_clock::now().time_since_epoch();
+        auto timestamp = std::to_string(chrono::duration_cast<chrono::seconds>(tp).count());
+
+        auto backupName = saveDirectory / "temporary" / (timestamp + ".state");
+
+        m_server->logger.log(id, ": Moved current state to ", backupName.string());
+
+        lib::filesystem::rename(newSaveFile, backupName);
+    }
+
+    // Remove old temporaries
+    {
+        std::vector<lib::filesystem::path> temporaryStates;
+        for (auto &p : lib::filesystem::directory_iterator(saveDirectory / "temporary")) {
+            auto &path = p.path();
+
+            if (lib::filesystem::is_regular_file(path) && path.extension() == ".state" && path.filename() != "current")
+                temporaryStates.push_back(path);
+        }
+
+        auto maxHistorySize = m_server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                  "serverConfig", "backups", "maxHistorySize");
+        if (temporaryStates.size() > maxHistorySize) {
+            // Sort by filename
+            std::sort(temporaryStates.begin(), temporaryStates.end(), [](const auto &a, const auto &b) {
+                return a.string() < b.string();
+            });
+
+            // Delete the oldest file
+            m_server->logger.log(id, ": Over threshold; Removing ", temporaryStates.front().string());
+            lib::filesystem::remove(temporaryStates.front());
+        }
+
+    }
+
+    std::ofstream fo(newSaveFile.string(), std::ios::binary);
+    fo.write(reinterpret_cast<char *>(saveData.data()), size);
 }
 
 void EmulatorController::Load() {
     std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
-    auto saveFile = saveDirectory / "letsplay.state";
+    auto saveFile = saveDirectory / "temporary" / "current.state";
 
     if (!lib::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it
 
