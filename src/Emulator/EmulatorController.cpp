@@ -118,12 +118,14 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     }
 
 
+    bool frameSkip = false;
     // TODO: Manage this thread
     if (fps != -1ull) {
         std::thread t([&]() {
             using namespace std::chrono;
 
             while (true) {
+                if (m_fastForward && (frameSkip ^= true)) continue;
                 server->SendFrame(id);
                 std::this_thread::sleep_for(
                         milliseconds(static_cast<long int>((1.0 / fps) * 1000) / (m_fastForward ? 2 : 1)));
@@ -140,7 +142,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         std::this_thread::sleep_until(wait_time);
         wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (m_fastForward ? 2 : 1));
         Core.Run();
-        if (fps == -1ull) m_server->SendFrame(id);
+        if (fps == -1ull && (frameSkip ^= true)) m_server->SendFrame(id);
     }
 }
 
