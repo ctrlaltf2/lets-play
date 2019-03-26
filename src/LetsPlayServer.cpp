@@ -31,13 +31,19 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         m_QueueThread = std::thread{[&]() { this->QueueThread(); }};
 
+        // Schedule periodic tasks
         auto savePeriod = std::chrono::minutes(
                 config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
-                                          "backups", "minsPerState"));
-        std::function<void()> saveFunc = [&]() {
-            this->SaveTask();
-        };
+                                          "backups", "historyInterval"));
+        auto backupPeriod = std::chrono::minutes(
+                config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
+                                          "backups", "backupInterval"));
+
+        std::function<void()> saveFunc = [&]() { this->SaveTask(); };
+        std::function<void()> backupFunc = [&]() { this->BackupTask(); };
+
         m_scheduler.Schedule(saveFunc, savePeriod);
+        m_scheduler.Schedule(backupFunc, backupPeriod);
 
         // Skip having to connect, change username, addemu
         {
@@ -665,7 +671,9 @@ void LetsPlayServer::SaveTask() {
 }
 
 void LetsPlayServer::BackupTask() {
-
+    std::unique_lock<std::mutex> lk(m_EmusMutex);
+    for (auto &emu : m_Emus)
+        emu.second->backup();
 }
 
 void LetsPlayServer::PingTask() {

@@ -51,7 +51,7 @@ struct EmulatorControllerProxy {
     std::function<Frame()> getFrame;
     bool isReady{false};
     RetroPad *joypad{nullptr};
-    std::function<void()> save;
+    std::function<void()> save, backup;
 };
 
 /**
@@ -237,9 +237,19 @@ class EmulatorController {
     static std::string coreName;
 
     /**
-     * Location of the save directory, loaded from config.
+     * Location of the emulator directory, loaded from config.
+     */
+    static lib::filesystem::path dataDirectory;
+
+    /**
+     * Given to the core as the save directory
      */
     static lib::filesystem::path saveDirectory;
+
+    /**
+     * String representation of saveDirectory. Storing as string to prevent dangling pointer in OnEnvironment.
+     */
+    static std::string saveDirString;
 
     /**
      * Rom data if loaded from file.
@@ -382,9 +392,14 @@ class EmulatorController {
     static Frame GetFrame();
 
     /**
-     * Called by the server periodically to save the emulator state
+     * Called by the server periodically to add to the emulator history
      */
     static void Save();
+
+    /**
+     * Called by the server periodically to create a backup of saves and a single history state
+     */
+    static void Backup();
 
     /**
      * Called on emulator controller startup, tries to load save state if possible

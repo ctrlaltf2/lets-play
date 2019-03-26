@@ -19,26 +19,30 @@ const void *EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
 
+lib::filesystem::path EmulatorController::dataDirectory;
 lib::filesystem::path EmulatorController::saveDirectory;
+std::string EmulatorController::saveDirString;
+
 std::shared_timed_mutex EmulatorController::m_generalMutex;
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
                              LetsPlayServer *server, EmuID_t t_id) {
     lib::filesystem::path coreFile = corePath, romFile = romPath;
     if (!lib::filesystem::is_regular_file(coreFile)) {
-        std::cerr << "provided core path '" << corePath << "' was not valid.\n";
+        server->logger.err("Provided core path '", corePath, "' was invalid.");
         return;
     }
     if (!lib::filesystem::is_regular_file(romFile)) {
-        std::cerr << "provided rom path '" << romPath << "' was not valid.\n";
+        server->logger.err("Provided rom path '", romPath, "' was not valid.");
         return;
     }
-    std::clog << "Started " << t_id << '\n';
+    server->logger.log("Starting up ", t_id, "...");
+
     Core.Load(coreFile.string().c_str());
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false, &joypad, Save};
+                                    false, &joypad, Save, Backup};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -51,8 +55,10 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     }
 
     // Create emu folder if it doesn't already exist
-    lib::filesystem::create_directories(saveDirectory = m_server->emuDirectory / id);
-    lib::filesystem::create_directories(saveDirectory / "temporary");
+    lib::filesystem::create_directories(dataDirectory = m_server->emuDirectory / id);
+    lib::filesystem::create_directories(dataDirectory / "history");
+    lib::filesystem::create_directories(dataDirectory / "backups");
+    lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
 
     server->config.SaveConfig();
 
@@ -64,7 +70,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.SetAudioSampleBatch(OnBatchAudioSample);
     Core.Init();
 
-    std::clog << "Past initialization" << '\n';
+    m_server->logger.log(id, ": Finished initialization.");
 
     retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(lib::filesystem::file_size(romFile)), nullptr};
     std::ifstream fo(romFile.string(), std::ios::binary);
@@ -77,12 +83,12 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         info.data = static_cast<void *>(romData);
 
         if (!info.data) {
-            std::cerr << "Failed to allocate memory for the ROM\n";
+            m_server->logger.err(id, ": Failed to allocate memory for the ROM");
             return;
         }
+
         if (!fo.read(romData, lib::filesystem::file_size(romFile))) {
-            std::cerr << "Failed to load data from the file -- Do you have the "
-                         "right access rights?\n";
+            m_server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
             return;
         }
     }
@@ -90,7 +96,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     // TODO: compressed roms and stuff
 
     if (!Core.LoadGame(&info)) {
-        std::cerr << "Failed to load game -- Was the rom the correct? file type" << '\n';
+        m_server->logger.err(id, ": Failed to load game. Was the rom the correct file type?");
         return;
     }
 
@@ -149,9 +155,9 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // system dir, dataDir / system
             *static_cast<const char **>(data) = m_server->systemDirectory.string().c_str();
             break;
-        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir, dataDir / emulators / emu_id
-            m_server->logger.log(saveDirectory.string());
-            *static_cast<const char **>(data) = saveDirectory.string().c_str();
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir, dataDir / emulators / emu_id / saves
+            saveDirString = saveDirectory.string();
+            *static_cast<const char **>(data) = saveDirString.c_str();
             break;
         case RETRO_ENVIRONMENT_GET_USERNAME:
             *static_cast<const char **>(data) = id.c_str();
@@ -424,7 +430,7 @@ void EmulatorController::Save() {
         return;
     }
 
-    auto newSaveFile = saveDirectory / "temporary" / "current.state";
+    auto newSaveFile = dataDirectory / "history" / "current.state";
 
     if (lib::filesystem::exists(newSaveFile)) { // Move current file to a backup if if exists
         m_server->logger.log(id, ": Existing state detected; Moving to new state.");
@@ -433,7 +439,7 @@ void EmulatorController::Save() {
         auto tp = chrono::system_clock::now().time_since_epoch();
         auto timestamp = std::to_string(chrono::duration_cast<chrono::seconds>(tp).count());
 
-        auto backupName = saveDirectory / "temporary" / (timestamp + ".state");
+        auto backupName = dataDirectory / "history" / (timestamp + ".state");
 
         m_server->logger.log(id, ": Moved current state to ", backupName.string());
 
@@ -443,7 +449,7 @@ void EmulatorController::Save() {
     // Remove old temporaries
     {
         std::vector<lib::filesystem::path> temporaryStates;
-        for (auto &p : lib::filesystem::directory_iterator(saveDirectory / "temporary")) {
+        for (auto &p : lib::filesystem::directory_iterator(dataDirectory / "history")) {
             auto &path = p.path();
 
             if (lib::filesystem::is_regular_file(path) && path.extension() == ".state" && path.filename() != "current")
@@ -469,9 +475,51 @@ void EmulatorController::Save() {
     fo.write(reinterpret_cast<char *>(saveData.data()), size);
 }
 
+void EmulatorController::Backup() {
+    if (!lib::filesystem::exists(
+            dataDirectory / "history" / "current.state")) // Create a current.state save if none exists
+        Save();
+
+    std::unique_lock<std::shared_timed_mutex> lk(m_generalMutex);
+
+    namespace chrono = std::chrono;
+    auto tp = chrono::system_clock::now().time_since_epoch();
+    auto timestamp = std::to_string(chrono::duration_cast<chrono::seconds>(tp).count());
+
+    // Copy any emulator generated files over
+    auto currentBackup = dataDirectory / "backups" / timestamp;
+
+    // *Almost* perfect compatibility between boost::filesystem and std::filesystem!
+#ifdef USE_BOOST_FILESYSTEM
+    std::function<void(const lib::filesystem::path &, const lib::filesystem::path &)> recursive_copy;
+    recursive_copy = [&recursive_copy](const lib::filesystem::path &src, const lib::filesystem::path &dst) {
+        if (lib::filesystem::exists(dst)) {
+            return;
+        }
+
+        if (lib::filesystem::is_directory(src)) {
+            lib::filesystem::create_directories(dst);
+            for (auto &item : lib::filesystem::directory_iterator(src)) {
+                recursive_copy(item.path(), dst / item.path().filename());
+            }
+        } else if (lib::filesystem::is_regular_file(src)) {
+            lib::filesystem::copy(src, dst);
+        }
+    };
+
+    if (!lib::filesystem::is_empty(saveDirectory))
+        recursive_copy(saveDirectory, currentBackup);
+#else
+    lib::filesystem::copy(saveDirectory, currentBackup, lib::filesystem::copy_options::recursive);
+#endif
+
+    // Copy current history state over
+    lib::filesystem::copy(dataDirectory / "history" / "current.state", currentBackup);
+}
+
 void EmulatorController::Load() {
     std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
-    auto saveFile = saveDirectory / "temporary" / "current.state";
+    auto saveFile = dataDirectory / "history" / "current.state";
 
     if (!lib::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it
 

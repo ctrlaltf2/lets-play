@@ -12,5 +12,4 @@ namespace lib {
 #else
     namespace filesystem = std::filesystem;
 #endif
-
 }
