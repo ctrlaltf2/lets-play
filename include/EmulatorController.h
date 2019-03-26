@@ -51,7 +51,7 @@ struct EmulatorControllerProxy {
     std::function<Frame()> getFrame;
     bool isReady{false};
     RetroPad *joypad{nullptr};
-    std::function<void()> save, backup;
+    std::function<void()> save, backup, fastForward;
 };
 
 /**
@@ -222,6 +222,16 @@ class EmulatorController {
      * General mutex for things that won't really go off at once and get blocked.
      */
     static std::shared_timed_mutex m_generalMutex;
+
+    /**
+     * Whether or not this emulator is fast forwarded
+     */
+    static std::atomic<bool> m_fastForward;
+
+    /**
+     * Timepoint of the last fastForward toggle. Used to prevent (over|ab)use.
+     */
+    static std::chrono::time_point<std::chrono::steady_clock> m_lastFastForward;
 
   public:
     /**
@@ -402,7 +412,13 @@ class EmulatorController {
     static void Backup();
 
     /**
+     * Called by the server. Toggles fast forward state.
+     */
+    static void FastForward();
+
+    /**
      * Called on emulator controller startup, tries to load save state if possible
      */
     static void Load();
+
 };

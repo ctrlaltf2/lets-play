@@ -79,6 +79,8 @@ enum class kCommandType {
         Shutdown,
     /** Config change request */
         Config,
+    /** Fast forward toggle */
+            FastForward,
     Unknown,
 };
 
