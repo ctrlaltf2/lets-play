@@ -168,6 +168,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         t = kCommandType::Admin;
     else if (command == "shutdown")
         t = kCommandType::Shutdown;
+    else if (command == "ff")
+        t = kCommandType::FastForward;
     else
         return;
 
@@ -649,6 +651,13 @@ void LetsPlayServer::QueueThread() {
                     case kCommandType::Pong:
                         if (auto user = command.user_hdl.lock())
                             user->updateLastPong();
+                        break;
+                    case kCommandType::FastForward: {
+                        std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                        auto emu = m_Emus[command.emuID];
+                        if (emu)
+                            emu->fastForward();
+                    }
                         break;
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:

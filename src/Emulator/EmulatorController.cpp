@@ -18,6 +18,8 @@ VideoFormat EmulatorController::m_videoFormat;
 const void *EmulatorController::m_currentBuffer{nullptr};
 std::mutex EmulatorController::m_videoMutex;
 retro_system_av_info EmulatorController::m_avinfo;
+std::atomic<bool> EmulatorController::m_fastForward{false};
+std::chrono::time_point<std::chrono::steady_clock> EmulatorController::m_lastFastForward;
 
 lib::filesystem::path EmulatorController::dataDirectory;
 lib::filesystem::path EmulatorController::saveDirectory;
@@ -42,7 +44,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false, &joypad, Save, Backup};
+                                    false, &joypad, Save, Backup, FastForward};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -124,7 +126,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
             while (true) {
                 server->SendFrame(id);
                 std::this_thread::sleep_for(
-                    milliseconds(static_cast<long int>((1.0 / fps) * 1000)));
+                        milliseconds(static_cast<long int>((1.0 / fps) * 1000) / (m_fastForward ? 2 : 1)));
             }
         });
         t.detach();
@@ -133,10 +135,10 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     unsigned msWait = (1.0 / m_avinfo.timing.fps) * 1000;
     proxy.isReady = true;
     std::chrono::time_point<std::chrono::steady_clock> wait_time =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (m_fastForward ? 2 : 1));
     while (true) {
         std::this_thread::sleep_until(wait_time);
-        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait);
+        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (m_fastForward ? 2 : 1));
         Core.Run();
         if (fps == -1ull) m_server->SendFrame(id);
     }
@@ -516,6 +518,19 @@ void EmulatorController::Backup() {
     // Copy current history state over
     lib::filesystem::copy(dataDirectory / "history" / "current.state",
                           dataDirectory / "backups" / "states" / (timestamp + ".state"));
+}
+
+void EmulatorController::FastForward() {
+    const auto &now = std::chrono::steady_clock::now();
+
+    // limit rate that the fast forward state can be toggled
+    if (now > (m_lastFastForward + std::chrono::milliseconds(
+            150))) { // 150 ms ~= 7 clicks per second ~= how fast the average person can click
+        // yay types
+        bool b = m_fastForward;
+        b ^= true;
+        m_fastForward = b;
+    }
 }
 
 void EmulatorController::Load() {
