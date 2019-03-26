@@ -57,7 +57,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     // Create emu folder if it doesn't already exist
     lib::filesystem::create_directories(dataDirectory = m_server->emuDirectory / id);
     lib::filesystem::create_directories(dataDirectory / "history");
-    lib::filesystem::create_directories(dataDirectory / "backups");
+    lib::filesystem::create_directories(dataDirectory / "backups" / "states");
     lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
 
     server->config.SaveConfig();
@@ -514,7 +514,8 @@ void EmulatorController::Backup() {
 #endif
 
     // Copy current history state over
-    lib::filesystem::copy(dataDirectory / "history" / "current.state", currentBackup);
+    lib::filesystem::copy(dataDirectory / "history" / "current.state",
+                          dataDirectory / "backups" / "states" / (timestamp + ".state"));
 }
 
 void EmulatorController::Load() {
