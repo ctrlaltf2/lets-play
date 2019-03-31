@@ -11,6 +11,7 @@ class LetsPlayServer;
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -206,11 +207,6 @@ class LetsPlayServer {
     std::mutex m_EmusMutex;
 
     /**
-     * Scheduler for periodic tasks
-     */
-    Scheduler m_Scheduler;
-
-    /**
      * Object to store emulator previews
      */
     std::map<EmuID_t, std::vector<std::uint8_t>> m_Previews;
@@ -234,6 +230,11 @@ class LetsPlayServer {
      * @note thread-safe
      */
     Logger logger;
+
+    /**
+     * Scheduler for periodic tasks
+     */
+    Scheduler scheduler;
 
     /*
      * ---- Filesystem constants ----
@@ -311,16 +312,6 @@ class LetsPlayServer {
     void QueueThread();
 
     /**
-     * Task function that periodically saves emulators according to the interval defined in the configuration
-     */
-    void SaveTask();
-
-    /**
-     * Task function that periodically makes permanent backups of the current emulator state
-     */
-    void BackupTask();
-
-    /**
      * Task function that manages the ping sends and disconnects for users not responding with a pong
      */
     void PingTask();
@@ -378,9 +369,15 @@ class LetsPlayServer {
     void SetupLetsPlayDirectories();
 
     /**
-     * Generates a jpeg from the display currently on an emulator
+     * Periodic save task that pushes a save command on all emulators
      */
-    std::vector<std::uint8_t> GenerateEmuJPEG(const EmuID_t &id);
+    void SaveTask();
+
+    /**
+     * Periodic backup task that pushes a backup command on all emulators
+     */
+    void BackupTask();
+
 
     // --- Functions called only by emulator controllers --- //
     /**
@@ -400,6 +397,16 @@ class LetsPlayServer {
      * @note Only called by EmulatorControllers
      */
     void SendFrame(const EmuID_t& id);
+
+    /**
+     * Generate preview thumbnails
+     */
+    void GeneratePreview(const EmuID_t &id);
+
+    /**
+     * Generates a jpeg from the display currently on an emulator
+     */
+    std::vector<std::uint8_t> GenerateEmuJPEG(const EmuID_t &id);
 
     /**
      * Replaces ~ in file paths with the path to the current user's home directory.

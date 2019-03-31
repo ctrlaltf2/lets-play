@@ -39,23 +39,24 @@ void LetsPlayServer::Run(std::uint16_t port) {
                 config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
                                           "backups", "backupInterval"));
 
+        // TODO: Queue on emulator controller, expose queue related stuff through one interface, use pointers n shit to expose it
+        std::function<void()> previewFunc = [&]() { this->PreviewTask(); };
         std::function<void()> saveFunc = [&]() { this->SaveTask(); };
         std::function<void()> backupFunc = [&]() { this->BackupTask(); };
-        std::function<void()> previewFunc = [&]() { this->PreviewTask(); };
 
-        m_Scheduler.Schedule(saveFunc, savePeriod);
-        m_Scheduler.Schedule(backupFunc, backupPeriod);
-        m_Scheduler.Schedule(previewFunc, std::chrono::minutes(1));
+        scheduler.Schedule(saveFunc, savePeriod);
+        scheduler.Schedule(backupFunc, backupPeriod);
+        scheduler.Schedule(previewFunc, std::chrono::seconds(20));
 
         // Skip having to connect, change username, addemu
-        {
+        /*{
             std::unique_lock<std::mutex> lk(m_QueueMutex);
-            m_WorkQueue.push(
-                    Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
-            m_WorkQueue.push(
-                    Command{kCommandType::AddEmu, {"emu2", "./core", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
+            //m_WorkQueue.push(
+            //        Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
+            //m_WorkQueue.push(
+            //        Command{kCommandType::AddEmu, {"emu2", "./snes9x.so", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
             m_QueueNotifier.notify_one();
-        }
+        }*/
 
         server->start_accept();
         server->run();
@@ -87,7 +88,6 @@ bool LetsPlayServer::OnValidate(websocketpp::connection_hdl hdl) {
 
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     {
-        logger.log("Connect, locking users");
         std::unique_lock<std::mutex> lk(m_UsersMutex);
         std::shared_ptr<LetsPlayUser> user{new LetsPlayUser};
         user->setUsername("");
@@ -114,9 +114,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     LetsPlayUserHdl user_hdl;
     decltype(m_Users)::iterator search;
     {
-        logger.log("Connect, locking users again");
         std::unique_lock<std::mutex> lk(m_UsersMutex);
-        logger.log("Locked");
         search = m_Users.find(hdl);
         if (search == m_Users.end()) {
             logger.log("Couldn't find user who just joined in list\n");
@@ -127,9 +125,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
 
     std::vector<EmuID_t> listMessage{"emus"};
     {
-        logger.log("Connect, locking emus");
         std::unique_lock<std::mutex> lk(m_EmusMutex);
-        logger.log("Locked");
         for (const auto &emu : m_Emus) {
             listMessage.push_back(emu.first);
             listMessage.push_back(emu.second->description);
@@ -140,14 +136,10 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
 
     // Put a preview send request on queue
     {
-        logger.log("Locking queue");
         std::unique_lock<std::mutex> lk(m_QueueMutex);
-        logger.log("Locked");
         m_WorkQueue.push(Command{kCommandType::Preview, {}, hdl, ""});
         m_QueueNotifier.notify_one();
     }
-    logger.log("Connect done");
-
 }
 
 void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
@@ -169,7 +161,15 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
             {
                 std::unique_lock<std::mutex> lk(m_EmusMutex);
                 // TODO: Check if emu exists
-                m_Emus[user->connectedEmu()]->userDisconnected(user_hdl);
+                auto &emu = m_Emus[user->connectedEmu()];
+
+                EmuCommand c{kEmuCommandType::UserDisconnect, user_hdl};
+                {
+                    std::unique_lock<std::mutex> lkk(*(emu->queueMutex));
+                    emu->queue->push(c);
+                }
+
+                emu->queueNotifier->notify_one();
             }
             BroadcastToEmu(user->connectedEmu(),
                            LetsPlayProtocol::encode("leave", user->username()),
@@ -307,443 +307,461 @@ void LetsPlayServer::Shutdown() {
 
 void LetsPlayServer::QueueThread() {
     while (m_QueueThreadRunning) {
-        {
-            std::unique_lock<std::mutex> lk(m_QueueMutex);
-            // Use std::condition_variable::wait Predicate?
-            while (m_WorkQueue.empty()) m_QueueNotifier.wait(lk);
+        std::unique_lock<std::mutex> lk(m_QueueMutex);
+        // Use std::condition_variable::wait Predicate?
+        while (m_WorkQueue.empty()) m_QueueNotifier.wait(lk);
 
-            if (!m_WorkQueue.empty()) {
-                auto& command = m_WorkQueue.front();
+        if (!m_WorkQueue.empty()) {
+            auto &command = m_WorkQueue.front();
 
-                switch (command.type) {
-                    case kCommandType::Chat: {
-                        // Chat has only one, the message
-                        if (command.params.size() != 1) break;
+            switch (command.type) {
+                case kCommandType::Chat: {
+                    // Chat has only one, the message
+                    if (command.params.size() != 1) break;
 
-                        if (auto user = command.user_hdl.lock()) {
-                            if (user->username().empty())
-                                break;
+                    if (auto user = command.user_hdl.lock()) {
+                        if (user->username().empty())
+                            break;
 
-                            // Message only has values in the range of typeable
-                            // ascii characters excluding \n and \t
-                            if (!LetsPlayServer::isAsciiStr(command.params[0])) break;
+                        // Message only has values in the range of typeable
+                        // ascii characters excluding \n and \t
+                        if (!LetsPlayServer::isAsciiStr(command.params[0])) break;
 
-                            auto maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                            "serverConfig", "maxMessageSize");
+                        auto maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                        "serverConfig", "maxMessageSize");
 
-                            if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
+                        if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
-                            BroadcastAll(
-                                    LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
-                                    websocketpp::frame::opcode::text
-                            );
-                            logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
-                        }
+                        BroadcastAll(
+                                LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
+                                websocketpp::frame::opcode::text
+                        );
+                        logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
                     }
-                        break;
-                    case kCommandType::Username: {
-                        // Username has only one param, the username
-                        if (command.params.size() != 1) break;
+                }
+                    break;
+                case kCommandType::Username: {
+                    // Username has only one param, the username
+                    if (command.params.size() != 1) break;
 
-                        if (auto user = command.user_hdl.lock()) {
-                            const auto& newUsername = command.params.at(0);
-                            const auto oldUsername = user->username();
+                    if (auto user = command.user_hdl.lock()) {
+                        const auto &newUsername = command.params.at(0);
+                        const auto oldUsername = user->username();
 
-                            const bool justJoined = oldUsername.empty();
+                        const bool justJoined = oldUsername.empty();
 
-                            // Ignore no change if haven't just joined
-                            if (newUsername == oldUsername && !justJoined) {
-                                // Treat as invalid if they haven't just joined and they tried to request a new username
-                                // that's the same as their current one
-                                BroadcastOne(
+                        // Ignore no change if haven't just joined
+                        if (newUsername == oldUsername && !justJoined) {
+                            // Treat as invalid if they haven't just joined and they tried to request a new username
+                            // that's the same as their current one
+                            BroadcastOne(
                                     LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                     command.hdl);
+                            logger.log(user->uuid(),
+                                       " (",
+                                       user->username(),
+                                       ") failed username change to : '",
+                                       newUsername,
+                                       '\'');
+                        }
+
+                        auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                        "serverConfig", "maxUsernameLength"),
+                                minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                           "serverConfig", "minUsernameLength");
+
+                        // Size based checks
+                        if (newUsername.size() > maxUsernameLen
+                            || newUsername.size() < minUsernameLen) {
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user_hdl);
+                            else {
+                                BroadcastOne(
+                                        LetsPlayProtocol::encode("username", oldUsername, oldUsername),
+                                        command.hdl);
                                 logger.log(user->uuid(),
                                            " (",
                                            user->username(),
-                                           ") failed username change to : '",
+                                           ") failed username change to '",
                                            newUsername,
-                                           '\'');
+                                           "' due to length.");
                             }
+                            break;
+                        }
 
-                            auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                            "serverConfig", "maxUsernameLength"),
-                                    minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                               "serverConfig", "minUsernameLength");
-
-                            // Size based checks
-                            if (newUsername.size() > maxUsernameLen
-                                || newUsername.size() < minUsernameLen) {
-                                if (justJoined)
-                                    GiveGuest(command.hdl, command.user_hdl);
-                                else {
-                                    BroadcastOne(
+                        // Content based checks
+                        if (newUsername.front() == ' ' || newUsername.back() == ' ' // Spaces at beginning/end
+                            || !LetsPlayServer::isAsciiStr(newUsername)         // Non-ascii printable characters
+                            || (newUsername.find("  ") != std::string::npos)) { // Double spaces inside username
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user_hdl);
+                            else {
+                                BroadcastOne(
                                         LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                         command.hdl);
-                                    logger.log(user->uuid(),
-                                               " (",
-                                               user->username(),
-                                               ") failed username change to '",
-                                               newUsername,
-                                               "' due to length.");
-                                }
-                                break;
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           ") failed username change to '",
+                                           newUsername,
+                                           "' due to content.");
                             }
+                            break;
+                        }
 
-                            // Content based checks
-                            if (newUsername.front() == ' ' || newUsername.back() == ' ' // Spaces at beginning/end
-                                || !LetsPlayServer::isAsciiStr(newUsername)         // Non-ascii printable characters
-                                || (newUsername.find("  ") != std::string::npos)) { // Double spaces inside username
-                                if (justJoined)
-                                    GiveGuest(command.hdl, command.user_hdl);
-                                else {
-                                    BroadcastOne(
+                        // Finally, check if username is already taken
+                        if (UsernameTaken(newUsername, user->uuid())) {
+                            if (justJoined)
+                                GiveGuest(command.hdl, command.user_hdl);
+                            else {
+                                BroadcastOne(
                                         LetsPlayProtocol::encode("username", oldUsername, oldUsername),
                                         command.hdl);
-                                    logger.log(user->uuid(),
-                                               " (",
-                                               user->username(),
-                                               ") failed username change to '",
-                                               newUsername,
-                                               "' due to content.");
-                                }
-                                break;
+                                logger.log(user->uuid(),
+                                           " (",
+                                           user->username(),
+                                           ") failed username change to '",
+                                           newUsername,
+                                           "' because its already taken.");
                             }
+                            break;
+                        }
 
-                            // Finally, check if username is already taken
-                            if (UsernameTaken(newUsername, user->uuid())) {
-                                if (justJoined)
-                                    GiveGuest(command.hdl, command.user_hdl);
-                                else {
-                                    BroadcastOne(
-                                        LetsPlayProtocol::encode("username", oldUsername, oldUsername),
-                                        command.hdl);
-                                    logger.log(user->uuid(),
-                                               " (",
-                                               user->username(),
-                                               ") failed username change to '",
-                                               newUsername,
-                                               "' because its already taken.");
-                                }
-                                break;
-                            }
+                        /*
+                         * If all checks were passed, set username and broadcast to the person that they have a new
+                         * username, and send a join/rename to everyone if the person just joined/has been around
+                         */
+                        user->setUsername(newUsername);
 
-                            /*
-                             * If all checks were passed, set username and broadcast to the person that they have a new
-                             * username, and send a join/rename to everyone if the person just joined/has been around
-                             */
-                            user->setUsername(newUsername);
-
-                            BroadcastOne(
+                        BroadcastOne(
                                 LetsPlayProtocol::encode("username", oldUsername, newUsername),
                                 command.hdl
-                            );
+                        );
 
-                            logger.log(user->uuid(), " (", user->username(), ") set username to '", newUsername, '\'');
+                        logger.log(user->uuid(), " (", user->username(), ") set username to '", newUsername, '\'');
 
-                            if (justJoined) { // Send a join message
-                                BroadcastToEmu(
+                        if (justJoined) { // Send a join message
+                            BroadcastToEmu(
                                     user->connectedEmu(),
                                     LetsPlayProtocol::encode("join", user->username()),
                                     websocketpp::frame::opcode::text);
 
-                                logger.log(user->uuid(), " (", user->username(), ") joined.");
-                            } else { // Tell everyone on the emu someone changed their username
-                                BroadcastToEmu(user->connectedEmu(),
-                                               LetsPlayProtocol::encode("rename", oldUsername, newUsername),
-                                               websocketpp::frame::opcode::text);
-                                logger.log(user->uuid(),
-                                           " (",
-                                           user->username(),
-                                           "): ",
-                                           oldUsername,
-                                           " is now known as ",
-                                           newUsername);
-                            }
-                        }
-                    }
-                        break;
-                    case kCommandType::List: {
-                        if (!command.params.empty()) break;
-
-                        if (auto user = command.user_hdl.lock()) {
-                            logger.log(user->uuid(), " (", user->username(), ") requested a user list.");
-                        }
-
-                        std::vector<std::string> message;
-                        message.emplace_back("list");
-
-                        {
-                            std::unique_lock<std::mutex> lkk(m_UsersMutex);
-                            for (auto &pair : m_Users) {
-                                auto &hdl = pair.first;
-                                auto &user = pair.second;
-
-                                auto commandUser = command.user_hdl.lock();
-                                if (commandUser) {
-                                    if ((commandUser->connectedEmu() == user->connectedEmu()) &&
-                                        !hdl.expired())
-                                        message.push_back(user->username());
-                                }
-                            }
-                        }
-
-                        BroadcastOne(LetsPlayProtocol::encode(message), command.hdl);
-                    }
-                        break;
-                    case kCommandType::Turn: {
-                        if (!command.params.empty()) break;
-
-                        if (auto user = command.user_hdl.lock()) {
+                            logger.log(user->uuid(), " (", user->username(), ") joined.");
+                        } else { // Tell everyone on the emu someone changed their username
+                            BroadcastToEmu(user->connectedEmu(),
+                                           LetsPlayProtocol::encode("rename", oldUsername, newUsername),
+                                           websocketpp::frame::opcode::text);
                             logger.log(user->uuid(),
                                        " (",
                                        user->username(),
-                                       ") requested a turn."
-                                       "user->requestedTurn: ",
-                                       (user->requestedTurn) == true,
-                                       " user->connectedEmu: ",
-                                       user->connectedEmu());
+                                       "): ",
+                                       oldUsername,
+                                       " is now known as ",
+                                       newUsername);
+                        }
+                    }
+                }
+                    break;
+                case kCommandType::List: {
+                    if (!command.params.empty()) break;
 
-                            if (user->connectedEmu().empty() || user->requestedTurn)
-                                break;
+                    if (auto user = command.user_hdl.lock()) {
+                        logger.log(user->uuid(), " (", user->username(), ") requested a user list.");
+                    }
 
-                            std::unique_lock<std::mutex> lkk(m_EmusMutex);
-                            auto emu = m_Emus[command.emuID];
-                            if (emu) {
-                                user->requestedTurn = true;
-                                emu->addTurnRequest(command.user_hdl);
+                    std::vector<std::string> message;
+                    message.emplace_back("list");
+
+                    {
+                        std::unique_lock<std::mutex> lkk(m_UsersMutex);
+                        for (auto &pair : m_Users) {
+                            auto &hdl = pair.first;
+                            auto &user = pair.second;
+
+                            auto commandUser = command.user_hdl.lock();
+                            if (commandUser) {
+                                if ((commandUser->connectedEmu() == user->connectedEmu()) &&
+                                    !hdl.expired())
+                                    message.push_back(user->username());
                             }
                         }
                     }
-                        break;
-                    case kCommandType::Shutdown:break;
-                    case kCommandType::Connect: {
-                        auto user = command.user_hdl.lock();
-                        if (user) {
-                            if (command.params.size() != 1 || user->username().empty()) {
-                                LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false), command.hdl);
+
+                    BroadcastOne(LetsPlayProtocol::encode(message), command.hdl);
+                }
+                    break;
+                case kCommandType::Turn: {
+                    if (!command.params.empty()) break;
+
+                    if (auto user = command.user_hdl.lock()) {
+                        logger.log(user->uuid(),
+                                   " (",
+                                   user->username(),
+                                   ") requested a turn."
+                                   "user->requestedTurn: ",
+                                   (user->requestedTurn) == true,
+                                   " user->connectedEmu: ",
+                                   user->connectedEmu());
+
+                        if (user->connectedEmu().empty() || user->requestedTurn)
+                            break;
+
+                        std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                        auto emu = m_Emus[command.emuID];
+                        if (emu) {
+                            user->requestedTurn = true;
+                            EmuCommand c{kEmuCommandType::TurnRequest, command.user_hdl};
+                            {
+                                std::unique_lock<std::mutex> lkkk(*(emu->queueMutex));
+                                emu->queue->push(c);
+                            }
+
+                            emu->queueNotifier->notify_one();
+                        }
+                    }
+                }
+                    break;
+                case kCommandType::Shutdown:
+                    break;
+                case kCommandType::Connect: {
+                    auto user = command.user_hdl.lock();
+                    if (user) {
+                        if (command.params.size() != 1 || user->username().empty()) {
+                            LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false), command.hdl);
+                            logger.log(user->uuid(),
+                                       " (",
+                                       user->username(),
+                                       ") failed to connect to an emulator (1st check).");
+                            break;
+                        }
+
+                        // Check if the emu that the connect thing that was sent exists
+                        {
+                            std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                            if (m_Emus.find(command.params[0]) == m_Emus.end()) {
+                                LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false),
+                                                             command.hdl);
                                 logger.log(user->uuid(),
                                            " (",
                                            user->username(),
-                                           ") failed to connect to an emulator (1st check).");
+                                           ") tried to connect to an emulator '",
+                                           command.params[0],
+                                           "'that doesn't exist.");
                                 break;
                             }
+                        }
 
-                            // Check if the emu that the connect thing that was sent exists
-                            {
-                                std::unique_lock<std::mutex> lkk(m_EmusMutex);
-                                if (m_Emus.find(command.params[0]) == m_Emus.end()) {
-                                    LetsPlayServer::BroadcastOne(LetsPlayProtocol::encode("connect", false),
-                                                                 command.hdl);
-                                    logger.log(user->uuid(),
-                                               " (",
-                                               user->username(),
-                                               ") tried to connect to an emulator '",
-                                               command.params[0],
-                                               "'that doesn't exist.");
-                                    break;
-                                }
-                            }
+                        // NOTE: Can remove check and allow on the fly
+                        // switching once the transition between being
+                        // connected to A and being connected to B is
+                        // figured out
 
-                            // NOTE: Can remove check and allow on the fly
-                            // switching once the transition between being
-                            // connected to A and being connected to B is
-                            // figured out
+                        if (!(user->connectedEmu().empty())) {
+                            logger.log("Tried to switch emus");
+                            break;
+                        }
 
-                            if (!(user->connectedEmu().empty())) {
-                                logger.log("Tried to switch emus");
-                                break;
-                            }
+                        BroadcastToEmu(command.params[0],
+                                       LetsPlayProtocol::encode("join", user->username()),
+                                       websocketpp::frame::opcode::text);
 
-                            BroadcastToEmu(command.params[0],
-                                           LetsPlayProtocol::encode("join", user->username()),
-                                           websocketpp::frame::opcode::text);
+                        user->setConnectedEmu(command.params[0]);
 
-                            user->setConnectedEmu(command.params[0]);
-                            {
-                                std::unique_lock<std::mutex> lkk(m_EmusMutex);
-                                m_Emus[user->connectedEmu()]->userConnected(command.user_hdl);
-                            }
+                        BroadcastOne(LetsPlayProtocol::encode("connect", true), command.hdl);
 
-                            BroadcastOne(LetsPlayProtocol::encode("connect", true), command.hdl);
+                        logger.log(user->uuid(), " (", user->username(), ") connected to ", command.params[0]);
 
-                            logger.log(user->uuid(), " (", user->username(), ") connected to ", command.params[0]);
+                        auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                        "serverConfig", "maxUsernameLength"),
+                                minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                           "serverConfig", "minUsernameLength"),
+                                maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                           "serverConfig", "maxMessageSize");
 
-                            auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                            "serverConfig", "maxUsernameLength"),
-                                    minUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                               "serverConfig", "minUsernameLength"),
-                                    maxMessageSize = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                               "serverConfig", "maxMessageSize");
-
-                            BroadcastOne(
+                        BroadcastOne(
                                 LetsPlayProtocol::encode("emuinfo",
                                                          minUsernameLen,
                                                          maxUsernameLen,
                                                          maxMessageSize,
                                                          user->connectedEmu()),
                                 command.hdl
-                            );
+                        );
+
+                        auto &emu = m_Emus[command.params[0]];
+
+                        EmuCommand c{kEmuCommandType::UserConnect};
+
+                        {
+                            std::unique_lock<std::mutex> lkk(*(emu->queueMutex));
+                            emu->queue->push(c);
                         }
+
+                        emu->queueNotifier->notify_one();
                     }
-                        break;
-                    case kCommandType::Button: {  // button/leftStick/rightStick, button id, value as int16
-                        if (command.params.size() != 3) break;
+                }
+                    break;
+                case kCommandType::Button: {  // button/leftStick/rightStick, button id, value as int16
+                    if (command.params.size() != 3) break;
 
-                        {
-                            auto user = command.user_hdl.lock();
-                            if (user && !user->hasTurn && !user->hasAdmin) break;
-                        }
+                    {
+                        auto user = command.user_hdl.lock();
+                        if (user && !user->hasTurn && !user->hasAdmin) break;
+                    }
 
 
-                        const auto &buttonType = command.params[0];
-                        std::int16_t id, value;
+                    const auto &buttonType = command.params[0];
+                    std::int16_t id, value;
 
-                        // Spaghet
-                        {
-                            std::stringstream ss{command.params[1]};
-                            ss >> id;
-                            if (!ss)
-                                break;
-                        }
-                        {
-                            std::stringstream ss{command.params[2]};
-                            ss >> value;
-                            if (!ss)
-                                break;
-                        }
-
-                        if (auto user = command.user_hdl.lock())
-                            logger.log(user->uuid(),
-                                       " (",
-                                       user->username(),
-                                       ") sent a '",
-                                       buttonType,
-                                       "' update with id '",
-                                       id,
-                                       "' and value '",
-                                       value,
-                                       '\'');
-
-                        if (id < 0)
+                    // Spaghet
+                    {
+                        std::stringstream ss{command.params[1]};
+                        ss >> id;
+                        if (!ss)
                             break;
+                    }
+                    {
+                        std::stringstream ss{command.params[2]};
+                        ss >> value;
+                        if (!ss)
+                            break;
+                    }
 
-                        if (!command.emuID.empty()) {
-                            std::unique_lock<std::mutex> lkk(m_EmusMutex);
-                            if (buttonType == "button") {
-                                if (id > 15)
-                                    break;
-                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_BUTTON, id, value);
-                            } else if (buttonType == "leftStick") {
-                                if (id > 1)
-                                    break;
-                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_LEFT, id, value);
-                            } else if (buttonType == "rightStick") {
-                                if (id > 1)
-                                    break;
-                                m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_RIGHT, id, value);
-                            }
+                    if (auto user = command.user_hdl.lock())
+                        logger.log(user->uuid(),
+                                   " (",
+                                   user->username(),
+                                   ") sent a '",
+                                   buttonType,
+                                   "' update with id '",
+                                   id,
+                                   "' and value '",
+                                   value,
+                                   '\'');
+
+                    if (id < 0)
+                        break;
+
+                    if (!command.emuID.empty()) {
+                        std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                        if (buttonType == "button") {
+                            if (id > 15)
+                                break;
+                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_BUTTON, id, value);
+                        } else if (buttonType == "leftStick") {
+                            if (id > 1)
+                                break;
+                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_LEFT, id, value);
+                        } else if (buttonType == "rightStick") {
+                            if (id > 1)
+                                break;
+                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_RIGHT, id, value);
                         }
                     }
-                        break;
-                    case kCommandType::AddEmu: {  // emu, dynamic lib for the core, rom path, emu description
-                        // TODO:: Add file path checks
-                        if (command.params.size() != 4) break;
+                }
+                    break;
+                case kCommandType::AddEmu: {  // emu, dynamic lib for the core, rom path, emu description
+                    // TODO:: Add file path checks
+                    if (command.params.size() != 4) break;
 
-                        if (auto user = command.user_hdl.lock()) {
-                            if (!user->hasAdmin)
-                                break;
-                        }
-
-                        auto& id = command.params[0];
-                        const auto& corePath = command.params[1];
-                        const auto& romPath = command.params[2];
-                        const auto &description = command.params[3];
-
-                        logger.log("Locking m_EmusThreads");
-                        {
-                            std::unique_lock<std::mutex> lkk(m_EmuThreadMutex);
-                            m_EmulatorThreads.emplace_back(
-                                    std::thread(EmulatorController::Run, corePath, romPath, this, id, description));
-                        }
-                        logger.log("Doone with m_EmuThreads");
+                    if (auto user = command.user_hdl.lock()) {
+                        if (!user->hasAdmin)
+                            break;
                     }
-                        break;
-                    case kCommandType::Admin: {
-                        if (command.params.size() != 1) break;
 
-                        if (auto user = command.user_hdl.lock()) {
-                            if (user->adminAttempts >= 3)
-                                break;
+                    auto &id = command.params[0];
+                    const auto &corePath = command.params[1];
+                    const auto &romPath = command.params[2];
+                    const auto &description = command.params[3];
+
+                    {
+                        std::unique_lock<std::mutex> lkk(m_EmuThreadMutex);
+                        m_EmulatorThreads.emplace_back(
+                                std::thread(EmulatorController::Run, corePath, romPath, this, id, description));
+                    }
+
+                    PreviewTask();
+                }
+                    break;
+                case kCommandType::Admin: {
+                    if (command.params.size() != 1) break;
+
+                    if (auto user = command.user_hdl.lock()) {
+                        if (user->adminAttempts >= 3)
+                            break;
+                    }
+
+                    auto salt = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "salt"),
+                            expectedHash = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig",
+                                                                   "adminHash");
+
+                    std::string hashed = md5(command.params[0] + salt);
+
+                    // TODO: Log failed admin attempts
+
+                    if (auto user = command.user_hdl.lock()) {
+                        if (hashed == expectedHash) {
+                            user->hasAdmin = true;
+                        } else {
+                            user->adminAttempts++;
                         }
 
-                        auto salt = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "salt"),
-                                expectedHash = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig",
-                                                                       "adminHash");
-
-                        std::string hashed = md5(command.params[0] + salt);
-
-                        // TODO: Log failed admin attempts
-
-                        if (auto user = command.user_hdl.lock()) {
-                            if (hashed == expectedHash) {
-                                user->hasAdmin = true;
-                            } else {
-                                user->adminAttempts++;
-                            }
-
-                            BroadcastOne(
+                        BroadcastOne(
                                 LetsPlayProtocol::encode("admin", (user->hasAdmin) == true),
                                 command.hdl
-                            );
-                        }
+                        );
                     }
-                        break;
-                    case kCommandType::Pong:
-                        if (auto user = command.user_hdl.lock())
-                            user->updateLastPong();
-                        break;
-                    case kCommandType::FastForward: {
-                        std::unique_lock<std::mutex> lkk(m_EmusMutex);
-                        auto emu = m_Emus[command.emuID];
-                        if (emu)
-                            emu->fastForward();
-                    }
-                        break;
-                    case kCommandType::Preview: {
-                        logger.log("Internal preview command received. Locking");
-                        std::unique_lock<std::mutex> lkk(m_PreviewsMutex);
-                        logger.log("Internal preview command locked.");
-                        for (const auto &preview : m_Previews) {
-                            websocketpp::lib::error_code ec;
-                            server->send(command.hdl, preview.second.data(), preview.second.size(),
-                                         websocketpp::frame::opcode::binary, ec);
-                        }
-                    }
-                    case kCommandType::RemoveEmu:
-                    case kCommandType::StopEmu:
-                    case kCommandType::Config:
-                    case kCommandType::Unknown:
-                        // Unimplemented
-                        break;
-                    default:break;
                 }
-                m_WorkQueue.pop();
+                    break;
+                case kCommandType::Pong:
+                    if (auto user = command.user_hdl.lock())
+                        user->updateLastPong();
+                    break;
+                case kCommandType::FastForward: {
+                    std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                    auto emu = m_Emus[command.emuID];
+                    if (emu) {
+                        EmuCommand c{kEmuCommandType::FastForward};
+                        {
+                            std::unique_lock<std::mutex> lkkk(*(emu->queueMutex));
+                            emu->queue->push(c);
+                        }
+
+                        emu->queueNotifier->notify_one();
+                    }
+
+                }
+                    break;
+                case kCommandType::Preview: {
+                    std::unique_lock<std::mutex> lkk(m_PreviewsMutex);
+                    for (const auto &preview : m_Previews) {
+                        logger.log("Sending a preview of ", preview.second.size());
+                        websocketpp::lib::error_code ec;
+                        server->send(command.hdl, preview.second.data(), preview.second.size(),
+                                     websocketpp::frame::opcode::binary, ec);
+                    }
+                }
+                case kCommandType::RemoveEmu:
+                case kCommandType::StopEmu:
+                case kCommandType::Config:
+                case kCommandType::Unknown:
+                    // Unimplemented
+                    break;
+                default:
+                    break;
             }
+            m_WorkQueue.pop();
         }
     }
 }
 
-void LetsPlayServer::SaveTask() {
-    std::unique_lock<std::mutex> lk(m_EmusMutex);
-    for (auto &emu : m_Emus)
-        emu.second->save();
-}
+void LetsPlayServer::GeneratePreview(const EmuID_t &id) {
+    auto index = std::distance(m_Emus.begin(), m_Emus.find(id));
+    auto jpegData = GenerateEmuJPEG(id);
 
-void LetsPlayServer::BackupTask() {
-    std::unique_lock<std::mutex> lk(m_EmusMutex);
-    for (auto &emu : m_Emus)
-        emu.second->backup();
+    // Set binary payload info
+    jpegData[0] = index | (kBinaryMessageType::Preview << 5);
+
+    m_Previews[id] = jpegData;
 }
 
 void LetsPlayServer::PingTask() {
@@ -765,23 +783,21 @@ void LetsPlayServer::PingTask() {
 }
 
 void LetsPlayServer::PreviewTask() {
-    logger.log("Preview task called");
-    std::lock(m_EmusMutex, m_PreviewsMutex);
-    std::lock_guard<std::mutex> lk1(m_EmusMutex, std::adopt_lock);
-    std::lock_guard<std::mutex> lk2(m_PreviewsMutex, std::adopt_lock);
-    logger.log("Preview task locked");
+    std::unique_lock<std::mutex> lk(m_EmusMutex);
 
-    m_Previews.clear();
-    logger.log("previews cleared");
-    std::uint8_t i = 0;
+    // Tell all the emulators to update their own preview thumbnails
     for (auto &p : m_Emus) {
-        logger.log("Loop start; generating jpge");
-        m_Previews[p.first] = GenerateEmuJPEG(p.first);
-        logger.log("JPEG Genrated; encoding preview byte");
-        m_Previews[p.first][0] = i++ | (kBinaryMessageType::Preview << 5);
-        logger.log("Loop end");
+        auto &emu = p.second;
+
+        EmuCommand c{kEmuCommandType::GeneratePreview};
+
+        {
+            std::unique_lock<std::mutex> lkk(*(emu->queueMutex));
+            emu->queue->push(c);
+        }
+
+        emu->queueNotifier->notify_one();
     }
-    logger.log("Preview task done.");
 }
 
 void LetsPlayServer::BroadcastAll(const std::string& data, websocketpp::frame::opcode::value op) {
@@ -890,6 +906,40 @@ void LetsPlayServer::SetupLetsPlayDirectories() {
     lib::filesystem::create_directories(coreDirectory = dataPath / "cores");
 }
 
+void LetsPlayServer::SaveTask() {
+    std::unique_lock<std::mutex> lk(m_EmusMutex);
+
+    for (auto &p : m_Emus) {
+        auto &emu = p.second;
+
+        EmuCommand c{kEmuCommandType::Save};
+
+        {
+            std::unique_lock<std::mutex> lkk(*(emu->queueMutex));
+            emu->queue->push(c);
+        }
+
+        emu->queueNotifier->notify_one();
+    }
+}
+
+void LetsPlayServer::BackupTask() {
+    std::unique_lock<std::mutex> lk(m_EmusMutex);
+
+    for (auto &p : m_Emus) {
+        auto &emu = p.second;
+
+        EmuCommand c{kEmuCommandType::Backup};
+
+        {
+            std::unique_lock<std::mutex> lkk(*(emu->queueMutex));
+            emu->queue->push(c);
+        }
+
+        emu->queueNotifier->notify_one();
+    }
+}
+
 void LetsPlayServer::AddEmu(const EmuID_t& id, EmulatorControllerProxy *emu) {
     std::unique_lock<std::mutex> lk(m_EmusMutex);
     m_Emus[id] = emu;
@@ -922,7 +972,7 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
     }();
 
     // currentBuffer was nullptr
-    if (frame.width == 0 || frame.height == 0) return std::vector<std::uint8_t>{0};
+    if (frame.width == 0 || frame.height == 0) return std::vector<std::uint8_t>{0, 2};
 
     // update quality value from config every 120 frames
     if ((++i %= 120) == 0) {
@@ -943,6 +993,19 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
 }
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
+    // Skip if no users
+    {
+        std::unique_lock<std::mutex> lk(m_UsersMutex);
+        bool hasUsers{false};
+        for (auto &pair : m_Users) {
+            if (pair.second->connectedEmu() == id)
+                hasUsers = true;
+        }
+
+        if (!hasUsers)
+            return;
+    }
+
     auto jpegData = GenerateEmuJPEG(id);
 
     // Mark as screen message
