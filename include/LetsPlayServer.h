@@ -81,6 +81,8 @@ enum class kCommandType {
         Config,
     /** Fast forward toggle */
             FastForward,
+    /** Internal: Sends off previews to a user */
+            Preview,
     Unknown,
 };
 
@@ -123,7 +125,6 @@ struct Command {
      * message from
      */
     EmuID_t emuID;
-    // TODO: Use this instead of emu lookup?
 
     /**
      * Handle to the LetsPlayUser that generated the message
@@ -207,7 +208,17 @@ class LetsPlayServer {
     /**
      * Scheduler for periodic tasks
      */
-    Scheduler m_scheduler;
+    Scheduler m_Scheduler;
+
+    /**
+     * Object to store emulator previews
+     */
+    std::map<EmuID_t, std::vector<std::uint8_t>> m_Previews;
+
+    /**
+     * Mutex for accessing/modifying m_Previews
+     */
+    std::mutex m_PreviewsMutex;
 
   public:
     LetsPlayConfig config;
@@ -315,6 +326,11 @@ class LetsPlayServer {
     void PingTask();
 
     /**
+     * Task function that periodically generates preview thumbnails for the join view of the client.
+     */
+    void PreviewTask();
+
+    /**
      * Send a message to all connected users
      * @param message The message to send (isn't modified or encoded on the way out)
      * @param op The type of message to send
@@ -360,6 +376,11 @@ class LetsPlayServer {
      * @note Called only on server run
      */
     void SetupLetsPlayDirectories();
+
+    /**
+     * Generates a jpeg from the display currently on an emulator
+     */
+    std::vector<std::uint8_t> GenerateEmuJPEG(const EmuID_t &id);
 
     // --- Functions called only by emulator controllers --- //
     /**

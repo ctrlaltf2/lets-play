@@ -11,7 +11,7 @@ std::vector<LetsPlayUserHdl> EmulatorController::m_TurnQueue;
 std::mutex EmulatorController::m_TurnMutex;
 std::condition_variable EmulatorController::m_TurnNotifier;
 std::atomic<bool> EmulatorController::m_TurnThreadRunning;
-std::thread EmulatorController::m_TurnThread;
+std::shared_ptr<std::thread> EmulatorController::m_TurnThread;
 RetroPad EmulatorController::joypad;
 
 VideoFormat EmulatorController::m_videoFormat;
@@ -28,7 +28,7 @@ std::string EmulatorController::saveDirString;
 std::shared_timed_mutex EmulatorController::m_generalMutex;
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
-                             LetsPlayServer *server, EmuID_t t_id) {
+                             LetsPlayServer *server, EmuID_t t_id, const std::string &description) {
     lib::filesystem::path coreFile = corePath, romFile = romPath;
     if (!lib::filesystem::is_regular_file(coreFile)) {
         server->logger.err("Provided core path '", corePath, "' was invalid.");
@@ -44,7 +44,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     m_server = server;
     id = t_id;
     proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false, &joypad, Save, Backup, FastForward};
+                                    false, &joypad, Save, Backup, FastForward, description};
     m_server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -106,7 +106,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Load();
 
     m_TurnThreadRunning = true;
-    m_TurnThread = std::thread(EmulatorController::TurnThread);
+    m_TurnThread.reset(new std::thread(EmulatorController::TurnThread));
 
     Core.GetAudioVideoInfo(&m_avinfo);
     std::uint64_t fps = -1ull;
