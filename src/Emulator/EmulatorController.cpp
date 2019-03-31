@@ -1,34 +1,139 @@
 #include "EmulatorController.h"
 
-EmuID_t EmulatorController::id;
-std::string EmulatorController::coreName;
-LetsPlayServer *EmulatorController::m_server{nullptr};
-EmulatorControllerProxy EmulatorController::proxy;
-RetroCore EmulatorController::Core;
-char *EmulatorController::romData{nullptr};
+namespace EmulatorController {
+    /**
+     * ID of the emulator controller / emulator.
+     */
+    static thread_local EmuID_t id;
 
-std::vector<LetsPlayUserHdl> EmulatorController::m_TurnQueue;
-std::mutex EmulatorController::m_TurnMutex;
-std::condition_variable EmulatorController::m_TurnNotifier;
-std::atomic<bool> EmulatorController::m_TurnThreadRunning;
-std::shared_ptr<std::thread> EmulatorController::m_TurnThread;
-RetroPad EmulatorController::joypad;
+    /**
+     * Name of the library that is loaded (mGBA, Snes9x, bsnes, etc).
+     *
+     * @todo Grab the info from the loaded core and populate this field.
+     */
+    static thread_local std::string coreName;
 
-VideoFormat EmulatorController::m_videoFormat;
-const void *EmulatorController::m_currentBuffer{nullptr};
-std::mutex EmulatorController::m_videoMutex;
-retro_system_av_info EmulatorController::m_avinfo;
-std::atomic<bool> EmulatorController::m_fastForward{false};
-std::chrono::time_point<std::chrono::steady_clock> EmulatorController::m_lastFastForward;
+    /**
+     * Pointer to the server managing the emulator controller
+     */
+    static thread_local LetsPlayServer *server{nullptr};
 
-lib::filesystem::path EmulatorController::dataDirectory;
-lib::filesystem::path EmulatorController::saveDirectory;
-std::string EmulatorController::saveDirString;
+    /**
+     * Pointer to some functions that the managing server needs to call.
+     */
+    static thread_local EmulatorControllerProxy proxy;
 
-std::shared_timed_mutex EmulatorController::m_generalMutex;
+    /**
+     * The object that manages the libretro lower level functions. Used mostly
+     * for loading symbols and storing function pointers.
+     */
+    static thread_local RetroCore Core;
+
+    /**
+     * Rom data if loaded from file.
+     */
+    static thread_local char *romData{nullptr};
+
+    /**
+     * Turn queue for this emulator
+     */
+    static thread_local std::vector <LetsPlayUserHdl> turnQueue;
+
+    /**
+     * Turn queue mutex
+     */
+    static thread_local std::mutex turnMutex;
+
+    /**
+     * The joypad object storing the button state.
+     */
+    static thread_local RetroPad joypad;
+
+    /**
+     * Stores the masks and shifts required to generate a rgb 0xRRGGBB
+     * vector from the video_refresh callback data.
+     */
+    static thread_local VideoFormat videoFormat;
+
+    /**
+     * Pointer to the current video buffer.
+     */
+    static thread_local const void *currentBuffer{nullptr};
+
+    /**
+     * Mutex for accessing m_screen or m_nextFrame or updating the buffer.
+     */
+    static thread_local std::mutex videoMutex;
+
+    /**
+     * libretro API struct that stores audio-video information.
+     */
+    static thread_local retro_system_av_info avinfo;
+
+    /**
+     * Whether or not this emulator is fast forwarded
+     */
+    static thread_local std::atomic<bool> fastForward{false};
+
+    /**
+     * Timepoint of the last fastForward toggle. Used to prevent (over|ab)use.
+     */
+    static thread_local std::chrono::time_point <std::chrono::steady_clock> lastFastForward;
+
+    /**
+     * Location of the emulator directory, loaded from config.
+     */
+    static thread_local lib::filesystem::path dataDirectory;
+
+    /**
+     * Given to the core as the save directory
+     */
+    static thread_local lib::filesystem::path saveDirectory;
+
+    /**
+     * String representation of saveDirectory. Storing as string to prevent dangling pointer in OnEnvironment.
+     */
+    static thread_local std::string saveDirString;
+
+    /**
+     * General mutex for things that won't really go off at once and get blocked.
+     */
+    static thread_local std::shared_timed_mutex generalMutex;
+
+
+    /*
+     * --- Work Queue Stuff ---
+     */
+
+    /**
+     * Mutex for the condition variable
+     */
+    static thread_local std::mutex queueMutex;
+
+    /**
+     * Condition variable used to wait for new messages
+     */
+    static thread_local std::condition_variable queueNotifier;
+
+    /**
+     * Queue thread running variable. Set to false and wakeup queueNotifier to stop the queue thread
+     */
+    static thread_local std::atomic<bool> queueRunning{false};
+
+    /**
+     * Work queue
+     */
+    static thread_local std::queue <EmuCommand> workQueue;
+
+    /**
+     * Queue thread
+     */
+    static thread_local std::thread queueThread;
+}
+
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
-                             LetsPlayServer *server, EmuID_t t_id, const std::string &description) {
+                             LetsPlayServer *t_server, EmuID_t t_id, const std::string &description) {
     lib::filesystem::path coreFile = corePath, romFile = romPath;
     if (!lib::filesystem::is_regular_file(coreFile)) {
         server->logger.err("Provided core path '", corePath, "' was invalid.");
@@ -38,14 +143,13 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         server->logger.err("Provided rom path '", romPath, "' was not valid.");
         return;
     }
-    server->logger.log("Starting up ", t_id, "...");
+    t_server->logger.log("Starting up ", t_id, "...");
 
     Core.Load(coreFile.string().c_str());
-    m_server = server;
+    server = t_server;
     id = t_id;
-    proxy = EmulatorControllerProxy{AddTurnRequest, UserDisconnected, UserConnected, GetFrame,
-                                    false, &joypad, Save, Backup, FastForward, description};
-    m_server->AddEmu(id, &proxy);
+    proxy = EmulatorControllerProxy{&workQueue, &queueMutex, &queueNotifier, GetFrame, &joypad, description};
+    server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
     {
@@ -57,7 +161,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     }
 
     // Create emu folder if it doesn't already exist
-    lib::filesystem::create_directories(dataDirectory = m_server->emuDirectory / id);
+    lib::filesystem::create_directories(dataDirectory = server->emuDirectory / id);
     lib::filesystem::create_directories(dataDirectory / "history");
     lib::filesystem::create_directories(dataDirectory / "backups" / "states");
     lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
@@ -72,7 +176,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.SetAudioSampleBatch(OnBatchAudioSample);
     Core.Init();
 
-    m_server->logger.log(id, ": Finished initialization.");
+    server->logger.log(id, ": Finished initialization.");
 
     retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(lib::filesystem::file_size(romFile)), nullptr};
     std::ifstream fo(romFile.string(), std::ios::binary);
@@ -85,12 +189,12 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         info.data = static_cast<void *>(romData);
 
         if (!info.data) {
-            m_server->logger.err(id, ": Failed to allocate memory for the ROM");
+            server->logger.err(id, ": Failed to allocate memory for the ROM");
             return;
         }
 
         if (!fo.read(romData, lib::filesystem::file_size(romFile))) {
-            m_server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
+            server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
             return;
         }
     }
@@ -98,25 +202,22 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     // TODO: compressed roms and stuff
 
     if (!Core.LoadGame(&info)) {
-        m_server->logger.err(id, ": Failed to load game. Was the rom the correct file type?");
+        server->logger.err(id, ": Failed to load game. Was the rom the correct file type?");
         return;
     }
 
     // Load state if applicable
     Load();
 
-    m_TurnThreadRunning = true;
-    m_TurnThread.reset(new std::thread(EmulatorController::TurnThread));
+    auto &config = server->config;
 
-    Core.GetAudioVideoInfo(&m_avinfo);
+    Core.GetAudioVideoInfo(&avinfo);
     std::uint64_t fps = -1ull;
 
-    auto &config = m_server->config;
     if (config.get<bool>(nlohmann::json::value_t::boolean, "serverConfig", "emulators", id, "overrideFramerate")) {
         fps = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig", "emulators", id,
                                         "fps");
     }
-
 
     bool frameSkip = false;
     // TODO: Manage this thread
@@ -125,29 +226,104 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
             using namespace std::chrono;
 
             while (true) {
-                if (m_fastForward && (frameSkip ^= true)) continue;
+                if (fastForward && (frameSkip ^= true)) continue;
                 server->SendFrame(id);
                 std::this_thread::sleep_for(
-                        milliseconds(static_cast<long int>((1.0 / fps) * 1000) / (m_fastForward ? 2 : 1)));
+                        milliseconds(static_cast<long int>((1.0 / fps) * 1000) / (fastForward ? 2 : 1)));
             }
         });
         t.detach();
     }
 
-    unsigned msWait = (1.0 / m_avinfo.timing.fps) * 1000;
-    proxy.isReady = true;
+    unsigned msWait = (1.0 / avinfo.timing.fps) * 1000;
     std::chrono::time_point<std::chrono::steady_clock> wait_time =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (m_fastForward ? 2 : 1));
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
+
+    // Terrible main emulator loop that manages all the things
+    std::chrono::time_point <std::chrono::steady_clock> turnEnd;
     while (true) {
+        // Check turn state
+        // Possible race condition but wouldn't really matter because it'd be a read during a write onto a boolean value
+        if (!turnQueue.empty()) {
+            if (auto currentUser = turnQueue[0].lock()) {
+                // Things that could happen:
+                // Newly added, no turn grant
+                // Current, has turn grant
+                // Manage leaves
+                if (!currentUser->hasTurn && currentUser->connected) { // newly added
+                    // grant turn
+                    currentUser->hasTurn = true;
+
+                    // update turn end
+                    const auto turnLength = server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                              "serverConfig", "emulators", id,
+                                                                              "turnLength");
+                    turnEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
+                } else { // has turn, check grant validity
+                    if (turnEnd < std::chrono::steady_clock::now()) { // no turn: end it
+                        std::unique_lock <std::mutex> lk(turnMutex);
+                        if (turnQueue.size() > 1) {
+                            currentUser->hasTurn = false;
+                            currentUser->requestedTurn = false;
+                            turnQueue.erase(turnQueue.begin());
+                            EmulatorController::SendTurnList();
+                        }
+                    }
+                }
+            } else { // Something happened to the user, so skip them
+                std::unique_lock <std::mutex> lk(turnMutex);
+                if (!turnQueue.empty()) {
+                    turnQueue.erase(turnQueue.begin());
+                    EmulatorController::SendTurnList();
+                }
+            }
+        }
+
+        // While there's work and we have time before the next retro_run call
+        while (!workQueue.empty() && (std::chrono::steady_clock::now() < wait_time)) {
+            auto &command = workQueue.front();
+
+            switch (command.command) {
+                case kEmuCommandType::Save:
+                    Save();
+                    break;
+                case kEmuCommandType::Backup:
+                    Backup();
+                    break;
+                case kEmuCommandType::GeneratePreview:
+                    server->GeneratePreview(id);
+                    break;
+                case kEmuCommandType::TurnRequest:
+                    if (command.user_hdl)
+                        AddTurnRequest(*command.user_hdl);
+                    break;
+                case kEmuCommandType::UserDisconnect:
+                    if (command.user_hdl)
+                        UserDisconnected(*command.user_hdl);
+                    break;
+                case kEmuCommandType::FastForward:
+                    FastForward();
+                    break;
+                case kEmuCommandType::UserConnect:
+                    EmulatorController::SendTurnList();
+                    break;
+            }
+            std::unique_lock <std::mutex> lk(queueMutex);
+            workQueue.pop();
+        }
+
+        // Wait until the next frame because at this point we've either passed the wait time (so 0 wait) or have no more work
+        // NOTE: If on a slow fps rate, there will be a lot of wasted time and the turns updating and work queue will be slow
+        // This relies on the fact that emulators usually want to be run 30 to 60 times a second
         std::this_thread::sleep_until(wait_time);
-        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (m_fastForward ? 2 : 1));
+        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
         Core.Run();
-        if (fps == -1ull && (frameSkip ^= true)) m_server->SendFrame(id);
+        if (fps == -1ull && (frameSkip ^= true)) server->SendFrame(id);
     }
 }
 
 bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
-    auto &config = m_server->config;
+    auto &config = server->config;
     switch (cmd) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format *fmt = static_cast<retro_pixel_format *>(data);
@@ -157,7 +333,7 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
             return SetPixelFormat(*fmt);
         }
         case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // system dir, dataDir / system
-            *static_cast<const char **>(data) = m_server->systemDirectory.string().c_str();
+            *static_cast<const char **>(data) = server->systemDirectory.string().c_str();
             break;
         case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir, dataDir / emulators / emu_id / saves
             saveDirString = saveDirectory.string();
@@ -188,17 +364,17 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
 
 void EmulatorController::OnVideoRefresh(const void *data, unsigned width, unsigned height,
                                         size_t pitch) {
-    std::unique_lock<std::mutex> lk(m_videoMutex);
-    if (width != m_videoFormat.width || height != m_videoFormat.height ||
-        pitch != m_videoFormat.pitch) {
-        std::clog << "Screen Res changed from " << m_videoFormat.width << 'x'
-                  << m_videoFormat.height << " to " << width << 'x' << height << ' ' << pitch
+    std::unique_lock <std::mutex> lk(videoMutex);
+    if (width != videoFormat.width || height != videoFormat.height ||
+        pitch != videoFormat.pitch) {
+        std::clog << "Screen Res changed from " << videoFormat.width << 'x'
+                  << videoFormat.height << " to " << width << 'x' << height << ' ' << pitch
                   << '\n';
-        m_videoFormat.width = width;
-        m_videoFormat.height = height;
-        m_videoFormat.pitch = pitch;
+        videoFormat.width = width;
+        videoFormat.height = height;
+        videoFormat.pitch = pitch;
     }
-    m_currentBuffer = data;
+    currentBuffer = data;
 }
 
 void EmulatorController::OnPollInput() {}
@@ -224,79 +400,22 @@ size_t EmulatorController::OnBatchAudioSample(const std::int16_t */*data*/, size
     return frames;
 }
 
-void EmulatorController::TurnThread() {
-    while (m_TurnThreadRunning) {
-        std::unique_lock<std::mutex> lk(m_TurnMutex);
-
-        // Wait for a nonempty queue
-        while (m_TurnQueue.empty()) {
-            m_TurnNotifier.wait(lk);
-        }
-
-        if (m_TurnThreadRunning == false) break;
-
-        // While someone in the turn queue has disconnected
-        while (m_TurnQueue[0].expired() || !m_TurnQueue[0].lock()->connected) {
-            if (m_TurnQueue.empty())
-                break;
-            m_TurnQueue.erase(m_TurnQueue.begin());
-        }
-
-        EmulatorController::SendTurnList();
-
-        // If everyone in the turn queue left and was removed by the above section's code, restart the turn loop at the top
-        if (m_TurnQueue.empty())
-            continue;
-
-        if (auto currentUser = m_TurnQueue[0].lock()) {
-            currentUser->hasTurn = true;
-
-            // TOOD: Fallback on template instead of id if invalid value? What happens to the value if its not in the emu's config?
-            const auto turnLength = m_server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                        "serverConfig", "emulators", id, "turnLength");
-            const auto turnEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(turnLength);
-
-            while ((currentUser.use_count() > 1) && currentUser->connected && currentUser->hasTurn
-                   && (std::chrono::steady_clock::now() < turnEnd)) {
-                /* FIXME?: does turnEnd - std::chrono::steady_clock::now() cause
-                 * underflow or UB for the case where now() is greater than
-                 * turnEnd? */
-                m_TurnNotifier.wait_for(lk, turnEnd - std::chrono::steady_clock::now());
-            }
-
-            if (m_TurnQueue.size() > 1) {
-                currentUser->hasTurn = false;
-                currentUser->requestedTurn = false;
-            }
-
-        }
-
-        if (m_TurnQueue.size() > 1)
-            m_TurnQueue.erase(m_TurnQueue.begin());
-
-        EmulatorController::SendTurnList();
-    }
-}
-
 void EmulatorController::AddTurnRequest(LetsPlayUserHdl user_hdl) {
     // Add user to the list
-    std::unique_lock<std::mutex> lk(m_TurnMutex);
-    m_TurnQueue.emplace_back(user_hdl);
+    std::unique_lock <std::mutex> lk(turnMutex);
+    turnQueue.emplace_back(user_hdl);
 
     // Send off updated turn list
     EmulatorController::SendTurnList();
-
-    // Wake up the turn thread to manage the changes
-    m_TurnNotifier.notify_one();
 }
 
 void EmulatorController::SendTurnList() {
     const std::string turnList = [&] {
-        // Majority of the time this won't lock because m_TurnMutex will have already been locked by the caller
-        std::unique_lock<std::mutex> lk(m_TurnMutex, std::try_to_lock);
+        // Majority of the time this won't lock because turnMutex will have already been locked by the caller
+        std::unique_lock <std::mutex> lk(turnMutex, std::try_to_lock);
 
         std::vector<std::string> names{"turns"};
-        for (auto user_hdl : m_TurnQueue) {
+        for (auto user_hdl : turnQueue) {
             // If pointer hasn't been deleted and user is still connected
             auto user = user_hdl.lock();
             if (user && user->connected)
@@ -305,19 +424,17 @@ void EmulatorController::SendTurnList() {
         return LetsPlayProtocol::encode(names);
     }();
 
-    m_server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
+    server->BroadcastToEmu(id, turnList, websocketpp::frame::opcode::text);
 }
 
 void EmulatorController::UserDisconnected(LetsPlayUserHdl user_hdl) {
-    // Update flag in case the turn queue gets to the user before its removed from memory in m_server
+    // Update flag in case the turn queue gets to the user before its removed from memory in server
     if (auto user = user_hdl.lock())
         user->connected = false;
-
-    // Wake up the turn thread in case that person had a turn when they disconnected
-    m_TurnNotifier.notify_one();
 }
 
 void EmulatorController::UserConnected(LetsPlayUserHdl) {
+    EmulatorController::SendTurnList();
 }
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
@@ -326,48 +443,48 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
         case RETRO_PIXEL_FORMAT_0RGB1555:  // 16 bit
             // rrrrrgggggbbbbba
             std::clog << "0RGB1555" << '\n';
-            m_videoFormat.rMask = 0b1111100000000000;
-            m_videoFormat.gMask = 0b0000011111000000;
-            m_videoFormat.bMask = 0b0000000000111110;
-            m_videoFormat.aMask = 0b0000000000000000;
+            videoFormat.rMask = 0b1111100000000000;
+            videoFormat.gMask = 0b0000011111000000;
+            videoFormat.bMask = 0b0000000000111110;
+            videoFormat.aMask = 0b0000000000000000;
 
-            m_videoFormat.rShift = 10;
-            m_videoFormat.gShift = 5;
-            m_videoFormat.bShift = 0;
-            m_videoFormat.aShift = 15;
+            videoFormat.rShift = 10;
+            videoFormat.gShift = 5;
+            videoFormat.bShift = 0;
+            videoFormat.aShift = 15;
 
-            m_videoFormat.bitsPerPel = 16;
+            videoFormat.bitsPerPel = 16;
             return true;
             // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
             // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
             std::clog << "XRGB8888\n";
-            m_videoFormat.rMask = 0xff000000;
-            m_videoFormat.gMask = 0x00ff0000;
-            m_videoFormat.bMask = 0x0000ff00;
-            m_videoFormat.aMask = 0x00000000;  // normally 0xff but who cares about alpha
+            videoFormat.rMask = 0xff000000;
+            videoFormat.gMask = 0x00ff0000;
+            videoFormat.bMask = 0x0000ff00;
+            videoFormat.aMask = 0x00000000;  // normally 0xff but who cares about alpha
 
-            m_videoFormat.rShift = 16;
-            m_videoFormat.gShift = 8;
-            m_videoFormat.bShift = 0;
-            m_videoFormat.aShift = 24;
+            videoFormat.rShift = 16;
+            videoFormat.gShift = 8;
+            videoFormat.bShift = 0;
+            videoFormat.aShift = 24;
 
-            m_videoFormat.bitsPerPel = 32;
+            videoFormat.bitsPerPel = 32;
             return true;
         case RETRO_PIXEL_FORMAT_RGB565:  // 16 bit
             // rrrrrggggggbbbbb
             std::clog << "RGB656\n";
-            m_videoFormat.rMask = 0b1111100000000000;
-            m_videoFormat.gMask = 0b0000011111100000;
-            m_videoFormat.bMask = 0b0000000000011111;
-            m_videoFormat.aMask = 0b0000000000000000;
+            videoFormat.rMask = 0b1111100000000000;
+            videoFormat.gMask = 0b0000011111100000;
+            videoFormat.bMask = 0b0000000000011111;
+            videoFormat.aMask = 0b0000000000000000;
 
-            m_videoFormat.rShift = 11;
-            m_videoFormat.gShift = 5;
-            m_videoFormat.bShift = 0;
-            m_videoFormat.aShift = 16;
+            videoFormat.rShift = 11;
+            videoFormat.gShift = 5;
+            videoFormat.bShift = 0;
+            videoFormat.aShift = 16;
 
-            m_videoFormat.bitsPerPel = 16;
+            videoFormat.bitsPerPel = 16;
             return true;
         default:
             return false;
@@ -375,34 +492,34 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 }
 
 Frame EmulatorController::GetFrame() {
-    std::unique_lock<std::mutex> lk(m_videoMutex);
-    if (m_currentBuffer == nullptr) return Frame{0, 0, {}};
+    std::unique_lock <std::mutex> lk(videoMutex);
+    if (currentBuffer == nullptr) return Frame{0, 0, {}};
 
-    std::vector<std::uint8_t> outVec(m_videoFormat.width * m_videoFormat.height * 3);
+    std::vector <std::uint8_t> outVec(videoFormat.width * videoFormat.height * 3);
 
     size_t j{0};
 
-    const auto *i = static_cast<const std::uint8_t *>(m_currentBuffer);
-    for (size_t h = 0; h < m_videoFormat.height; ++h) {
-        for (size_t w = 0; w < m_videoFormat.width; ++w) {
+    const auto *i = static_cast<const std::uint8_t *>(currentBuffer);
+    for (size_t h = 0; h < videoFormat.height; ++h) {
+        for (size_t w = 0; w < videoFormat.width; ++w) {
             std::uint32_t pixel{0};
             // Assuming little endian
             pixel |= *(i++);
             pixel |= *(i++) << 8;
 
-            if (m_videoFormat.bitsPerPel == 32) {
+            if (videoFormat.bitsPerPel == 32) {
                 pixel |= *(i++) << 16;
                 pixel |= *(i++) << 24;
             }
 
             // Calculate the rgb 0 - 255 values
-            const std::uint8_t& rMax = 1 << (m_videoFormat.aShift - m_videoFormat.rShift);
-            const std::uint8_t& gMax = 1 << (m_videoFormat.rShift - m_videoFormat.gShift);
-            const std::uint8_t& bMax = 1 << (m_videoFormat.gShift - m_videoFormat.bShift);
+            const std::uint8_t &rMax = 1 << (videoFormat.aShift - videoFormat.rShift);
+            const std::uint8_t &gMax = 1 << (videoFormat.rShift - videoFormat.gShift);
+            const std::uint8_t &bMax = 1 << (videoFormat.gShift - videoFormat.bShift);
 
-            const std::uint8_t& rVal = (pixel & m_videoFormat.rMask) >> m_videoFormat.rShift;
-            const std::uint8_t& gVal = (pixel & m_videoFormat.gMask) >> m_videoFormat.gShift;
-            const std::uint8_t& bVal = (pixel & m_videoFormat.bMask) >> m_videoFormat.bShift;
+            const std::uint8_t &rVal = (pixel & videoFormat.rMask) >> videoFormat.rShift;
+            const std::uint8_t &gVal = (pixel & videoFormat.gMask) >> videoFormat.gShift;
+            const std::uint8_t &bVal = (pixel & videoFormat.bMask) >> videoFormat.bShift;
 
             std::uint8_t rNormalized = (rVal / (double) rMax) * 255;
             std::uint8_t gNormalized = (gVal / (double) gMax) * 255;
@@ -412,32 +529,32 @@ Frame EmulatorController::GetFrame() {
             outVec[j++] = gNormalized;
             outVec[j++] = bNormalized;
         }
-        i += m_videoFormat.pitch - 2 * m_videoFormat.width;
+        i += videoFormat.pitch - 2 * videoFormat.width;
     }
 
-    return Frame{m_videoFormat.width, m_videoFormat.height, outVec};
+    return Frame{videoFormat.width, videoFormat.height, outVec};
 }
 
 void EmulatorController::Save() {
-    std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
+    std::unique_lock <std::shared_timed_mutex> lk(generalMutex);
     auto size = Core.SaveStateSize();
 
     if (size == 0) { // Not supported by the loaded core
-        m_server->logger.log(id, ": Warning; Saving for this core unsupported. Skipping save procedure.");
+        server->logger.log(id, ": Warning; Saving for this core unsupported. Skipping save procedure.");
         return;
     }
 
     std::vector<unsigned char> saveData(size);
 
     if (!Core.SaveState(saveData.data(), size)) {
-        m_server->logger.log(id, ": Warning; Failed to serialize data with size ", size, ".");
+        server->logger.log(id, ": Warning; Failed to serialize data with size ", size, ".");
         return;
     }
 
     auto newSaveFile = dataDirectory / "history" / "current.state";
 
     if (lib::filesystem::exists(newSaveFile)) { // Move current file to a backup if if exists
-        m_server->logger.log(id, ": Existing state detected; Moving to new state.");
+        server->logger.log(id, ": Existing state detected; Moving to new state.");
         namespace chrono = std::chrono;
 
         auto tp = chrono::system_clock::now().time_since_epoch();
@@ -445,7 +562,7 @@ void EmulatorController::Save() {
 
         auto backupName = dataDirectory / "history" / (timestamp + ".state");
 
-        m_server->logger.log(id, ": Moved current state to ", backupName.string());
+        server->logger.log(id, ": Moved current state to ", backupName.string());
 
         lib::filesystem::rename(newSaveFile, backupName);
     }
@@ -460,8 +577,8 @@ void EmulatorController::Save() {
                 temporaryStates.push_back(path);
         }
 
-        auto maxHistorySize = m_server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
-                                                                  "serverConfig", "backups", "maxHistorySize");
+        auto maxHistorySize = server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                "serverConfig", "backups", "maxHistorySize");
         if (temporaryStates.size() > maxHistorySize) {
             // Sort by filename
             std::sort(temporaryStates.begin(), temporaryStates.end(), [](const auto &a, const auto &b) {
@@ -469,7 +586,7 @@ void EmulatorController::Save() {
             });
 
             // Delete the oldest file
-            m_server->logger.log(id, ": Over threshold; Removing ", temporaryStates.front().string());
+            server->logger.log(id, ": Over threshold; Removing ", temporaryStates.front().string());
             lib::filesystem::remove(temporaryStates.front());
         }
 
@@ -484,7 +601,7 @@ void EmulatorController::Backup() {
             dataDirectory / "history" / "current.state")) // Create a current.state save if none exists
         Save();
 
-    std::unique_lock<std::shared_timed_mutex> lk(m_generalMutex);
+    std::unique_lock <std::shared_timed_mutex> lk(generalMutex);
 
     namespace chrono = std::chrono;
     auto tp = chrono::system_clock::now().time_since_epoch();
@@ -526,17 +643,17 @@ void EmulatorController::FastForward() {
     const auto &now = std::chrono::steady_clock::now();
 
     // limit rate that the fast forward state can be toggled
-    if (now > (m_lastFastForward + std::chrono::milliseconds(
+    if (now > (lastFastForward + std::chrono::milliseconds(
             150))) { // 150 ms ~= 7 clicks per second ~= how fast the average person can click
         // yay types
-        bool b = m_fastForward;
+        bool b = fastForward;
         b ^= true;
-        m_fastForward = b;
+        fastForward = b;
     }
 }
 
 void EmulatorController::Load() {
-    std::unique_lock <std::shared_timed_mutex> lk(m_generalMutex);
+    std::unique_lock <std::shared_timed_mutex> lk(generalMutex);
     auto saveFile = dataDirectory / "history" / "current.state";
 
     if (!lib::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it

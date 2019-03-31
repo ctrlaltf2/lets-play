@@ -4,13 +4,12 @@
  * @author ctrlaltf2
  *
  *  @section DESCRIPTION
- *  Class that serves as the connection from the LetsPlayServer to the
+ *  'Class' that serves as the connection from the LetsPlayServer to the
  *  RetroArch core.
  */
 
-class EmulatorController;
-
 struct EmulatorControllerProxy;
+struct EmuCommand;
 struct VideoFormat;
 struct Frame;
 #pragma once
@@ -32,14 +31,59 @@ struct Frame;
 
 #include <websocketpp/frame.hpp>
 
+#include "boost/optional.hpp"
+
 #include "libretro.h"
 
 #include "common/typedefs.h"
+
 #include "LetsPlayProtocol.h"
 #include "LetsPlayServer.h"
 #include "LetsPlayUser.h"
 #include "RetroCore.h"
 #include "RetroPad.h"
+#include "Scheduler.h"
+
+
+/**
+ * @enum kEmuCommandType
+ *
+ * Enum for the internal work queue commands
+ */
+enum class kEmuCommandType {
+    /** Save command, updates history folder **/
+            Save,
+    /** Backup command, updates permanent backups **/
+            Backup,
+    /** Generate preview command, generates a thumbnail and gives it to the server **/
+            GeneratePreview,
+    /** Turn request **/
+            TurnRequest,
+    /** User disconnect **/
+            UserDisconnect,
+    /** User connect **/
+            UserConnect,
+    /** Fast forward request **/
+            FastForward,
+};
+
+
+/**
+ * @struct EmuCommand
+ *
+ * POD struct for the work queue. Stores relevant information for a specific command.
+ */
+struct EmuCommand {
+    /**
+     * The type of command
+     */
+    kEmuCommandType command;
+
+    /**
+     *  Who, if anyone, generated the command
+     */
+    boost::optional<LetsPlayUserHdl> user_hdl;
+};
 
 /**
  * @struct EmulatorControllerProxy
@@ -47,12 +91,35 @@ struct Frame;
  * Serves as a 'proxy' for EmulatorController objects which are in their own thread.
  */
 struct EmulatorControllerProxy {
-    std::function<void(LetsPlayUserHdl)> addTurnRequest, userDisconnected, userConnected;
+    /**
+     * Pointer to the work queue
+     */
+    std::queue<EmuCommand> *queue;
+
+    /**
+     * Mutex for the work queue
+     */
+    std::mutex *queueMutex;
+
+    /**
+     * CV for notifying the queue
+     */
+    std::condition_variable *queueNotifier;
+
+    /**
+     * Callback for getFrame, used in LetsPlayServer::GenerateEmuJPEG and similar when called by emulator
+     */
     std::function<Frame()> getFrame;
-    bool isReady{false};
-    RetroPad *joypad{nullptr};
-    std::function<void()> save, backup, fastForward;
-    std::string description;
+
+    /**
+     * Pointer to the joypad object
+     */
+    RetroPad /*-*/*joypad{nullptr};
+
+    /**
+     * Emulator description
+     */
+    std::string /*-*/description;
 };
 
 /**
@@ -153,136 +220,18 @@ struct Frame {
     std::vector<std::uint8_t> data;
 };
 
+
 /**
- * @class EmulatorController
+ * @namespace EmulatorController
  *
- * Class to be used once per thread, manages a RetroArch emulator and its
+ * Namespace with TLS, manages a RetroArch emulator and its
  * own turns through the use of callbacks.
  *
- * @note The reason that the class is all static is because the callback functions
+ * @note The reason that the namespace is all static thread_local is because the callback functions
  * for RetroArch have to be plain old functions. This means there has to be some sort
  * of global piece of data keeping track of information for the core.
- *
- * @todo The one-thread-per-controller rule might be able to be worked around by
- * using a thread-safe class that stores information based on the thread ID. Server to
- * controller communication would need reworked.
  */
-class EmulatorController {
-    /**
-     * Pointer to the server managing the emulator controller
-     */
-    static LetsPlayServer *m_server;
-
-    /**
-     * Turn queue for this emulator
-     */
-    static std::vector<LetsPlayUserHdl> m_TurnQueue;
-
-    /**
-     * Mutex for accessing the turn queue
-     */
-    static std::mutex m_TurnMutex;
-
-    /**
-     * Condition variable for waking up/sleeping the turn thread.
-     */
-    static std::condition_variable m_TurnNotifier;
-
-    /**
-     * Keep the turn thread running.
-     */
-    static std::atomic<bool> m_TurnThreadRunning;
-
-    /**
-     * Thread that runs EmulatorController::TurnThread.
-     */
-    static std::shared_ptr<std::thread> m_TurnThread;
-
-    /**
-     * Stores the masks and shifts required to generate a rgb 0xRRGGBB
-     * vector from the video_refresh callback data.
-     */
-    static VideoFormat m_videoFormat;
-
-    /**
-     * Pointer to the current video buffer.
-     */
-    static const void *m_currentBuffer;
-
-    /**
-     * Mutex for accessing m_screen or m_nextFrame or updating the buffer.
-     */
-    static std::mutex m_videoMutex;
-
-    /**
-     * libretro API struct that stores audio-video information.
-     */
-    static retro_system_av_info m_avinfo;
-
-    /**
-     * General mutex for things that won't really go off at once and get blocked.
-     */
-    static std::shared_timed_mutex m_generalMutex;
-
-    /**
-     * Whether or not this emulator is fast forwarded
-     */
-    static std::atomic<bool> m_fastForward;
-
-    /**
-     * Timepoint of the last fastForward toggle. Used to prevent (over|ab)use.
-     */
-    static std::chrono::time_point<std::chrono::steady_clock> m_lastFastForward;
-
-  public:
-    /**
-     * ID of the emulator controller / emulator.
-     */
-    static EmuID_t id;
-
-    /**
-     * Name of the library that is loaded (mGBA, Snes9x, bsnes, etc).
-     *
-     * @todo Grab the info from the loaded core and populate this field.
-     */
-    static std::string coreName;
-
-    /**
-     * Location of the emulator directory, loaded from config.
-     */
-    static lib::filesystem::path dataDirectory;
-
-    /**
-     * Given to the core as the save directory
-     */
-    static lib::filesystem::path saveDirectory;
-
-    /**
-     * String representation of saveDirectory. Storing as string to prevent dangling pointer in OnEnvironment.
-     */
-    static std::string saveDirString;
-
-    /**
-     * Rom data if loaded from file.
-     */
-    static char *romData;
-
-    /**
-     * The joypad object storing the button state.
-     */
-    static RetroPad joypad;
-
-    /**
-     * Pointer to some functions that the managing server needs to call.
-     */
-    static EmulatorControllerProxy proxy;
-
-    /**
-     * The object that manages the libretro lower level functions. Used mostly
-     * for loading symbols and storing function pointers.
-     */
-    static RetroCore Core;
-
+namespace EmulatorController {
     /**
      * Called as a constructor. Blocks when called and runs retro_run.
      *
@@ -294,8 +243,8 @@ class EmulatorController {
      * @param t_id The ID that is to be assigned to the EmulatorController instance.
      * @param description The description of the emulator. Used as the emulator title in the join view.
      */
-    static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer *server,
-                    EmuID_t t_id, const std::string &description);
+    void Run(const std::string &corePath, const std::string &romPath, LetsPlayServer *server,
+             EmuID_t t_id, const std::string &description);
 
     /**
      * Callback for when the libretro core sends extra info about the
@@ -306,7 +255,7 @@ class EmulatorController {
      *
      * @return If the command was recognized.
      */
-    static bool OnEnvironment(unsigned cmd, void *data);
+    bool OnEnvironment(unsigned cmd, void *data);
 
     /**
      * Called by the RetroArch core when the video updates.
@@ -316,12 +265,12 @@ class EmulatorController {
      * @param height Height for the frame.
      * @param stride In-memory stride for the frame.
      */
-    static void OnVideoRefresh(const void *data, unsigned width, unsigned height, size_t stride);
+    void OnVideoRefresh(const void *data, unsigned width, unsigned height, size_t stride);
 
     /**
      * Pretty much unused but called by the RetroArch core.
      */
-    static void OnPollInput();
+    void OnPollInput();
 
     /**
      *
@@ -333,8 +282,8 @@ class EmulatorController {
      * @return The value of the button being pressed. Without analog support
      * being added, this is just a 1 or 0 value.
      */
-    static std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
-                                        unsigned id);
+    std::int16_t OnGetInputState(unsigned port, unsigned device, unsigned index,
+                                 unsigned id);
 
     /**
      * Audio callback for RetroArch. Superseded by the batch.
@@ -345,7 +294,7 @@ class EmulatorController {
      * @param left Audio data for the left side.
      * @param right Audio data for the right side.
      */
-    static void OnLRAudioSample(std::int16_t left, std::int16_t right);
+    void OnLRAudioSample(std::int16_t left, std::int16_t right);
 
     /**
      * Batch audio callback for RetroArch.
@@ -357,70 +306,63 @@ class EmulatorController {
      *
      * @return How many samples were used (?)
      */
-    static size_t OnBatchAudioSample(const std::int16_t *data, size_t frames);
-
-    /**
-     * Thread that manages the turns for the users that are connected to the
-     * emulator
-     */
-    static void TurnThread();
+    size_t OnBatchAudioSample(const std::int16_t *data, size_t frames);
 
     /**
      * Adds a user to the turn request queue, invoked by parent LetsPlayServer
      *
      * @param user_hdl Who to add to the turn queue
      */
-    static void AddTurnRequest(LetsPlayUserHdl user_hdl);
+    void AddTurnRequest(LetsPlayUserHdl user_hdl);
 
     /**
      * Send the turn list to the connected users
      */
-    static void SendTurnList();
+    void SendTurnList();
 
     /**
      * Called when a user disconnects.
      *
      * @param user_hdl Who disconnected
      */
-    static void UserDisconnected(LetsPlayUserHdl user_hdl);
+    void UserDisconnected(LetsPlayUserHdl user_hdl);
 
     /**
      * Called when a user connects.
      *
      * @param user_hdl Who connected
      */
-    static void UserConnected(LetsPlayUserHdl user_hdl);
+    void UserConnected(LetsPlayUserHdl user_hdl);
 
     /**
      * Called when the emulator requests/announces a change in the pixel format
      */
-    static bool SetPixelFormat(const retro_pixel_format fmt);
+    bool SetPixelFormat(const retro_pixel_format fmt);
 
     /**
      * Gets a frame based on the current video buffer.
      *
      * @return The frame representing the current video buffer.
      */
-    static Frame GetFrame();
+    Frame GetFrame();
 
     /**
      * Called by the server periodically to add to the emulator history
      */
-    static void Save();
+    void Save();
 
     /**
      * Called by the server periodically to create a backup of saves and a single history state
      */
-    static void Backup();
+    void Backup();
 
     /**
      * Called by the server. Toggles fast forward state.
      */
-    static void FastForward();
+    void FastForward();
 
     /**
      * Called on emulator controller startup, tries to load save state if possible
      */
-    static void Load();
-
-};
+    void Load();
+}
