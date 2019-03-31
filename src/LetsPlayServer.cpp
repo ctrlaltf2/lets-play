@@ -41,14 +41,19 @@ void LetsPlayServer::Run(std::uint16_t port) {
 
         std::function<void()> saveFunc = [&]() { this->SaveTask(); };
         std::function<void()> backupFunc = [&]() { this->BackupTask(); };
+        std::function<void()> previewFunc = [&]() { this->PreviewTask(); };
 
-        m_scheduler.Schedule(saveFunc, savePeriod);
-        m_scheduler.Schedule(backupFunc, backupPeriod);
+        m_Scheduler.Schedule(saveFunc, savePeriod);
+        m_Scheduler.Schedule(backupFunc, backupPeriod);
+        m_Scheduler.Schedule(previewFunc, std::chrono::minutes(1));
 
         // Skip having to connect, change username, addemu
         {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
-            m_WorkQueue.push(Command{kCommandType::AddEmu, {"emu1", "./core", "./rom"}, {}, ""});
+            m_WorkQueue.push(
+                    Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
+            m_WorkQueue.push(
+                    Command{kCommandType::AddEmu, {"emu2", "./core", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
             m_QueueNotifier.notify_one();
         }
 
@@ -82,6 +87,7 @@ bool LetsPlayServer::OnValidate(websocketpp::connection_hdl hdl) {
 
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
     {
+        logger.log("Connect, locking users");
         std::unique_lock<std::mutex> lk(m_UsersMutex);
         std::shared_ptr<LetsPlayUser> user{new LetsPlayUser};
         user->setUsername("");
@@ -101,6 +107,47 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
 
         m_Users[hdl] = user;
     }
+
+    // Send available emulators
+    // TODO?: Make this an internal work queue message?
+
+    LetsPlayUserHdl user_hdl;
+    decltype(m_Users)::iterator search;
+    {
+        logger.log("Connect, locking users again");
+        std::unique_lock<std::mutex> lk(m_UsersMutex);
+        logger.log("Locked");
+        search = m_Users.find(hdl);
+        if (search == m_Users.end()) {
+            logger.log("Couldn't find user who just joined in list\n");
+            return;
+        }
+        user_hdl = search->second;
+    }
+
+    std::vector<EmuID_t> listMessage{"emus"};
+    {
+        logger.log("Connect, locking emus");
+        std::unique_lock<std::mutex> lk(m_EmusMutex);
+        logger.log("Locked");
+        for (const auto &emu : m_Emus) {
+            listMessage.push_back(emu.first);
+            listMessage.push_back(emu.second->description);
+        }
+
+        BroadcastOne(LetsPlayProtocol::encode(listMessage), hdl);
+    }
+
+    // Put a preview send request on queue
+    {
+        logger.log("Locking queue");
+        std::unique_lock<std::mutex> lk(m_QueueMutex);
+        logger.log("Locked");
+        m_WorkQueue.push(Command{kCommandType::Preview, {}, hdl, ""});
+        m_QueueNotifier.notify_one();
+    }
+    logger.log("Connect done");
+
 }
 
 void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
@@ -166,6 +213,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         t = kCommandType::AddEmu;
     else if (command == "admin")
         t = kCommandType::Admin;
+    else if (command == "addemu")
+        t = kCommandType::AddEmu;
     else if (command == "shutdown")
         t = kCommandType::Shutdown;
     else if (command == "ff")
@@ -597,10 +646,9 @@ void LetsPlayServer::QueueThread() {
                         }
                     }
                         break;
-                    case kCommandType::AddEmu: {  // emu, libretro core
-                        // path, rom path
+                    case kCommandType::AddEmu: {  // emu, dynamic lib for the core, rom path, emu description
                         // TODO:: Add file path checks
-                        if (command.params.size() != 3) break;
+                        if (command.params.size() != 4) break;
 
                         if (auto user = command.user_hdl.lock()) {
                             if (!user->hasAdmin)
@@ -610,12 +658,15 @@ void LetsPlayServer::QueueThread() {
                         auto& id = command.params[0];
                         const auto& corePath = command.params[1];
                         const auto& romPath = command.params[2];
+                        const auto &description = command.params[3];
 
+                        logger.log("Locking m_EmusThreads");
                         {
                             std::unique_lock<std::mutex> lkk(m_EmuThreadMutex);
                             m_EmulatorThreads.emplace_back(
-                                std::thread(EmulatorController::Run, corePath, romPath, this, id));
+                                    std::thread(EmulatorController::Run, corePath, romPath, this, id, description));
                         }
+                        logger.log("Doone with m_EmuThreads");
                     }
                         break;
                     case kCommandType::Admin: {
@@ -659,6 +710,16 @@ void LetsPlayServer::QueueThread() {
                             emu->fastForward();
                     }
                         break;
+                    case kCommandType::Preview: {
+                        logger.log("Internal preview command received. Locking");
+                        std::unique_lock<std::mutex> lkk(m_PreviewsMutex);
+                        logger.log("Internal preview command locked.");
+                        for (const auto &preview : m_Previews) {
+                            websocketpp::lib::error_code ec;
+                            server->send(command.hdl, preview.second.data(), preview.second.size(),
+                                         websocketpp::frame::opcode::binary, ec);
+                        }
+                    }
                     case kCommandType::RemoveEmu:
                     case kCommandType::StopEmu:
                     case kCommandType::Config:
@@ -686,25 +747,41 @@ void LetsPlayServer::BackupTask() {
 }
 
 void LetsPlayServer::PingTask() {
-    const auto ping = LetsPlayProtocol::encode("ping");
-    while(true) {
-        for (auto &pair : m_Users) {
-            auto &hdl = pair.first;
-            auto &user = pair.second;
-            websocketpp::lib::error_code ec;
+    for (auto &pair : m_Users) {
+        auto &hdl = pair.first;
+        auto &user = pair.second;
+        websocketpp::lib::error_code ec;
 
-            // Check if should d/c
-            if (user->shouldDisconnect()) {
-                server->close(hdl, websocketpp::close::status::normal, "Timed out.", ec);
-                continue;
-            }
-
-            // Send a ping if not
-            if(!hdl.expired())
-                server->send(hdl, ping, websocketpp::frame::opcode::text);
+        // Check if should d/c
+        if (user->shouldDisconnect()) {
+            server->close(hdl, websocketpp::close::status::normal, "Timed out.", ec);
+            continue;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        // Send a ping if not
+        if (!hdl.expired())
+            server->send(hdl, LetsPlayProtocol::encode("ping"), websocketpp::frame::opcode::text);
     }
+}
+
+void LetsPlayServer::PreviewTask() {
+    logger.log("Preview task called");
+    std::lock(m_EmusMutex, m_PreviewsMutex);
+    std::lock_guard<std::mutex> lk1(m_EmusMutex, std::adopt_lock);
+    std::lock_guard<std::mutex> lk2(m_PreviewsMutex, std::adopt_lock);
+    logger.log("Preview task locked");
+
+    m_Previews.clear();
+    logger.log("previews cleared");
+    std::uint8_t i = 0;
+    for (auto &p : m_Emus) {
+        logger.log("Loop start; generating jpge");
+        m_Previews[p.first] = GenerateEmuJPEG(p.first);
+        logger.log("JPEG Genrated; encoding preview byte");
+        m_Previews[p.first][0] = i++ | (kBinaryMessageType::Preview << 5);
+        logger.log("Loop end");
+    }
+    logger.log("Preview task done.");
 }
 
 void LetsPlayServer::BroadcastAll(const std::string& data, websocketpp::frame::opcode::value op) {
@@ -831,7 +908,7 @@ size_t LetsPlayServer::escapedSize(const std::string& str) {
     return output.size();
 }
 
-void LetsPlayServer::SendFrame(const EmuID_t& id) {
+std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
     thread_local static tjhandle _jpegCompressor = tjInitCompress();
     thread_local static long unsigned int _jpegBufferSize = 20000000;
     thread_local static std::vector<std::uint8_t> jpegData(20000000); // 20MB jpeg buffer
@@ -839,13 +916,13 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     thread_local static auto quality = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
                                                                  "serverConfig", "jpegQuality");
     Frame frame = [&]() {
-        std::unique_lock<std::mutex> lk(m_EmusMutex);
+        // Possible race condition, unlocked m_EmusMutex
         auto emu = m_Emus[id];
         return emu->getFrame();
     }();
 
     // currentBuffer was nullptr
-    if (frame.width == 0 || frame.height == 0) return;
+    if (frame.width == 0 || frame.height == 0) return std::vector<std::uint8_t>{0};
 
     // update quality value from config every 120 frames
     if ((++i %= 120) == 0) {
@@ -860,9 +937,16 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
     tjCompress2(_jpegCompressor, frame.data.data(), frame.width, frame.width * 3, frame.height,
                 TJPF_RGB, &cjpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
 
-    //_jpegBufferSize = _jpegBufferSize >= jpegSize ? _jpegBufferSize : jpegSize;
+    std::vector<std::uint8_t> slicedData(std::begin(jpegData), std::next(jpegData.begin(), jpegSize + 1));
 
-    jpegData[0] = kBinaryMessageType::Screen;
+    return slicedData;
+}
+
+void LetsPlayServer::SendFrame(const EmuID_t& id) {
+    auto jpegData = GenerateEmuJPEG(id);
+
+    // Mark as screen message
+    jpegData[0] = 0 | (kBinaryMessageType::Screen << 5);
 
     std::unique_lock<std::mutex> lk(m_UsersMutex);
     for (auto &pair : m_Users) {
@@ -871,7 +955,7 @@ void LetsPlayServer::SendFrame(const EmuID_t& id) {
 
         if (user->connectedEmu() == id && user->connected && !hdl.expired()) {
             websocketpp::lib::error_code ec;
-            server->send(hdl, jpegData.data(), jpegSize + 1, websocketpp::frame::opcode::binary, ec);
+            server->send(hdl, jpegData.data(), jpegData.size(), websocketpp::frame::opcode::binary, ec);
         }
     }
 }

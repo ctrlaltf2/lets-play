@@ -52,6 +52,7 @@ struct EmulatorControllerProxy {
     bool isReady{false};
     RetroPad *joypad{nullptr};
     std::function<void()> save, backup, fastForward;
+    std::string description;
 };
 
 /**
@@ -195,7 +196,7 @@ class EmulatorController {
     /**
      * Thread that runs EmulatorController::TurnThread.
      */
-    static std::thread m_TurnThread;
+    static std::shared_ptr<std::thread> m_TurnThread;
 
     /**
      * Stores the masks and shifts required to generate a rgb 0xRRGGBB
@@ -291,9 +292,10 @@ class EmulatorController {
      * by the emulator.
      * @param server Pointer to the server that manages this EmulatorController.
      * @param t_id The ID that is to be assigned to the EmulatorController instance.
+     * @param description The description of the emulator. Used as the emulator title in the join view.
      */
     static void Run(const std::string& corePath, const std::string& romPath, LetsPlayServer *server,
-                    EmuID_t t_id);
+                    EmuID_t t_id, const std::string &description);
 
     /**
      * Callback for when the libretro core sends extra info about the
