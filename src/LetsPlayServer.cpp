@@ -43,10 +43,12 @@ void LetsPlayServer::Run(std::uint16_t port) {
         std::function<void()> previewFunc = [&]() { this->PreviewTask(); };
         std::function<void()> saveFunc = [&]() { this->SaveTask(); };
         std::function<void()> backupFunc = [&]() { this->BackupTask(); };
+        std::function<void()> pingFunc = [&]() { this->PingTask(); };
 
         scheduler.Schedule(saveFunc, savePeriod);
         scheduler.Schedule(backupFunc, backupPeriod);
         scheduler.Schedule(previewFunc, std::chrono::seconds(20));
+        scheduler.Schedule(pingFunc, std::chrono::seconds(5));
 
         // Skip having to connect, change username, addemu
         /*{
@@ -219,6 +221,8 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
         t = kCommandType::Shutdown;
     else if (command == "ff")
         t = kCommandType::FastForward;
+    else if (command == "pong")
+        t = kCommandType::Pong;
     else
         return;
 

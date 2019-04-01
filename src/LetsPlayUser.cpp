@@ -16,6 +16,7 @@ LetsPlayUser::LetsPlayUser()
     g_uuidMutex.lock();
     m_uuid = g_UUIDGen();
     g_uuidMutex.unlock();
+    this->updateLastPong();
 }
 
 bool LetsPlayUser::shouldDisconnect() {
