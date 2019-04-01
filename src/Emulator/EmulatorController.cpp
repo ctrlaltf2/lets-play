@@ -257,6 +257,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                             currentUser->hasTurn = false;
                             currentUser->requestedTurn = false;
                             turnQueue.erase(turnQueue.begin());
+                            joypad.resetValues();
                             EmulatorController::SendTurnList();
                         }
                     }
@@ -265,6 +266,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                 std::unique_lock <std::mutex> lk(turnMutex);
                 if (!turnQueue.empty()) {
                     turnQueue.erase(turnQueue.begin());
+                    joypad.resetValues();
                     EmulatorController::SendTurnList();
                 }
             }

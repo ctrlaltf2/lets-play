@@ -55,4 +55,8 @@ class RetroPad {
      */
     void updateValue(unsigned index, unsigned id, std::int16_t value);
 
+    /**
+     * Called between turns, resets all buttons to unpressed so that there's no stuck down buttons
+     */
+    void resetValues();
 };

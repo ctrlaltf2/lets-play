@@ -29,3 +29,15 @@ void RetroPad::updateValue(unsigned index, unsigned id, std::int16_t value) {
     else if (id == RETRO_DEVICE_ID_ANALOG_Y)
         m_stickStates.at(index).Y.value = value;
 }
+
+void RetroPad::resetValues() {
+    for (auto &state : m_buttonStates) {
+        state.value = 0;
+    }
+
+    for (auto &stick : m_stickStates) {
+        stick.X.value = 0;
+        stick.Y.value = 0;
+        dd
+    }
+}
