@@ -214,11 +214,23 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.GetAudioVideoInfo(&avinfo);
 
     unsigned msWait = (1.0 / avinfo.timing.fps) * 1000;
-    std::chrono::time_point<std::chrono::steady_clock> wait_time =
+    std::chrono::time_point<std::chrono::steady_clock> nextRun =
             std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
 
+    // Set FPS if applicable
+    auto overrideFPS = server->config.get<bool>(nlohmann::json::value_t::boolean, "serverConfig", "emulators", id,
+                                                "overrideFramerate");
+    std::chrono::microseconds frameDeltaTime;
+
+
+    if (overrideFPS) {
+        auto newFPS = server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
+                                                        "emulators", id, "fps");
+        frameDeltaTime = std::chrono::microseconds(1'000'000) / newFPS;
+    }
+
     // Terrible main emulator loop that manages all the things
-    std::chrono::time_point <std::chrono::steady_clock> turnEnd;
+    std::chrono::time_point<std::chrono::steady_clock> turnEnd, nextFrame;
     bool frameSkip = false;
     while (true) {
         // Check turn state
@@ -259,7 +271,8 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         }
 
         // While there's work and we have time before the next retro_run call
-        while (!workQueue.empty() && (std::chrono::steady_clock::now() < wait_time)) {
+        while (!workQueue.empty() && (std::chrono::steady_clock::now() < nextRun) &&
+               (!overrideFPS || (std::chrono::steady_clock::now() < nextFrame))) {
             auto &command = workQueue.front();
 
             switch (command.command) {
@@ -294,10 +307,17 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         // Wait until the next frame because at this point we've either passed the wait time (so 0 wait) or have no more work
         // NOTE: If on a slow fps rate, there will be a lot of wasted time and the turns updating and work queue will be slow
         // This relies on the fact that emulators usually want to be run 30 to 60 times a second
-        std::this_thread::sleep_until(wait_time);
-        wait_time = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
+        std::this_thread::sleep_until(nextRun);
+        nextRun = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
         Core.Run();
-        if ((frameSkip ^= true)) server->SendFrame(id);
+
+        if (overrideFPS && (nextFrame < std::chrono::steady_clock::now())) {
+            server->SendFrame(id);
+            nextFrame = std::chrono::steady_clock::now() + frameDeltaTime;
+        } else if (!overrideFPS) {
+            if (fastForward && (frameSkip ^= true)) server->SendFrame(id);
+            else server->SendFrame(id);
+        }
     }
 }
 

@@ -9,7 +9,9 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
             "template": {
                 "coreLocation": "./core",
                 "romLocation": "./rom",
-                "turnLength": 10000
+                "turnLength": 10000,
+                "overrideFramerate": false,
+                "fps": 60
             }
         },
         "backups": {
