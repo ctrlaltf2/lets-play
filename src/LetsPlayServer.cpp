@@ -327,6 +327,9 @@ void LetsPlayServer::QueueThread() {
                         if (user->username().empty())
                             break;
 
+                        if (user->connectedEmu().empty())
+                            break;
+
                         // Message only has values in the range of typeable
                         // ascii characters excluding \n and \t
                         if (!LetsPlayServer::isAsciiStr(command.params[0])) break;
@@ -336,9 +339,9 @@ void LetsPlayServer::QueueThread() {
 
                         if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
-                        BroadcastAll(
-                                LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
-                                websocketpp::frame::opcode::text
+                        BroadcastToEmu(user->connectedEmu(),
+                                       LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
+                                       websocketpp::frame::opcode::text
                         );
                         logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
                     }
