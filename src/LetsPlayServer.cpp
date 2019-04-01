@@ -724,6 +724,10 @@ void LetsPlayServer::QueueThread() {
                         user->updateLastPong();
                     break;
                 case kCommandType::FastForward: {
+                    {
+                        auto user = command.user_hdl.lock();
+                        if (user && !user->hasTurn && !user->hasAdmin) break;
+                    }
                     std::unique_lock<std::mutex> lkk(m_EmusMutex);
                     auto emu = m_Emus[command.emuID];
                     if (emu) {
