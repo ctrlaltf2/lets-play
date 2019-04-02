@@ -38,6 +38,5 @@ void RetroPad::resetValues() {
     for (auto &stick : m_stickStates) {
         stick.X.value = 0;
         stick.Y.value = 0;
-        dd
     }
 }
