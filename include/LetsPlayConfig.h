@@ -75,7 +75,6 @@ class LetsPlayConfig {
 
     ~LetsPlayConfig();
 
-    // TODO: Variadic function, string..., nlohmann::json::type. Warn or error onmismatched datatype or nonexistent value. Falls back on default config. A call might look like nlohmann::json val = config.pull("serverConfig", "emulators", "emu1", "turnLength", nlohmann::json::value_t::number_unsigned);
     // 1
     template<typename ReturnType, typename... Keys>
     ReturnType get(nlohmann::json::value_t expectedType, std::string key, Keys... k) {
@@ -104,5 +103,24 @@ class LetsPlayConfig {
     // n;
     nlohmann::json &get(nlohmann::json &j, std::string key) {
         return j[key];
+    }
+
+    template<typename ...Keys>
+    void set(std::string key, Keys... k) {
+        {
+            std::unique_lock<std::shared_timed_mutex> lk(mutex);
+            setImpl(config, key, k...);
+        }
+        SaveConfig();
+    }
+
+    template<typename ...Keys>
+    void setImpl(nlohmann::json& t, std::string key, Keys... k) {
+        setImpl(t[key], k...);
+    }
+
+    template<typename Value>
+    void setImpl(nlohmann::json& t, std::string key, Value v) {
+        t[key] = v;
     }
 };

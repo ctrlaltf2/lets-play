@@ -152,12 +152,13 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
-    {
-        std::unique_lock<std::shared_timed_mutex> lk(server->config.mutex);
-        if (!server->config.config["serverConfig"]["emulators"].count(t_id)) {
-            server->config.config["serverConfig"]["emulators"][t_id] =
-                LetsPlayConfig::defaultConfig["serverConfig"]["emulators"]["template"];
-        }
+    std::cout << "Getting" << '\n';
+    auto emuConfigs = server->config.get<nlohmann::json>(nlohmann::json::value_t::array, "serverConfig", "emulators");
+    std::cout << emuConfigs << '\n';
+    if(!emuConfigs.count(id)) {
+        std::cout << "No count, setting" << '\n';
+        auto emuTemplate = server->config.get<nlohmann::json>(nlohmann::json::value_t::object, "serverConfig", "emulators", "template");
+        server->config.set("serverConfig", "emulators", id, emuTemplate);
     }
 
     // Create emu folder if it doesn't already exist

@@ -19,6 +19,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
         server->set_message_handler(std::bind(&LetsPlayServer::OnMessage, this, ::_1, ::_2));
         server->set_open_handler(std::bind(&LetsPlayServer::OnConnect, this, ::_1));
         server->set_close_handler(std::bind(&LetsPlayServer::OnDisconnect, this, ::_1));
+        server->set_http_handler(std::bind(&LetsPlayServer::OnHTTP, this, ::_1));
 
         websocketpp::lib::error_code err;
         server->listen(port, err);
@@ -187,6 +188,101 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
         // Double check is on purpose
         search = m_Users.find(hdl);
         if (search != m_Users.end()) m_Users.erase(search);
+    }
+}
+
+void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path) {
+    // TODO: Rewrite this to be not dartzcode (not that its bad or anything)
+    using std::ifstream;
+    ifstream file(file_path.string(), ifstream::in | ifstream::binary | ifstream::ate);
+    if (file.is_open())
+    {
+        // Read the entire file into a string
+        std::string resp_body;
+        size_t size = file.tellg();
+        if (size >= 0)
+        {
+            if (size)
+            {
+                resp_body.reserve();
+                file.seekg(0, ifstream::beg);
+                resp_body.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+            }
+            cptr->set_body(resp_body);
+            cptr->set_status(websocketpp::http::status_code::ok);
+            return;
+        }
+    }
+}
+
+void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
+    websocketpp::lib::error_code err;
+    auto cptr = server->get_con_from_hdl(hdl, err);
+    if (err) return;
+
+    const std::string ip = [&]() {
+        boost::system::error_code ec;
+        const auto &ep = cptr->get_raw_socket().remote_endpoint(ec);
+        if (!ec)
+            return ep.address().to_string();
+        else
+            return std::string("");
+    }();
+
+    logger.log('[', ip, "] Requested resource: ", cptr->get_resource());
+    if (cptr->get_request_body().length() > 0)
+        logger.log('[', ip, "] Requested body: ", cptr->get_request_body());
+
+    std::string path = cptr->get_resource();
+
+    if (path.size() == 0)
+        return; // TODO: 404
+
+    // Add / if none exists
+    if (path[0] != '/')
+        path = '/' + path;
+
+    // Prevent path traversal
+    if (path.find("..") != std::string::npos) {
+        // TODO: 404
+        return;
+    }
+
+    cptr->append_header("Access-Control-Allow-Origin", "*");
+    const auto request = cptr->get_request();
+
+    const std::regex emu_re{R"(\/emu\/([A-Za-z0-9]+)$)"};
+    std::smatch m;
+
+    if(request.get_method() == "GET" && (path == "/" || std::regex_match(path, m, emu_re))) { // GET / OR /emu/[id]
+        std::string id;
+        if(m.size() > 0) { // If in the form /emu/[id]
+            id = m[1].str();
+
+            std::unique_lock<std::mutex> lk(m_EmusMutex);
+            // If any not equal to id
+            if(std::all_of(m_Emus.begin(), m_Emus.end(), [id](const auto& a) {return a.first != id;})) {
+                cptr->append_header("Location", "/");
+            }
+            lk.unlock();
+        }
+
+        // Send client
+        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "dist" / "index.html");
+    } else if(request.get_method() == "GET" && path == "/admin") {
+        // TODO: Admin
+        cptr->set_body("404");
+        cptr->set_status(websocketpp::http::status_code::not_found);
+    } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "dist" / path)) {
+        // TODO: 404
+        auto request = lib::filesystem::path(".") / "client" / "dist" / path;
+        if(!lib::filesystem::is_regular_file(request)) {
+            cptr->set_body("404");
+            cptr->set_status(websocketpp::http::status_code::not_found);
+            return;
+        }
+
+        LetsPlayServer::sendHTTPFile(cptr, request);
     }
 }
 
@@ -745,7 +841,6 @@ void LetsPlayServer::QueueThread() {
                 case kCommandType::Preview: {
                     std::unique_lock<std::mutex> lkk(m_PreviewsMutex);
                     for (const auto &preview : m_Previews) {
-                        logger.log("Sending a preview of ", preview.second.size());
                         websocketpp::lib::error_code ec;
                         server->send(command.hdl, preview.second.data(), preview.second.size(),
                                      websocketpp::frame::opcode::binary, ec);
