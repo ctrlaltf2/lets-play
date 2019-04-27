@@ -271,14 +271,11 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         }
 
         // Send client
-        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "dist" / "index.html");
+        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html");
     } else if(request.get_method() == "GET" && path == "/admin") {
         // TODO: Admin
-        cptr->set_body("404");
-        cptr->set_status(websocketpp::http::status_code::not_found);
-    } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "dist" / path)) {
-        // TODO: 404
-        auto request = lib::filesystem::path(".") / "client" / "dist" / path;
+    } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "root" / path)) {
+        auto request = lib::filesystem::path(".") / "client" / "root" / path;
         if(!lib::filesystem::is_regular_file(request)) {
             cptr->set_body("404");
             cptr->set_status(websocketpp::http::status_code::not_found);
