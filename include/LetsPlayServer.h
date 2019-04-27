@@ -447,5 +447,5 @@ class LetsPlayServer {
      * @param con Who to send to
      * @param file_path Path to the file to send
      */
-    static void sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path);
+    static void sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path, websocketpp::http::status_code::value);
 };

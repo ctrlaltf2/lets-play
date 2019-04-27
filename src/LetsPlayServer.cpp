@@ -52,14 +52,14 @@ void LetsPlayServer::Run(std::uint16_t port) {
         scheduler.Schedule(pingFunc, std::chrono::seconds(5));
 
         // Skip having to connect, change username, addemu
-        /*{
+        {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
-            //m_WorkQueue.push(
-            //        Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
-            //m_WorkQueue.push(
-            //        Command{kCommandType::AddEmu, {"emu2", "./snes9x.so", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
+            m_WorkQueue.push(
+                    Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
+            m_WorkQueue.push(
+                    Command{kCommandType::AddEmu, {"emu2", "./snes9x.so", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
             m_QueueNotifier.notify_one();
-        }*/
+        }
 
         server->start_accept();
         server->run();
@@ -191,7 +191,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     }
 }
 
-void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path) {
+void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path, websocketpp::http::status_code::value status) {
     // TODO: Rewrite this to be not dartzcode (not that its bad or anything)
     using std::ifstream;
     ifstream file(file_path.string(), ifstream::in | ifstream::binary | ifstream::ate);
@@ -209,7 +209,7 @@ void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesy
                 resp_body.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
             }
             cptr->set_body(resp_body);
-            cptr->set_status(websocketpp::http::status_code::ok);
+            cptr->set_status(status);
             return;
         }
     }
@@ -258,6 +258,7 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
     std::smatch m;
 
     if(request.get_method() == "GET" && (path == "/" || std::regex_match(path, m, emu_re))) { // GET / OR /emu/[id]
+        auto status = websocketpp::http::status_code::ok;
         std::string id;
         if(m.size() > 0) { // If in the form /emu/[id]
             id = m[1].str();
@@ -266,12 +267,13 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
             // If any not equal to id
             if(std::all_of(m_Emus.begin(), m_Emus.end(), [id](const auto& a) {return a.first != id;})) {
                 cptr->append_header("Location", "/");
+                status = websocketpp::http::status_code::moved_permanently;
             }
             lk.unlock();
         }
 
         // Send client
-        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html");
+        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html", status);
     } else if(request.get_method() == "GET" && path == "/admin") {
         // TODO: Admin
     } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "root" / path)) {
@@ -282,7 +284,7 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
             return;
         }
 
-        LetsPlayServer::sendHTTPFile(cptr, request);
+        LetsPlayServer::sendHTTPFile(cptr, request, websocketpp::http::status_code::ok);
     } else {
         cptr->set_body("404");
         cptr->set_status(websocketpp::http::status_code::not_found);
