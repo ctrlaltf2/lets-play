@@ -235,8 +235,10 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
 
     std::string path = cptr->get_resource();
 
-    if (path.size() == 0)
-        return; // TODO: 404
+    if (path.size() == 0) {
+        cptr->set_body("404");
+        cptr->set_status(websocketpp::http::status_code::not_found);
+    }
 
     // Add / if none exists
     if (path[0] != '/')
@@ -244,7 +246,8 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
 
     // Prevent path traversal
     if (path.find("..") != std::string::npos) {
-        // TODO: 404
+        cptr->set_body("404");
+        cptr->set_status(websocketpp::http::status_code::not_found);
         return;
     }
 
@@ -283,6 +286,9 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         }
 
         LetsPlayServer::sendHTTPFile(cptr, request);
+    } else {
+        cptr->set_body("404");
+        cptr->set_status(websocketpp::http::status_code::not_found);
     }
 }
 
