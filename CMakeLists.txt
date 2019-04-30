@@ -17,7 +17,7 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
     # Update submodules
     option(GIT_SUBMODULE "Check submodules during build" ON)
     if(GIT_SUBMODULE)
-        message(STATUS "Updating submodules")
+        message(STATUS "Updating submodules...")
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
@@ -72,8 +72,15 @@ set_target_properties(letsplay
         CXX_STANDARD 14
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
-        RUNTIME_OUTPUT_DIRECTORY bin
-)
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+        )
+
+add_custom_target(fetch-client
+        COMMAND rm -rf ${CMAKE_SOURCE_DIR}/bin/client && git clone https://github.com/ctrlaltf2/lets-play-client ${CMAKE_SOURCE_DIR}/bin/client
+        COMMENT Fetching client...
+        )
+
+add_dependencies(letsplay fetch-client)
 
 target_compile_features(letsplay
     PUBLIC
@@ -141,3 +148,4 @@ target_link_libraries(letsplay
         turbojpeg
         atomic
 )
+
