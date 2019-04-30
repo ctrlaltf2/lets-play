@@ -12,7 +12,7 @@
 #include "RetroCore.h"
 
 int main(int argc, char **argv) {
-    std::uint16_t port{80};
+    std::uint16_t port{8080};
 
     lib::filesystem::path configPath; // default: ($XDG_CONFIG_HOME || $HOME/.config)/letsplay/config.json
     const char *cXDGConfigHome = std::getenv("XDG_CONFIG_HOME");
