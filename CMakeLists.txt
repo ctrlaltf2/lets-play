@@ -75,12 +75,23 @@ set_target_properties(letsplay
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
         )
 
-add_custom_target(fetch-client
-        COMMAND rm -rf ${CMAKE_SOURCE_DIR}/bin/client && git clone https://github.com/ctrlaltf2/lets-play-client ${CMAKE_SOURCE_DIR}/bin/client
-        COMMENT Fetching client...
+add_custom_target(update-client ALL
+        DEPENDS
+        ${CMAKE_SOURCE_DIR}/bin/client
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/client
+        COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
+        COMMENT Updating client...
         )
 
-add_dependencies(letsplay fetch-client)
+add_custom_command(
+        OUTPUT
+        ${CMAKE_SOURCE_DIR}/bin/client
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
+        COMMENT Fetching client..
+        )
+
+add_dependencies(letsplay update-client)
 
 target_compile_features(letsplay
     PUBLIC
