@@ -1,4 +1,6 @@
 # Let's Play
+
+[![Discord](https://discordapp.com/api/guilds/572941118065606667/widget.png)](https://discord.gg/GNChjnn)
 A web-based collaborative RetroArch frontend
 
 ![screenshot](https://raw.githubusercontent.com/ctrlaltf2/lets-play-server/master/screenshot.png)
