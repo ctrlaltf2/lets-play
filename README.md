@@ -1,9 +1,10 @@
 # Let's Play
 
 [![Discord](https://discordapp.com/api/guilds/572941118065606667/widget.png)](https://discord.gg/GNChjnn)
+
 A web-based collaborative RetroArch frontend
 
-![screenshot](https://raw.githubusercontent.com/ctrlaltf2/lets-play-server/master/screenshot.png)
+![Screenshot](https://raw.githubusercontent.com/ctrlaltf2/lets-play-server/master/screenshot.png)
 
 # What is a "web-based collaborative RetroArch frontend"?
 Why thanks for asking, a A web-based collaborative RetroArch frontend is just a fancy phrase for a video game you can play online, collaboratively, with strangers by taking turns at the controller (so to speak). Users connect using [the web portion](https://github.com/ctrlaltf2/lets-play-client) which connects to this, the backend, and are then able to interact with an emulator that (usually) runs a retro video game system of some sort.
