@@ -40,3 +40,12 @@ void RetroPad::resetValues() {
         stick.Y.value = 0;
     }
 }
+
+std::bitset<16> RetroPad::getPressedState() {
+    std::bitset<16> state;
+    for(int i = 0; i < state.size();++i) {
+        state[i] = this->isPressed(i);
+    }
+
+    return state;
+}

@@ -751,18 +751,33 @@ void LetsPlayServer::QueueThread() {
 
                     if (!command.emuID.empty()) {
                         std::unique_lock<std::mutex> lkk(m_EmusMutex);
+                        auto& joypad = m_Emus[command.emuID]->joypad;
                         if (buttonType == "button") {
                             if (id > 15)
                                 break;
-                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_BUTTON, id, value);
+
+                            auto potentialState = joypad->getPressedState();
+                            potentialState[id] = /* isPressed */ std::abs(value) > ((2 << 14) - 1) / 2;
+
+                            bool shouldBlock{false};
+                            for(const auto& forbiddenCombo : *m_Emus[command.emuID]->forbiddenCombos) {
+                                if((potentialState & forbiddenCombo) == forbiddenCombo) {
+                                    shouldBlock = true;
+                                    break;
+                                }
+                            }
+
+                            if(shouldBlock) break;
+
+                            joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_BUTTON, id, value);
                         } else if (buttonType == "leftStick") {
                             if (id > 1)
                                 break;
-                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_LEFT, id, value);
+                            joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_LEFT, id, value);
                         } else if (buttonType == "rightStick") {
                             if (id > 1)
                                 break;
-                            m_Emus[command.emuID]->joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_RIGHT, id, value);
+                            joypad->updateValue(RETRO_DEVICE_INDEX_ANALOG_RIGHT, id, value);
                         }
                     }
                 }

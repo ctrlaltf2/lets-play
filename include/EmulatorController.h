@@ -14,6 +14,7 @@ struct VideoFormat;
 struct Frame;
 #pragma once
 #include <algorithm>
+#include <bitset>
 #include <condition_variable>
 #include <cstdint>
 #include <ctime>
@@ -120,6 +121,11 @@ struct EmulatorControllerProxy {
      * Emulator description
      */
     std::string /*-*/description;
+
+    /**
+     * Pointer to the forbidden combos list
+     */
+    std::vector<std::bitset<16>>* forbiddenCombos;
 };
 
 /**
