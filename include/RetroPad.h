@@ -10,6 +10,7 @@ class RetroPad;
 
 #include <array>
 #include <atomic>
+#include <bitset>
 #include <cmath>
 #include <cstdint>
 
@@ -59,4 +60,9 @@ class RetroPad {
      * Called between turns, resets all buttons to unpressed so that there's no stuck down buttons
      */
     void resetValues();
+
+    /**
+     * Retrieve the internal button press represented as a bitset. Used for checking for forbidden button combos.
+     */
+     std::bitset<16> getPressedState();
 };

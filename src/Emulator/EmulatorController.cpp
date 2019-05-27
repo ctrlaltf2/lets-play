@@ -129,6 +129,37 @@ namespace EmulatorController {
      * Queue thread
      */
     static thread_local std::thread queueThread;
+
+    /**
+     * List of the forbidden button combos
+     * @note Works by using 16 length bitsets that act as the pressed state for the input. The nth bit in the bitsets
+     * represent the RETRO_DEVICE_ID_JOYPAD ID and whether or not it is pressed. On every button press by a user,
+     * the button state for this emulator is retrieved as a bitset. Then, every bitset in this is list is AND'd against
+     * that state. If the resultant is the same as the forbidden state, then the button combo should be blocked.
+     */
+     static thread_local std::vector<std::bitset<16>> forbiddenCombos;
+
+     /**
+      * Relation for button name -> Retro button ID
+      */
+     static const std::map<std::string, unsigned> buttonAsRetroID = {
+             {"a", RETRO_DEVICE_ID_JOYPAD_A},
+             {"b", RETRO_DEVICE_ID_JOYPAD_B},
+             {"x", RETRO_DEVICE_ID_JOYPAD_X},
+             {"y", RETRO_DEVICE_ID_JOYPAD_Y},
+             {"start", RETRO_DEVICE_ID_JOYPAD_START},
+             {"select", RETRO_DEVICE_ID_JOYPAD_SELECT},
+             {"up", RETRO_DEVICE_ID_JOYPAD_UP},
+             {"down", RETRO_DEVICE_ID_JOYPAD_DOWN},
+             {"left", RETRO_DEVICE_ID_JOYPAD_LEFT},
+             {"right", RETRO_DEVICE_ID_JOYPAD_RIGHT},
+             {"r", RETRO_DEVICE_ID_JOYPAD_R},
+             {"l", RETRO_DEVICE_ID_JOYPAD_L},
+             {"r2", RETRO_DEVICE_ID_JOYPAD_R2},
+             {"l2", RETRO_DEVICE_ID_JOYPAD_L2},
+             {"r3", RETRO_DEVICE_ID_JOYPAD_R3},
+             {"l3", RETRO_DEVICE_ID_JOYPAD_L3}
+     };
 }
 
 
@@ -148,12 +179,12 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.Load(coreFile.string().c_str());
     server = t_server;
     id = t_id;
-    proxy = EmulatorControllerProxy{&workQueue, &queueMutex, &queueNotifier, GetFrame, &joypad, description};
+    proxy = EmulatorControllerProxy{&workQueue, &queueMutex, &queueNotifier, GetFrame, &joypad, description, &forbiddenCombos};
     server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
     std::cout << "Getting" << '\n';
-    auto emuConfigs = server->config.get<nlohmann::json>(nlohmann::json::value_t::array, "serverConfig", "emulators");
+    auto emuConfigs = server->config.get<nlohmann::json>(nlohmann::json::value_t::object, "serverConfig", "emulators");
     std::cout << emuConfigs << '\n';
     if(!emuConfigs.count(id)) {
         std::cout << "No count, setting" << '\n';
@@ -176,6 +207,42 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.SetAudioSample(OnLRAudioSample);
     Core.SetAudioSampleBatch(OnBatchAudioSample);
     Core.Init();
+
+    // Load forbidden button combos into memory
+    // ...
+    auto jForbiddenCombos = server->config.get<nlohmann::json>(nlohmann::json::value_t::array, "serverConfig", "emulators", id, "forbiddenCombos");
+
+    for(std::string buttons : jForbiddenCombos) {
+        bool goodCombo{true};
+        std::stringstream ss{buttons};
+        std::bitset<16> combo;
+        for(std::string button; ss >> button;) {
+            std::transform(button.begin(), button.end(), button.begin(), ::tolower);
+            try {
+                const auto retroID = buttonAsRetroID.at(button);
+                combo[retroID] = true;
+            } catch(const std::out_of_range& e) {
+                server->logger.log(id, ": Invalid button name found in forbiddenCombos list called '", button, "'.");
+                goodCombo = false;
+                break;
+            }
+        }
+        if(combo.any() && goodCombo)
+            forbiddenCombos.push_back(combo);
+    }
+
+    /*
+     * Load emuConfig[id][forbiddenCombos]
+     * For each list in that list:
+     *      set state 0
+     *      convert all list items to upper
+     *      for each forbidden button name:
+     *          lookup item in name -> Retro_id map
+     *          if not found, continue to next forbiddenCombos list (warn server dude)
+     *          if found, |= onto state
+     *      forbiddenCombos += state
+     *
+     */
 
     server->logger.log(id, ": Finished initialization.");
 

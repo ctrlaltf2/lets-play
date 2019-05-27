@@ -11,6 +11,7 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
                 "romLocation": "./rom",
                 "turnLength": 10000,
                 "overrideFramerate": false,
+                "forbiddenCombos": [],
                 "fps": 60
             }
         },
