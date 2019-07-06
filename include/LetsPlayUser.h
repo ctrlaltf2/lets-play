@@ -110,11 +110,6 @@ public:
      */
     std::atomic<std::uint32_t> adminAttempts;
 
-    /**
-     * If the user is muted
-     */
-     std::atomic<bool> isMuted;
-
     LetsPlayUser();
 
     /*
@@ -159,41 +154,6 @@ public:
      * Get the IP string for the user
      */
     std::string IP() const;
-
-    /**
-     * Get the last username change for the user
-     */
-    std::chrono::time_point<std::chrono::steady_clock> lastUsernameChange();
-
-    /**
-     * Update the last username change to now
-     */
-    void updateLastUsernameChange();
-
-    /**
-     * Update the message timestamps list to remove the oldest one if applicable and add
-     * current timestamp to the list
-     * @param historySize The maximum length of the m_messageTimestamps as defined by the config. THis
-     * is used in determining if the function should remove the oldest timestamp before adding the current
-     * one.
-     */
-    void updateMessageTimestamps(const std::uint32_t historySize);
-
-    /**
-     * Get the timestamps of the last sent messages
-     */
-    std::vector<std::chrono::time_point<std::chrono::steady_clock>> messageTimestamps();
-
-    /**
-     * Get a copy of the mute time point
-     */
-    std::chrono::time_point<std::chrono::steady_clock> muteTime();
-
-    /**
-     * Set the mute time point to now + the number of seconds in the seconds param
-     * @param seconds the number of seconds to mute the user
-     */
-    void mute(const std::uint32_t seconds);
 
     /**
      * Update pong time to now

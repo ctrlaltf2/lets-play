@@ -440,30 +440,31 @@ void LetsPlayServer::QueueThread() {
 
                         if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
-                        if(user->isMuted) {
-                            if(std::chrono::steady_clock::now() < user->muteTime()) {
-                                logger.log("Muted. skip user's message.");
+                        std::unique_lock<std::mutex> lk(this->m_MutesMutex);
+                        auto& ip = m_Mutes[user->IP()];
+
+                        if(ip.isMuted) {
+                            if(std::chrono::steady_clock::now() < ip.muteTime)
                                 break;
-                            }
 
                             /* Here, the user would be marked as muted but their mute should expire, so
                              * update mute state and allow this message */
-                            user->isMuted = false;
-                            logger.log("Unmuting user, expired");
+                            ip.isMuted = false;
+                            logger.log("Unmuting ", user->IP(), ".");
                         }
 
                         auto messagesPerInterval = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
                                                                              "serverConfig", "emulators", user->connectedEmu(), "muting", "messagesPerInterval");
 
+                        auto& messageTimestamps = ip.messageTimestamps;
+
                         // Should mute?
-                        if(!user->isMuted) {
+                        if(!ip.isMuted) {
                             logger.log("Checking mute eligibility");
                             auto intervalTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
                                                                           "serverConfig", "emulators", user->connectedEmu(), "muting", "intervalTime");
                             auto muteTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
                                                                       "serverConfig", "emulators", user->connectedEmu(), "muting", "muteTime");
-
-                            auto messageTimestamps = user->messageTimestamps();
 
                             /* Mutable as in able to be muted. This counts messages that are sent within
                              * the last intervalTime seconds */
@@ -474,9 +475,10 @@ void LetsPlayServer::QueueThread() {
                             logger.log("mutableMessages: ", mutableMessages);
                             if((mutableMessages + 1) > messagesPerInterval) {
                                 logger.log("(", user->username(), ") was muted for ", muteTime, " seconds.");
-                                user->mute(muteTime);
-                                user->isMuted = true;
+                                ip.muteTime = std::chrono::steady_clock::now() + std::chrono::seconds(muteTime);
+                                ip.isMuted = true;
                                 BroadcastOne(LetsPlayProtocol::encode("mute", muteTime), command.hdl);
+                                break;
                             }
 
                         }
@@ -486,8 +488,11 @@ void LetsPlayServer::QueueThread() {
                                        websocketpp::frame::opcode::text
                         );
 
-                        // Was allowed to send, so update message timestamps
-                        user->updateMessageTimestamps(messagesPerInterval);
+                        // IP was allowed to send, so update message timestamps
+                        if(messageTimestamps.size() >= messagesPerInterval)
+                            messageTimestamps.erase(messageTimestamps.begin());
+
+                        messageTimestamps.push_back(std::chrono::steady_clock::now());
 
                         logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
                     }
@@ -739,11 +744,6 @@ void LetsPlayServer::QueueThread() {
                                                          user->connectedEmu()),
                                 command.hdl
                         );
-
-                        if(user->isMuted && user->muteTime() < std::chrono::steady_clock::now()) {
-                            auto muteTimeLeft = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - user->muteTime());
-                            BroadcastOne(LetsPlayProtocol::encode("mute", muteTimeLeft.count()), command.hdl);
-                        }
 
                         auto &emu = m_Emus[command.params[0]];
 

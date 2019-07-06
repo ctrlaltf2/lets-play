@@ -100,6 +100,28 @@ enum kBinaryMessageType {
 };
 
 /**
+ * @struct IPData
+ *
+ * POD class for keeping track of IP-specific data such as mutes and username ratelimits
+ */
+struct IPData {
+    /**
+     * Whether or not the IP is muted
+     **/
+    bool isMuted{false};
+
+    /**
+     * Timestamps for the last message
+     **/
+    std::vector<std::chrono::time_point<std::chrono::steady_clock>> messageTimestamps;
+
+    /**
+     * Timestamp for when the user's mute expires
+     **/
+    std::chrono::time_point<std::chrono::steady_clock> muteTime;
+};
+
+/**
  * @struct Command
  *
  * POD class for the action queue
@@ -216,7 +238,17 @@ class LetsPlayServer {
      */
     std::mutex m_PreviewsMutex;
 
-  public:
+    /**
+     * IP -> IPData for mutes
+     */
+    std::map<std::string, IPData> m_Mutes;
+
+    /**
+     * Mutex for mutes
+     */
+     std::mutex m_MutesMutex;
+
+public:
     LetsPlayConfig config;
 
     /**
