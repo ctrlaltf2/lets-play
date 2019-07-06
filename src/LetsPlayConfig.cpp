@@ -12,7 +12,13 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
                 "turnLength": 10000,
                 "overrideFramerate": false,
                 "forbiddenCombos": [],
-                "fps": 60
+                "fps": 60,
+                "muting": {
+                    "messagesPerInterval": 3,
+                    "intervalTime": 4,
+                    "usernameChangeCooldown": 1000,
+                    "muteTime": 5
+                }
             }
         },
         "backups": {

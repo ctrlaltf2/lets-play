@@ -62,7 +62,29 @@ class LetsPlayUser {
      */
     std::string m_ip;
 
-  public:
+    /**
+     * List that stores the timestamps for the last n messages the user sent where n is the value specified in
+     * config["serverConfig"]["emulators"][emuID]["muting"]["messagesPerInterval"]
+     */
+    std::vector<std::chrono::time_point<std::chrono::steady_clock>> m_messageTimestamps;
+
+    /**
+     * Time point for the last username change
+     */
+    std::chrono::time_point<std::chrono::steady_clock> m_lastUsernameChange;
+
+    /**
+     * Time point for when the user was muted
+     */
+    std::chrono::time_point<std::chrono::steady_clock> m_muteTime;
+
+    /**
+     * Mutex for muting related objects
+     */
+    std::mutex m_muting;
+
+
+public:
     /**
      * if the user has a turn on their emu
      */
@@ -87,6 +109,11 @@ class LetsPlayUser {
      * How many admin attempts the user has made
      */
     std::atomic<std::uint32_t> adminAttempts;
+
+    /**
+     * If the user is muted
+     */
+     std::atomic<bool> isMuted;
 
     LetsPlayUser();
 
@@ -134,7 +161,42 @@ class LetsPlayUser {
     std::string IP() const;
 
     /**
-     * Updates pong time
+     * Get the last username change for the user
+     */
+    std::chrono::time_point<std::chrono::steady_clock> lastUsernameChange();
+
+    /**
+     * Update the last username change to now
+     */
+    void updateLastUsernameChange();
+
+    /**
+     * Update the message timestamps list to remove the oldest one if applicable and add
+     * current timestamp to the list
+     * @param historySize The maximum length of the m_messageTimestamps as defined by the config. THis
+     * is used in determining if the function should remove the oldest timestamp before adding the current
+     * one.
+     */
+    void updateMessageTimestamps(const std::uint32_t historySize);
+
+    /**
+     * Get the timestamps of the last sent messages
+     */
+    std::vector<std::chrono::time_point<std::chrono::steady_clock>> messageTimestamps();
+
+    /**
+     * Get a copy of the mute time point
+     */
+    std::chrono::time_point<std::chrono::steady_clock> muteTime();
+
+    /**
+     * Set the mute time point to now + the number of seconds in the seconds param
+     * @param seconds the number of seconds to mute the user
+     */
+    void mute(const std::uint32_t seconds);
+
+    /**
+     * Update pong time to now
      */
     void updateLastPong();
 
