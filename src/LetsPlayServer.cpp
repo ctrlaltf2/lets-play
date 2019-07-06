@@ -440,10 +440,55 @@ void LetsPlayServer::QueueThread() {
 
                         if (LetsPlayServer::escapedSize(command.params[0]) > maxMessageSize) break;
 
+                        if(user->isMuted) {
+                            if(std::chrono::steady_clock::now() < user->muteTime()) {
+                                logger.log("Muted. skip user's message.");
+                                break;
+                            }
+
+                            /* Here, the user would be marked as muted but their mute should expire, so
+                             * update mute state and allow this message */
+                            user->isMuted = false;
+                            logger.log("Unmuting user, expired");
+                        }
+
+                        auto messagesPerInterval = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                             "serverConfig", "emulators", user->connectedEmu(), "muting", "messagesPerInterval");
+
+                        // Should mute?
+                        if(!user->isMuted) {
+                            logger.log("Checking mute eligibility");
+                            auto intervalTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                          "serverConfig", "emulators", user->connectedEmu(), "muting", "intervalTime");
+                            auto muteTime = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
+                                                                      "serverConfig", "emulators", user->connectedEmu(), "muting", "muteTime");
+
+                            auto messageTimestamps = user->messageTimestamps();
+
+                            /* Mutable as in able to be muted. This counts messages that are sent within
+                             * the last intervalTime seconds */
+                            auto mutableMessages = std::count_if(messageTimestamps.begin(), messageTimestamps.end(), [&](const auto& timestamp) {
+                                return timestamp > std::chrono::steady_clock::now() - std::chrono::seconds(intervalTime);
+                            });
+
+                            logger.log("mutableMessages: ", mutableMessages);
+                            if((mutableMessages + 1) > messagesPerInterval) {
+                                logger.log("(", user->username(), ") was muted for ", muteTime, " seconds.");
+                                user->mute(muteTime);
+                                user->isMuted = true;
+                                BroadcastOne(LetsPlayProtocol::encode("mute", muteTime), command.hdl);
+                            }
+
+                        }
+
                         BroadcastToEmu(user->connectedEmu(),
                                        LetsPlayProtocol::encode("chat", user->username(), command.params[0]),
                                        websocketpp::frame::opcode::text
                         );
+
+                        // Was allowed to send, so update message timestamps
+                        user->updateMessageTimestamps(messagesPerInterval);
+
                         logger.log(user->uuid(), " (", user->username(), "): '", command.params[0], '\'');
                     }
                 }
@@ -694,6 +739,11 @@ void LetsPlayServer::QueueThread() {
                                                          user->connectedEmu()),
                                 command.hdl
                         );
+
+                        if(user->isMuted && user->muteTime() < std::chrono::steady_clock::now()) {
+                            auto muteTimeLeft = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - user->muteTime());
+                            BroadcastOne(LetsPlayProtocol::encode("mute", muteTimeLeft.count()), command.hdl);
+                        }
 
                         auto &emu = m_Emus[command.params[0]];
 

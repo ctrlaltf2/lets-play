@@ -64,3 +64,37 @@ std::string LetsPlayUser::uuid() const {
     s += '}';
     return s;
 }
+
+std::chrono::time_point<std::chrono::steady_clock> LetsPlayUser::lastUsernameChange() {
+    std::unique_lock<std::mutex> lk(m_muting);
+    return m_lastUsernameChange;
+}
+
+void LetsPlayUser::updateLastUsernameChange() {
+    std::unique_lock<std::mutex> lk(m_muting);
+    m_lastUsernameChange = std::chrono::steady_clock::now();
+}
+
+std::vector<std::chrono::time_point<std::chrono::steady_clock>> LetsPlayUser::messageTimestamps() {
+    std::unique_lock<std::mutex> lk(m_muting);
+    return m_messageTimestamps;
+}
+
+void LetsPlayUser::updateMessageTimestamps(const std::uint32_t historySize) {
+    std::unique_lock<std::mutex> lk(m_muting);
+
+    if(m_messageTimestamps.size() >= historySize)
+        m_messageTimestamps.erase(m_messageTimestamps.begin());
+
+    m_messageTimestamps.push_back(std::chrono::steady_clock::now());
+}
+
+std::chrono::time_point<std::chrono::steady_clock> LetsPlayUser::muteTime() {
+    std::unique_lock<std::mutex> lk(m_muting);
+    return m_muteTime;
+}
+
+void LetsPlayUser::mute(const std::uint32_t seconds) {
+    std::unique_lock<std::mutex> lk(m_muting);
+    m_muteTime = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+}
