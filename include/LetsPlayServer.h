@@ -124,6 +124,11 @@ struct IPData {
      * Timestamp for the last rename message
      */
     std::chrono::time_point<std::chrono::steady_clock> lastRename;
+
+    /**
+     * Number of unsuccessful admin attempts this IP has made during the server's lifetime
+     */
+    std::atomic<std::uint32_t> adminAttempts{0};
 };
 
 /**

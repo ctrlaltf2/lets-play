@@ -882,8 +882,12 @@ void LetsPlayServer::QueueThread() {
                     if (command.params.size() != 1) break;
 
                     if (auto user = command.user_hdl.lock()) {
-                        if (user->adminAttempts >= 3)
+                        std::unique_lock<std::mutex> lkk(m_MutesMutex);
+                        auto& ip = m_Mutes[user->IP()];
+                        if (ip.adminAttempts >= 3) {
+                            logger.log("Admin attempt from banned user ", user->uuid(), " on ", user->IP());
                             break;
+                        }
                     }
 
                     auto salt = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "salt"),
@@ -892,13 +896,14 @@ void LetsPlayServer::QueueThread() {
 
                     std::string hashed = md5(command.params[0] + salt);
 
-                    // TODO: Log failed admin attempts
-
                     if (auto user = command.user_hdl.lock()) {
                         if (hashed == expectedHash) {
                             user->hasAdmin = true;
                         } else {
-                            user->adminAttempts++;
+                            std::unique_lock<std::mutex> lkk(m_MutesMutex);
+                            auto& ip = m_Mutes[user->IP()];
+                            ++ip.adminAttempts;
+                            logger.log("Failed admin attempt from ", user->uuid(), "on ", user->IP());
                         }
 
                         BroadcastOne(

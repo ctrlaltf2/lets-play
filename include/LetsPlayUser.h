@@ -105,11 +105,6 @@ public:
      */
     std::atomic<bool> hasAdmin;
 
-    /**
-     * How many admin attempts the user has made
-     */
-    std::atomic<std::uint32_t> adminAttempts;
-
     LetsPlayUser();
 
     /*
