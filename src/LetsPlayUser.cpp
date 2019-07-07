@@ -11,8 +11,7 @@ LetsPlayUser::LetsPlayUser()
       hasTurn{false},
       requestedTurn{false},
       connected{true},
-      hasAdmin{false},
-      adminAttempts{0} {
+      hasAdmin{false} {
     g_uuidMutex.lock();
     m_uuid = g_UUIDGen();
     g_uuidMutex.unlock();
