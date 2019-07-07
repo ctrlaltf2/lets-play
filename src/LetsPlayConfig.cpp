@@ -16,8 +16,8 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
                 "muting": {
                     "messagesPerInterval": 3,
                     "intervalTime": 4,
-                    "usernameChangeCooldown": 1000,
-                    "muteTime": 5
+                    "muteTime": 5,
+                    "renameCooldown": 1000
                 }
             }
         },
@@ -34,6 +34,7 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
         "maxMessageSize": 100,
         "maxUsernameLength": 15,
         "minUsernameLength": 3,
+        "usernameChangeCooldown": 5000,
         "syncInterval": 5000
     },
     "coreConfig": {

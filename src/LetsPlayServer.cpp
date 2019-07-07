@@ -506,6 +506,27 @@ void LetsPlayServer::QueueThread() {
                         const auto &newUsername = command.params.at(0);
                         const auto oldUsername = user->username();
 
+                        std::unique_lock<std::mutex> lkk(m_MutesMutex);
+                        auto& ip = m_Mutes[user->IP()];
+
+                        // TODO: Message muting for no man's land
+                        const auto renameCooldown = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig", "usernameChangeCooldown");
+
+                        logger.log((ip.lastRename + std::chrono::milliseconds(renameCooldown)).time_since_epoch().count());
+                        // If the user sent another rename within the cooldown period, skip it
+                        if(ip.lastRename + std::chrono::milliseconds(renameCooldown) > std::chrono::steady_clock::now()) {
+                            BroadcastOne(
+                                    LetsPlayProtocol::encode("username", oldUsername, oldUsername),
+                                    command.hdl);
+                            logger.log(user->uuid(),
+                                       " (",
+                                       user->username(),
+                                       ") was rate-limited when changing username to '",
+                                       newUsername,
+                                       '\'');
+                            break;
+                        }
+
                         const bool justJoined = oldUsername.empty();
 
                         // Ignore no change if haven't just joined
@@ -521,6 +542,7 @@ void LetsPlayServer::QueueThread() {
                                        ") failed username change to : '",
                                        newUsername,
                                        '\'');
+                            break;
                         }
 
                         auto maxUsernameLen = config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned,
@@ -590,6 +612,7 @@ void LetsPlayServer::QueueThread() {
                          * username, and send a join/rename to everyone if the person just joined/has been around
                          */
                         user->setUsername(newUsername);
+                        ip.lastRename = std::chrono::steady_clock::now();
 
                         BroadcastOne(
                                 LetsPlayProtocol::encode("username", oldUsername, newUsername),

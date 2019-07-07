@@ -119,6 +119,11 @@ struct IPData {
      * Timestamp for when the user's mute expires
      **/
     std::chrono::time_point<std::chrono::steady_clock> muteTime;
+
+    /**
+     * Timestamp for the last rename message
+     */
+    std::chrono::time_point<std::chrono::steady_clock> lastRename;
 };
 
 /**
