@@ -22,7 +22,7 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-            message(FATAL_ERROR "git submodule foreach git fetch origin master failed with ${GIT_SUBMOD_RESULT}. Please manually checkout submodules.")
+            message(WARNING "git submodule foreach git fetch origin master failed with ${GIT_SUBMOD_RESULT}. Please manually checkout submodules.")
         endif()
     endif()
 endif()
@@ -87,7 +87,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_SOURCE_DIR}/bin/client
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
-        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
+        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client || true
         COMMENT Fetching client..
         )
 
