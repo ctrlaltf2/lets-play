@@ -90,9 +90,9 @@ bool LetsPlayServer::OnValidate(websocketpp::connection_hdl hdl) {
 }
 
 void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
+    std::shared_ptr<LetsPlayUser> user{new LetsPlayUser};
     {
         std::unique_lock<std::mutex> lk(m_UsersMutex);
-        std::shared_ptr<LetsPlayUser> user{new LetsPlayUser};
         user->setUsername("");
 
         websocketpp::lib::error_code err;
@@ -121,6 +121,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         search = m_Users.find(hdl);
         if (search == m_Users.end()) {
             logger.log("Couldn't find user who just joined in list\n");
+            // TODO: Close their connection
             return;
         }
         user_hdl = search->second;
@@ -137,6 +138,15 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         BroadcastOne(LetsPlayProtocol::encode(listMessage), hdl);
     }
 
+    {
+        std::unique_lock<std::mutex> lk(m_MutesMutex);
+        const auto& ipdata = m_Mutes[user->IP()];
+        if(ipdata.isMuted) {
+            const auto muteTime = std::chrono::duration_cast<std::chrono::seconds>(ipdata.muteTime - std::chrono::steady_clock::now()).count();
+            if(muteTime > 0)
+                BroadcastOne(LetsPlayProtocol::encode("mute", muteTime), hdl);
+        }
+    }
     // Put a preview send request on queue
     {
         std::unique_lock<std::mutex> lk(m_QueueMutex);
