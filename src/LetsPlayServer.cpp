@@ -285,7 +285,11 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         // Send client
         LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html", status);
     } else if(request.get_method() == "GET" && path == "/admin") {
-        // TODO: Admin
+        auto status = websocketpp::http::status_code::ok;
+        cptr->append_header("X-Robots-Tag", "noindex");
+
+        // Send admin page
+        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "admin" / "index.html", status);
     } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "root" / path)) {
         auto request = lib::filesystem::path(".") / "client" / "root" / path;
         if(!lib::filesystem::is_regular_file(request)) {
