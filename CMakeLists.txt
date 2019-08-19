@@ -4,13 +4,23 @@ project(letsplay
     DESCRIPTION "Emulator thing"
 )
 
+set(CMAKE_MODULE_PATH cmake)
+find_package(TurboJPEG REQUIRED)
+
 option(UseSTLFilesystem "Use std::filesystem instead of boost::filesystem" OFF)
 
+set(Boost_USE_STATIC_LIBS OFF)
+set(BUILD_SHARED_LIBS ON)
+set(Boost_NO_BOOST_CMAKE OFF)
+
 if(NOT UseSTLFilesystem)
-    find_package(Boost 1.62 COMPONENTS program_options filesystem REQUIRED)
+	find_package(Boost REQUIRED COMPONENTS system filesystem program_options)
 else()
-    find_package(Boost 1.62 COMPONENTS program_options REQUIRED)
+	find_package(Boost REQUIRED COMPONENTS system program_options)
 endif()
+
+find_package(Threads)
+find_package(JPEG REQUIRED)
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -45,7 +55,7 @@ if(CMAKE_VERSION VERSION_GREATER 3.6)
         endif()
     endif()
 endif()
-]]
+## ]]
 
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/json/README.md")
     message(FATAL_ERROR "The json library submodule was not downloaded. Please manually update submodules and try again.")
@@ -75,6 +85,9 @@ set_target_properties(letsplay
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
         )
 
+if(NOT WIN32)
+# TODO(modeco80): Figure out a way to make this work on the Windows because
+# microsoft big gay
 add_custom_target(update-client ALL
         DEPENDS
         ${CMAKE_SOURCE_DIR}/bin/client
@@ -82,16 +95,16 @@ add_custom_target(update-client ALL
         COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
         COMMENT Updating client...
         )
-
 add_custom_command(
         OUTPUT
         ${CMAKE_SOURCE_DIR}/bin/client
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
-        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client || true
+        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
         COMMENT Fetching client..
         )
-
+		
 add_dependencies(letsplay update-client)
+endif()		
 
 target_compile_features(letsplay
     PUBLIC
@@ -116,10 +129,12 @@ target_include_directories(letsplay
     PUBLIC
         include
         include/common
-        ${Boost_INCLUDE_DIR}
+       # ${Boost_INCLUDE_DIR}
         external/json/single_include
+		${TURBOJPEG_INCLUDE_DIR}
 )
 
+if(UNIX)
 target_compile_options(letsplay
     PUBLIC
         -Wall
@@ -131,6 +146,7 @@ target_compile_options(letsplay
         -pedantic-errors
         -Wfatal-errors
 )
+endif()
 
 if(UseSTLFilesystem)
     target_link_libraries(letsplay
@@ -142,21 +158,30 @@ else()
         PRIVATE
             USE_BOOST_FILESYSTEM
     )
+	target_link_libraries(letsplay
+        PUBLIC
+            Boost::filesystem
+    )
 endif()
 
 if(UNIX)
     target_link_libraries(letsplay
         PUBLIC
             ${CMAKE_DL_LIBS}
+			${CMAKE_THREAD_LIBS_INIT}
     )
+endif()
+
+if(WIN32)
+target_link_libraries(letsplay
+    PUBLIC
+	bcrypt
+)
 endif()
 
 target_link_libraries(letsplay
     PUBLIC
-        pthread
-        boost_system
-        ${Boost_LIBRARIES}
-        turbojpeg
-        atomic
+        Boost::system
+		Boost::program_options
+        ${TURBOJPEG_LIBRARIES}
 )
-
