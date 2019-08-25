@@ -1112,7 +1112,11 @@ void LetsPlayServer::SetupLetsPlayDirectories() {
         if (cXDGDataHome) { // Using XDG standard
             dataPath = lib::filesystem::path(cXDGDataHome) / "letsplay";
         } else { // If not, fall back to what XDG *would* use
+#if defined(__unix__) || defined(__APPLE__)
             dataPath = lib::filesystem::path(std::getenv("HOME")) / ".local" / "share" / "letsplay";
+#else
+			dataPath = lib::filesystem::path(std::getenv("LOCALAPPDATA")) / "letsplay";
+#endif
         }
     } else {
         dataPath = dataDir;

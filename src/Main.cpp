@@ -19,7 +19,13 @@ int main(int argc, char **argv) {
     if (cXDGConfigHome)
         configPath = lib::filesystem::path(cXDGConfigHome) / "letsplay" / "config.json";
     else
+#if defined(__unix__) || defined(__APPLE__)
         configPath = lib::filesystem::path(std::getenv("HOME")) / ".config" / "letsplay" / "config.json";
+#else
+		// TODO(modeco80): probably finalize and discuss where things should actually go,
+		// but for now, this should hopefully cause things to not crash on windows
+		configPath = lib::filesystem::path(std::getenv("LOCALAPPDATA")) / "letsplay" / "config.json";
+#endif
 
     try {
         using namespace boost;
