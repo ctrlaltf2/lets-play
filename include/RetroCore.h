@@ -66,4 +66,11 @@ class RetroCore {
      * Properly shuts down the retro core by calling deinit and similar.
      */
     ~RetroCore();
+
+private:
+
+	/**
+	 * Will be true if the core was loaded properly
+	 */
+	bool loaded_;
 };
