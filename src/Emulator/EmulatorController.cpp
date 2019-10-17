@@ -83,12 +83,12 @@ namespace EmulatorController {
     /**
      * Location of the emulator directory, loaded from config.
      */
-    static thread_local lib::filesystem::path dataDirectory;
+    static thread_local boost::filesystem::path dataDirectory;
 
     /**
      * Given to the core as the save directory
      */
-    static thread_local lib::filesystem::path saveDirectory;
+    static thread_local boost::filesystem::path saveDirectory;
 
     /**
      * String representation of saveDirectory. Storing as string to prevent dangling pointer in OnEnvironment.
@@ -173,12 +173,12 @@ namespace EmulatorController {
 
 void EmulatorController::Run(const std::string& corePath, const std::string& romPath,
                              LetsPlayServer *t_server, EmuID_t t_id, const std::string &description) {
-    lib::filesystem::path coreFile = corePath, romFile = romPath;
-    if (!lib::filesystem::is_regular_file(coreFile)) {
+    boost::filesystem::path coreFile = corePath, romFile = romPath;
+    if (!boost::filesystem::is_regular_file(coreFile)) {
         server->logger.err("Provided core path '", corePath, "' was invalid.");
         return;
     }
-    if (!lib::filesystem::is_regular_file(romFile)) {
+    if (!boost::filesystem::is_regular_file(romFile)) {
         server->logger.err("Provided rom path '", romPath, "' was not valid.");
         return;
     }
@@ -186,14 +186,14 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     // Create emu folder if it doesn't already exist
     t_server->logger.log("Creating emulator directories...");
-    lib::filesystem::create_directories(dataDirectory = t_server->emuDirectory / t_id);
-    lib::filesystem::create_directories(dataDirectory / "history");
-    lib::filesystem::create_directories(dataDirectory / "backups" / "states");
-    lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
+    boost::filesystem::create_directories(dataDirectory = t_server->emuDirectory / t_id);
+    boost::filesystem::create_directories(dataDirectory / "history");
+    boost::filesystem::create_directories(dataDirectory / "backups" / "states");
+    boost::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
 
     t_server->logger.log("Copying core file to own path... (", (dataDirectory / "emulator.so").string(), ')');
-    lib::filesystem::remove((dataDirectory / "emulator.so").string());
-    lib::filesystem::copy_file(coreFile.string(), (dataDirectory / "emulator.so").string());
+    boost::filesystem::remove((dataDirectory / "emulator.so").string());
+    boost::filesystem::copy_file(coreFile.string(), (dataDirectory / "emulator.so").string());
 
     t_server->logger.log("Starting up ", t_id, "...");
 
@@ -245,14 +245,14 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     server->logger.log(id, ": Finished initialization.");
 
-    retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(lib::filesystem::file_size(romFile)), nullptr};
+    retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(boost::filesystem::file_size(romFile)), nullptr};
     std::ifstream fo(romFile.string(), std::ios::binary);
 
     retro_system_info system{};
     Core.GetSystemInfo(&system);
 
     if (!system.need_fullpath) {
-        romData = new char[lib::filesystem::file_size(romFile)];
+        romData = new char[boost::filesystem::file_size(romFile)];
         info.data = static_cast<void *>(romData);
 
         if (!info.data) {
@@ -260,7 +260,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
             return;
         }
 
-        if (!fo.read(romData, lib::filesystem::file_size(romFile))) {
+        if (!fo.read(romData, boost::filesystem::file_size(romFile))) {
             server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
             return;
         }
@@ -626,7 +626,7 @@ void EmulatorController::Save() {
 
     auto newSaveFile = dataDirectory / "history" / "current.state";
 
-    if (lib::filesystem::exists(newSaveFile)) { // Move current file to a backup if if exists
+    if (boost::filesystem::exists(newSaveFile)) { // Move current file to a backup if if exists
         server->logger.log(id, ": Existing state detected; Moving to new state.");
         namespace chrono = std::chrono;
 
@@ -637,16 +637,16 @@ void EmulatorController::Save() {
 
         server->logger.log(id, ": Moved current state to ", backupName.string());
 
-        lib::filesystem::rename(newSaveFile, backupName);
+        boost::filesystem::rename(newSaveFile, backupName);
     }
 
     // Remove old temporaries
     {
-        std::vector<lib::filesystem::path> temporaryStates;
-        for (auto &p : lib::filesystem::directory_iterator(dataDirectory / "history")) {
+        std::vector<boost::filesystem::path> temporaryStates;
+        for (auto &p : boost::filesystem::directory_iterator(dataDirectory / "history")) {
             auto &path = p.path();
 
-            if (lib::filesystem::is_regular_file(path) && path.extension() == ".state" && path.filename() != "current")
+            if (boost::filesystem::is_regular_file(path) && path.extension() == ".state" && path.filename() != "current")
                 temporaryStates.push_back(path);
         }
 
@@ -660,7 +660,7 @@ void EmulatorController::Save() {
 
             // Delete the oldest file
             server->logger.log(id, ": Over threshold; Removing ", temporaryStates.front().string());
-            lib::filesystem::remove(temporaryStates.front());
+            boost::filesystem::remove(temporaryStates.front());
         }
 
     }
@@ -670,7 +670,7 @@ void EmulatorController::Save() {
 }
 
 void EmulatorController::Backup() {
-    if (!lib::filesystem::exists(
+    if (!boost::filesystem::exists(
             dataDirectory / "history" / "current.state")) // Create a current.state save if none exists
         Save();
 
@@ -683,32 +683,27 @@ void EmulatorController::Backup() {
     // Copy any emulator generated files over
     auto currentBackup = dataDirectory / "backups" / timestamp;
 
-    // *Almost* perfect compatibility between boost::filesystem and std::filesystem!
-#ifdef USE_BOOST_FILESYSTEM
-    std::function<void(const lib::filesystem::path &, const lib::filesystem::path &)> recursive_copy;
-    recursive_copy = [&recursive_copy](const lib::filesystem::path &src, const lib::filesystem::path &dst) {
-        if (lib::filesystem::exists(dst)) {
+    std::function<void(const boost::filesystem::path &, const boost::filesystem::path &)> recursive_copy;
+    recursive_copy = [&recursive_copy](const boost::filesystem::path &src, const boost::filesystem::path &dst) {
+        if (boost::filesystem::exists(dst)) {
             return;
         }
 
-        if (lib::filesystem::is_directory(src)) {
-            lib::filesystem::create_directories(dst);
-            for (auto &item : lib::filesystem::directory_iterator(src)) {
+        if (boost::filesystem::is_directory(src)) {
+            boost::filesystem::create_directories(dst);
+            for (auto &item : boost::filesystem::directory_iterator(src)) {
                 recursive_copy(item.path(), dst / item.path().filename());
             }
-        } else if (lib::filesystem::is_regular_file(src)) {
-            lib::filesystem::copy(src, dst);
+        } else if (boost::filesystem::is_regular_file(src)) {
+            boost::filesystem::copy(src, dst);
         }
     };
 
-    if (!lib::filesystem::is_empty(saveDirectory))
+    if (!boost::filesystem::is_empty(saveDirectory))
         recursive_copy(saveDirectory, currentBackup);
-#else
-    lib::filesystem::copy(saveDirectory, currentBackup, lib::filesystem::copy_options::recursive);
-#endif
 
     // Copy current history state over
-    lib::filesystem::copy(dataDirectory / "history" / "current.state",
+    boost::filesystem::copy(dataDirectory / "history" / "current.state",
                           dataDirectory / "backups" / "states" / (timestamp + ".state"));
 }
 
@@ -729,9 +724,9 @@ void EmulatorController::Load() {
     std::unique_lock <std::shared_timed_mutex> lk(generalMutex);
     auto saveFile = dataDirectory / "history" / "current.state";
 
-    if (!lib::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it
+    if (!boost::filesystem::exists(saveFile)) return; // Hasn't saved yet, so don't try to load it
 
-    auto saveFileSize = lib::filesystem::file_size(saveFile);
+    auto saveFileSize = boost::filesystem::file_size(saveFile);
     std::vector<unsigned char> saveData(saveFileSize);
 
     std::ifstream fi(saveFile.string(), std::ios::binary);

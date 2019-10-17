@@ -7,17 +7,11 @@ project(letsplay
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 find_package(TurboJPEG REQUIRED)
 
-option(UseSTLFilesystem "Use std::filesystem instead of boost::filesystem" OFF)
-
 set(Boost_USE_STATIC_LIBS OFF)
 set(BUILD_SHARED_LIBS ON)
 set(Boost_NO_BOOST_CMAKE OFF)
 
-if(NOT UseSTLFilesystem)
-	find_package(Boost REQUIRED COMPONENTS system filesystem program_options)
-else()
-	find_package(Boost REQUIRED COMPONENTS system program_options)
-endif()
+find_package(Boost REQUIRED COMPONENTS system filesystem program_options)
 
 find_package(Threads)
 find_package(JPEG REQUIRED)
@@ -86,8 +80,7 @@ set_target_properties(letsplay
         )
 
 if(NOT WIN32)
-# TODO(modeco80): Figure out a way to make this work on the Windows because
-# microsoft big gay
+# TODO(modeco80): Figure out a way to make this work on the Windows because microsoft bad
 add_custom_target(update-client ALL
         DEPENDS
         ${CMAKE_SOURCE_DIR}/bin/client
@@ -129,7 +122,6 @@ target_include_directories(letsplay
     PUBLIC
         include
         include/common
-       # ${Boost_INCLUDE_DIR}
         external/json/single_include
 		${TURBOJPEG_INCLUDE_DIR}
 )
@@ -148,22 +140,6 @@ target_compile_options(letsplay
 )
 endif()
 
-if(UseSTLFilesystem)
-    target_link_libraries(letsplay
-        PUBLIC
-            stdc++fs
-    )
-else()
-    target_compile_definitions(letsplay
-        PRIVATE
-            USE_BOOST_FILESYSTEM
-    )
-	target_link_libraries(letsplay
-        PUBLIC
-            Boost::filesystem
-    )
-endif()
-
 if(UNIX)
     target_link_libraries(letsplay
         PUBLIC
@@ -173,15 +149,16 @@ if(UNIX)
 endif()
 
 if(WIN32)
-target_link_libraries(letsplay
-    PUBLIC
-	bcrypt
-)
+    target_link_libraries(letsplay
+        PUBLIC
+            bcrypt
+    )
 endif()
 
 target_link_libraries(letsplay
     PUBLIC
         Boost::system
 		Boost::program_options
+        Boost::filesystem
         ${TURBOJPEG_LIBRARIES}
 )

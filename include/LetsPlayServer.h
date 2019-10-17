@@ -33,7 +33,6 @@ class LetsPlayServer;
 
 #include "md5.h"
 
-#include "common/filesystem.h"
 #include "common/typedefs.h"
 #include "EmulatorController.h"
 #include "LetsPlayConfig.h"
@@ -285,22 +284,22 @@ public:
     /**
      * Data dir / emulators
      */
-    lib::filesystem::path emuDirectory;
+    boost::filesystem::path emuDirectory;
 
     /**
      * Data dir / system
      */
-    lib::filesystem::path systemDirectory;
+    boost::filesystem::path systemDirectory;
 
     /**
      * Data dir / roms
      */
-    lib::filesystem::path romDirectory;
+    boost::filesystem::path romDirectory;
 
     /**
      * Data dir / cores
      */
-    lib::filesystem::path coreDirectory;
+    boost::filesystem::path coreDirectory;
 
 
     /**
@@ -308,7 +307,7 @@ public:
      * @param configFile Path to the config.json file (defaults to
      * ~/.config/letsplay/config)
      */
-    explicit LetsPlayServer(lib::filesystem::path& configFile);
+    explicit LetsPlayServer(boost::filesystem::path& configFile);
 
     /**
      * Blocking function that starts the LetsPlayServer on the given port
@@ -489,5 +488,5 @@ public:
      * @param con Who to send to
      * @param file_path Path to the file to send
      */
-    static void sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path, websocketpp::http::status_code::value);
+    static void sendHTTPFile(wcpp_server::connection_ptr& cptr, boost::filesystem::path file_path, websocketpp::http::status_code::value);
 };

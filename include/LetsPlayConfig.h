@@ -19,8 +19,6 @@ class LetsPlayConfig;
 
 #include "nlohmann/json.hpp"
 
-#include "common/filesystem.h"
-
 /**
  * @class LetsPlayConfig
  *
@@ -32,7 +30,7 @@ class LetsPlayConfig {
     /**
      * Path to the config file
      */
-    lib::filesystem::path m_configPath;
+    boost::filesystem::path m_configPath;
 
   public:
     /**
@@ -66,7 +64,7 @@ class LetsPlayConfig {
      *
      * @param path The path to load the file from
      */
-    void LoadFrom(const lib::filesystem::path& path);
+    void LoadFrom(const boost::filesystem::path& path);
 
     /**
      * Writes the current config to the disk
