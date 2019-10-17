@@ -4,7 +4,7 @@ project(letsplay
     DESCRIPTION "Emulator thing"
 )
 
-set(CMAKE_MODULE_PATH cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 find_package(TurboJPEG REQUIRED)
 
 option(UseSTLFilesystem "Use std::filesystem instead of boost::filesystem" OFF)
