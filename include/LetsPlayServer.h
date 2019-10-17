@@ -31,6 +31,8 @@ class LetsPlayServer;
 
 #include "nlohmann/json.hpp"
 
+#include <boost/filesystem.hpp>
+
 #include "md5.h"
 
 #include "common/typedefs.h"

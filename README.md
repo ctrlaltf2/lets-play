@@ -11,15 +11,6 @@ Why thanks for asking, a A web-based collaborative RetroArch frontend is just a 
 
 # Requirements
  - Compiler with support for C++14
- - websocketpp
- - Boost
-    - Program Options
-    - UUID
-    - Asio (for websocketpp)
-    - Filesystem
-    - DLL
-    - Function
- - turbojpeg
 
 # Building
 To build, simply type `cmake .` in the top level directory, then type `make`. To do parallel builds (recommended), type `make -j#` where `#` is the number of cores you have on your machine. After the build, the binary will be in `./bin/` as `letsplay`.

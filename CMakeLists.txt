@@ -1,17 +1,25 @@
-cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
+include("cmake/HunterGate.cmake")
+HunterGate(
+        URL "https://github.com/cpp-pm/hunter/archive/v0.23.219.tar.gz"
+        SHA1 "9cf34f61c8d34cfc2b1396a63aaaedaa5e09441e"
+        LOCAL
+)
 project(letsplay
-    LANGUAGES CXX
     DESCRIPTION "Emulator thing"
 )
-
-set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
-find_package(TurboJPEG REQUIRED)
 
 set(Boost_USE_STATIC_LIBS OFF)
 set(BUILD_SHARED_LIBS ON)
 set(Boost_NO_BOOST_CMAKE OFF)
 
-find_package(Boost REQUIRED COMPONENTS system filesystem program_options)
+hunter_add_package(Boost COMPONENTS system filesystem program_options)
+hunter_add_package(websocketpp)
+hunter_add_package(libjpeg-turbo)
+
+find_package(Boost CONFIG REQUIRED system filesystem program_options)
+find_package(websocketpp CONFIG REQUIRED)
+find_package(libjpeg-turbo CONFIG REQUIRED)
 
 find_package(Threads)
 find_package(JPEG REQUIRED)
@@ -29,30 +37,6 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
             message(WARNING "git submodule foreach git fetch origin master failed with ${GIT_SUBMOD_RESULT}. Please manually checkout submodules.")
         endif()
     endif()
-endif()
-
-#[[ clang-tidy segfaults on LetsPlayServer.cpp; too complex?
-if(CMAKE_VERSION VERSION_GREATER 3.6)
-    # Use clang-tidy if available
-    option(CLANG_TIDY_FIX "Perform fixes for Clang-Tidy" OFF)
-    find_program(
-        CLANG_TIDY_EXE
-        NAMES "clang-tidy"
-        DOC "Path to the clang-tidy executable"
-    )
-
-    if(CLANG_TIDY_EXE)
-        if(CLANG_TIDY_FIX)
-            set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}" "-fix" "-checks=-*,cppcoreguidelines-*,clang-analyzer-*,misc-*,modernize-*,performance-*,portability-*")
-        else()
-            set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}" "-checks=-*,cppcoreguidelines-*,clang-analyzer-*,misc-*,modernize-*,performance-*,portability-*")
-        endif()
-    endif()
-endif()
-## ]]
-
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/external/json/README.md")
-    message(FATAL_ERROR "The json library submodule was not downloaded. Please manually update submodules and try again.")
 endif()
 
 add_executable(letsplay
@@ -80,23 +64,23 @@ set_target_properties(letsplay
         )
 
 if(NOT WIN32)
-# TODO(modeco80): Figure out a way to make this work on the Windows because microsoft bad
-add_custom_target(update-client ALL
-        DEPENDS
-        ${CMAKE_SOURCE_DIR}/bin/client
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/client
-        COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
-        COMMENT Updating client...
-        )
-add_custom_command(
-        OUTPUT
-        ${CMAKE_SOURCE_DIR}/bin/client
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
-        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
-        COMMENT Fetching client..
-        )
-		
-add_dependencies(letsplay update-client)
+    # TODO(modeco80): Figure out a way to make this work on the Windows because microsoft bad
+    add_custom_target(update-client ALL
+            DEPENDS
+            ${CMAKE_SOURCE_DIR}/bin/client
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/client
+            COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
+            COMMENT Updating client...
+            )
+    add_custom_command(
+            OUTPUT
+            ${CMAKE_SOURCE_DIR}/bin/client
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+            COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
+            COMMENT Fetching client..
+            )
+
+    add_dependencies(letsplay update-client)
 endif()		
 
 target_compile_features(letsplay
@@ -123,7 +107,6 @@ target_include_directories(letsplay
         include
         include/common
         external/json/single_include
-		${TURBOJPEG_INCLUDE_DIR}
 )
 
 if(UNIX)
@@ -157,8 +140,10 @@ endif()
 
 target_link_libraries(letsplay
     PUBLIC
+        Boost::boost
         Boost::system
 		Boost::program_options
         Boost::filesystem
-        ${TURBOJPEG_LIBRARIES}
+        websocketpp::websocketpp
+        libjpeg-turbo::turbojpeg-static
 )
