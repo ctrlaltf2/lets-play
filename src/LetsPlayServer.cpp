@@ -1,6 +1,6 @@
 #include "LetsPlayServer.h"
 
-LetsPlayServer::LetsPlayServer(lib::filesystem::path& configFile) { config.LoadFrom(configFile); }
+LetsPlayServer::LetsPlayServer(boost::filesystem::path& configFile) { config.LoadFrom(configFile); }
 
 void LetsPlayServer::Run(std::uint16_t port) {
     if (port == 0) return;
@@ -205,7 +205,7 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     }
 }
 
-void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, lib::filesystem::path file_path, websocketpp::http::status_code::value status) {
+void LetsPlayServer::sendHTTPFile(wcpp_server::connection_ptr& cptr, boost::filesystem::path file_path, websocketpp::http::status_code::value status) {
     // TODO: Rewrite this to be not dartzcode (not that its bad or anything)
     using std::ifstream;
     ifstream file(file_path.string(), ifstream::in | ifstream::binary | ifstream::ate);
@@ -292,7 +292,7 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         }
 
         // Send client
-        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html", status);
+        LetsPlayServer::sendHTTPFile(cptr, boost::filesystem::path(".") / "client" / "root" / "index.html", status);
     } else if(request.get_method() == "GET" && path == "/admin") {
         auto status = websocketpp::http::status_code::ok;
 
@@ -300,10 +300,10 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         cptr->append_header("X-Robots-Tag", "noindex");
 
         // Send admin page
-        LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "admin" / "index.html", status);
-    } else if(lib::filesystem::exists(lib::filesystem::path(".") / "client" / "root" / path)) {
-        auto request = lib::filesystem::path(".") / "client" / "root" / path;
-        if(!lib::filesystem::is_regular_file(request)) {
+        LetsPlayServer::sendHTTPFile(cptr, boost::filesystem::path(".") / "client" / "root" / "admin" / "index.html", status);
+    } else if(boost::filesystem::exists(boost::filesystem::path(".") / "client" / "root" / path)) {
+        auto request = boost::filesystem::path(".") / "client" / "root" / path;
+        if(!boost::filesystem::is_regular_file(request)) {
             cptr->set_body("404");
             cptr->set_status(websocketpp::http::status_code::not_found);
             return;
@@ -1117,26 +1117,26 @@ void LetsPlayServer::SetupLetsPlayDirectories() {
     */
     auto dataDir = config.get<std::string>(nlohmann::json::value_t::string, "serverConfig", "dataDirectory");
 
-    lib::filesystem::path dataPath;
+    boost::filesystem::path dataPath;
     if (dataDir == "System Default") {
         const char *cXDGDataHome = std::getenv("XDG_DATA_HOME");
         if (cXDGDataHome) { // Using XDG standard
-            dataPath = lib::filesystem::path(cXDGDataHome) / "letsplay";
+            dataPath = boost::filesystem::path(cXDGDataHome) / "letsplay";
         } else { // If not, fall back to what XDG *would* use
 #if defined(__unix__) || defined(__APPLE__)
-            dataPath = lib::filesystem::path(std::getenv("HOME")) / ".local" / "share" / "letsplay";
+            dataPath = boost::filesystem::path(std::getenv("HOME")) / ".local" / "share" / "letsplay";
 #else
-			dataPath = lib::filesystem::path(std::getenv("LOCALAPPDATA")) / "letsplay";
+			dataPath = boost::filesystem::path(std::getenv("LOCALAPPDATA")) / "letsplay";
 #endif
         }
     } else {
         dataPath = dataDir;
     }
 
-    lib::filesystem::create_directories(systemDirectory = dataPath / "system");
-    lib::filesystem::create_directories(emuDirectory = dataPath / "emulators");
-    lib::filesystem::create_directories(romDirectory = dataPath / "roms");
-    lib::filesystem::create_directories(coreDirectory = dataPath / "cores");
+    boost::filesystem::create_directories(systemDirectory = dataPath / "system");
+    boost::filesystem::create_directories(emuDirectory = dataPath / "emulators");
+    boost::filesystem::create_directories(romDirectory = dataPath / "roms");
+    boost::filesystem::create_directories(coreDirectory = dataPath / "cores");
 }
 
 void LetsPlayServer::SaveTask() {

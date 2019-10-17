@@ -22,7 +22,7 @@ Why thanks for asking, a A web-based collaborative RetroArch frontend is just a 
  - turbojpeg
 
 # Building
-To build, simply type `cmake .` in the top level directory, then type `make`. To do parallel builds (recommended), type `make -j#` where `#` is the number of cores you have on your machine. After the build, the binary will be in `./bin/` as `letsplay`. If your compiler supports the STL filesystem fully and you'd like to use it, add `-DUseSTLFilesystem=ON`.
+To build, simply type `cmake .` in the top level directory, then type `make`. To do parallel builds (recommended), type `make -j#` where `#` is the number of cores you have on your machine. After the build, the binary will be in `./bin/` as `letsplay`.
 
 # Where do I put the extra files (bios, etc) that would normally go in the frontend's system directory?
 The RetroArch cores will be instructed to look in the `system` folder inside of the data directory. The location of the data directory varies based on what is specified in the configuration. If `dataDirectory` is equal to `System Default`, Let's Play will first go to `XDG_DATA_HOME/letsplay` as the data dir, and if XDG envs are undefined, ``~/.local/share/letsplay`.

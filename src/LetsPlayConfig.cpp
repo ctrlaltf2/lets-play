@@ -51,7 +51,7 @@ nlohmann::json LetsPlayConfig::defaultConfig = R"json(
 
 void LetsPlayConfig::ReloadConfig() {
     std::unique_lock<std::shared_timed_mutex> lk(mutex, std::try_to_lock);
-    if (lib::filesystem::exists(m_configPath) && lib::filesystem::is_regular_file(m_configPath)) {
+    if (boost::filesystem::exists(m_configPath) && boost::filesystem::is_regular_file(m_configPath)) {
         std::ifstream fi(m_configPath.string());
         fi >> config;
     } else {
@@ -59,10 +59,10 @@ void LetsPlayConfig::ReloadConfig() {
     }
 }
 
-void LetsPlayConfig::LoadFrom(const lib::filesystem::path& path) {
+void LetsPlayConfig::LoadFrom(const boost::filesystem::path& path) {
     std::unique_lock<std::shared_timed_mutex> lk(mutex);
     m_configPath = path;
-    if (lib::filesystem::exists(path) && lib::filesystem::is_regular_file(path)) {
+    if (boost::filesystem::exists(path) && boost::filesystem::is_regular_file(path)) {
         ReloadConfig();
     } else {
         config = LetsPlayConfig::defaultConfig;
