@@ -174,29 +174,34 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         server->logger.err("Provided rom path '", romPath, "' was not valid.");
         return;
     }
+
+
+    // Create emu folder if it doesn't already exist
+    t_server->logger.log("Creating emulator directories...");
+    lib::filesystem::create_directories(dataDirectory = t_server->emuDirectory / t_id);
+    lib::filesystem::create_directories(dataDirectory / "history");
+    lib::filesystem::create_directories(dataDirectory / "backups" / "states");
+    lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
+
+    t_server->logger.log("Copying core file to own path... (", (dataDirectory / "emulator.so").string(), ')');
+    lib::filesystem::remove((dataDirectory / "emulator.so").string());
+    lib::filesystem::copy_file(coreFile.string(), (dataDirectory / "emulator.so").string());
+
     t_server->logger.log("Starting up ", t_id, "...");
 
-    Core.Load(coreFile.string().c_str());
+    Core.Load((dataDirectory / "emulator.so").string().c_str());
+
     server = t_server;
     id = t_id;
     proxy = EmulatorControllerProxy{&workQueue, &queueMutex, &queueNotifier, GetFrame, &joypad, description, &forbiddenCombos};
     server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
-    std::cout << "Getting" << '\n';
     auto emuConfigs = server->config.get<nlohmann::json>(nlohmann::json::value_t::object, "serverConfig", "emulators");
-    std::cout << emuConfigs << '\n';
     if(!emuConfigs.count(id)) {
-        std::cout << "No count, setting" << '\n';
         auto emuTemplate = server->config.get<nlohmann::json>(nlohmann::json::value_t::object, "serverConfig", "emulators", "template");
         server->config.set("serverConfig", "emulators", id, emuTemplate);
     }
-
-    // Create emu folder if it doesn't already exist
-    lib::filesystem::create_directories(dataDirectory = server->emuDirectory / id);
-    lib::filesystem::create_directories(dataDirectory / "history");
-    lib::filesystem::create_directories(dataDirectory / "backups" / "states");
-    lib::filesystem::create_directories(saveDirectory = dataDirectory / "saves");
 
     server->config.SaveConfig();
 
@@ -209,7 +214,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     Core.Init();
 
     // Load forbidden button combos into memory
-    // ...
     auto jForbiddenCombos = server->config.get<nlohmann::json>(nlohmann::json::value_t::array, "serverConfig", "emulators", id, "forbiddenCombos");
 
     for(std::string buttons : jForbiddenCombos) {
@@ -230,19 +234,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         if(combo.any() && goodCombo)
             forbiddenCombos.push_back(combo);
     }
-
-    /*
-     * Load emuConfig[id][forbiddenCombos]
-     * For each list in that list:
-     *      set state 0
-     *      convert all list items to upper
-     *      for each forbidden button name:
-     *          lookup item in name -> Retro_id map
-     *          if not found, continue to next forbiddenCombos list (warn server dude)
-     *          if found, |= onto state
-     *      forbiddenCombos += state
-     *
-     */
 
     server->logger.log(id, ": Finished initialization.");
 
