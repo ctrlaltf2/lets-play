@@ -16,28 +16,14 @@ set(Boost_NO_BOOST_CMAKE OFF)
 hunter_add_package(Boost COMPONENTS system filesystem program_options)
 hunter_add_package(websocketpp)
 hunter_add_package(libjpeg-turbo)
+hunter_add_package(nlohmann_json)
 
 find_package(Boost CONFIG REQUIRED system filesystem program_options)
 find_package(websocketpp CONFIG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 find_package(Threads)
-find_package(JPEG REQUIRED)
-
-find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    # Update submodules
-    option(GIT_SUBMODULE "Check submodules during build" ON)
-    if(GIT_SUBMODULE)
-        message(STATUS "Updating submodules...")
-        execute_process(COMMAND ${GIT_EXECUTABLE} submodule foreach git fetch origin master
-                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                        RESULT_VARIABLE GIT_SUBMOD_RESULT)
-        if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-            message(WARNING "git submodule foreach git fetch origin master failed with ${GIT_SUBMOD_RESULT}. Please manually checkout submodules.")
-        endif()
-    endif()
-endif()
 
 add_executable(letsplay
     # src/
@@ -61,7 +47,7 @@ set_target_properties(letsplay
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
-        )
+)
 
 if(NOT WIN32)
     # TODO(modeco80): Figure out a way to make this work on the Windows because microsoft bad
@@ -106,7 +92,6 @@ target_include_directories(letsplay
     PUBLIC
         include
         include/common
-        external/json/single_include
 )
 
 if(UNIX)
@@ -146,4 +131,5 @@ target_link_libraries(letsplay
         Boost::filesystem
         websocketpp::websocketpp
         libjpeg-turbo::turbojpeg-static
+        nlohmann_json::nlohmann_json
 )

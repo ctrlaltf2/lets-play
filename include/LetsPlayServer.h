@@ -29,7 +29,7 @@ class LetsPlayServer;
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <boost/filesystem.hpp>
 
