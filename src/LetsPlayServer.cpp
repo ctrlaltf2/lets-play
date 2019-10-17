@@ -1226,8 +1226,6 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
 }
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
-    logger.log("SendFrame: ", std::chrono::steady_clock::now().time_since_epoch().count());
-
     auto jpegData = GenerateEmuJPEG(id);
 
     // Mark as screen message
