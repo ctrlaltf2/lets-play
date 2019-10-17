@@ -19,6 +19,8 @@ class LetsPlayConfig;
 
 #include "nlohmann/json.hpp"
 
+#include <boost/filesystem.hpp>
+
 /**
  * @class LetsPlayConfig
  *

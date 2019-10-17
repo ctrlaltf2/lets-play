@@ -10,8 +10,8 @@
 #include <iostream>
 #include <type_traits>
 
-#include "boost/function.hpp"
-#include "boost/dll/import.hpp"
+#include <boost/function.hpp>
+#include <boost/dll/import.hpp>
 
 #include "libretro.h"
 

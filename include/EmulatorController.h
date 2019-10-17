@@ -32,7 +32,8 @@ struct Frame;
 
 #include <websocketpp/frame.hpp>
 
-#include "boost/optional.hpp"
+#include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
 
 #include "libretro.h"
 
