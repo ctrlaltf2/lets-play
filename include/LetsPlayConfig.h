@@ -17,7 +17,7 @@ class LetsPlayConfig;
 #include <iostream>
 #include <shared_mutex>
 
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 
 #include <boost/filesystem.hpp>
 
