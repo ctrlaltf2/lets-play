@@ -40,7 +40,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
                 config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
                                           "backups", "backupInterval"));
 
-        // TODO: Queue on emulator controller, expose queue related stuff through one interface, use pointers n shit to expose it
+        // Create std::function wrappers so that they can be used in the scheduler
         std::function<void()> previewFunc = [&]() { this->PreviewTask(); };
         std::function<void()> saveFunc = [&]() { this->SaveTask(); };
         std::function<void()> backupFunc = [&]() { this->BackupTask(); };
@@ -127,10 +127,11 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         user_hdl = search->second;
     }
 
+    // Tell the client about the available emulators
     std::vector<EmuID_t> listMessage{"emus"};
     {
         std::unique_lock<std::mutex> lk(m_EmusMutex);
-        for (const auto &emu : m_Emus) {
+        for (const auto &emu : m_Emus) { // emu = [emu id, emu description]
             listMessage.push_back(emu.first);
             listMessage.push_back(emu.second->description);
         }
@@ -138,6 +139,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
         BroadcastOne(LetsPlayProtocol::encode(listMessage), hdl);
     }
 
+    // If the newly joined user is muted, update the client to reflect their remaining mute time
     {
         std::unique_lock<std::mutex> lk(m_MutesMutex);
         const auto& ipdata = m_Mutes[user->IP()];
@@ -147,6 +149,7 @@ void LetsPlayServer::OnConnect(websocketpp::connection_hdl hdl) {
                 BroadcastOne(LetsPlayProtocol::encode("mute", muteTime), hdl);
         }
     }
+
     // Put a preview send request on queue
     {
         std::unique_lock<std::mutex> lk(m_QueueMutex);
@@ -171,9 +174,10 @@ void LetsPlayServer::OnDisconnect(websocketpp::connection_hdl hdl) {
     {
         auto user = user_hdl.lock();
         if (user && !user->connectedEmu().empty()) {
+            // If the client that disconnected was connected to an emulator, let that emulator know about the disconnect
             {
                 std::unique_lock<std::mutex> lk(m_EmusMutex);
-                // TODO: Check if emu exists
+                // TODO:? Check if emu exists
                 auto &emu = m_Emus[user->connectedEmu()];
 
                 EmuCommand c{kEmuCommandType::UserDisconnect, user_hdl};
@@ -248,6 +252,7 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
     if (path.size() == 0) {
         cptr->set_body("404");
         cptr->set_status(websocketpp::http::status_code::not_found);
+        return;
     }
 
     // Add / if none exists
@@ -267,7 +272,11 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
     const std::regex emu_re{R"(\/emu\/([A-Za-z0-9]+)$)"};
     std::smatch m;
 
-    if(request.get_method() == "GET" && (path == "/" || std::regex_match(path, m, emu_re))) { // GET / OR /emu/[id]
+    /* If client GETs / or /emu/id, send the client code over HTTP. If path was in the form /emu/id but the emulator with
+     * that ID doesn't exist, then the location header is set to / and a HTTP 3XX code is sent (redirecting the client).
+     * If not redirected, the client will detect the the /emu/id in the URL and automatically connect to the emulator
+     * with that ID. */
+    if(request.get_method() == "GET" && (path == "/" || std::regex_match(path, m, emu_re))) {
         auto status = websocketpp::http::status_code::ok;
         std::string id;
         if(m.size() > 0) { // If in the form /emu/[id]
@@ -286,6 +295,8 @@ void LetsPlayServer::OnHTTP(websocketpp::connection_hdl hdl) {
         LetsPlayServer::sendHTTPFile(cptr, lib::filesystem::path(".") / "client" / "root" / "index.html", status);
     } else if(request.get_method() == "GET" && path == "/admin") {
         auto status = websocketpp::http::status_code::ok;
+
+        // Begone, googlebot!
         cptr->append_header("X-Robots-Tag", "noindex");
 
         // Send admin page
@@ -310,7 +321,6 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
     const auto decoded = LetsPlayProtocol::decode(data);
 
     if (decoded.empty()) return;
-    // TODO: that switch case compile-time hash thing; its faster
     const auto& command = decoded.at(0);
     kCommandType t = kCommandType::Unknown;
 
@@ -344,6 +354,7 @@ void LetsPlayServer::OnMessage(websocketpp::connection_hdl hdl, wcpp_server::mes
     EmuID_t emuID;
     LetsPlayUserHdl user_hdl;
 
+    //
     {
         std::unique_lock<std::mutex> lk(m_UsersMutex);
         if (m_Users.find(hdl) != m_Users.end()) {
