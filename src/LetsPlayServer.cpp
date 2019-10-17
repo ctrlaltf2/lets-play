@@ -1226,18 +1226,7 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
 }
 
 void LetsPlayServer::SendFrame(const EmuID_t& id) {
-    // Skip if no users
-    {
-        std::unique_lock<std::mutex> lk(m_UsersMutex);
-        bool hasUsers{false};
-        for (auto &pair : m_Users) {
-            if (pair.second->connectedEmu() == id)
-                hasUsers = true;
-        }
-
-        if (!hasUsers)
-            return;
-    }
+    logger.log("SendFrame: ", std::chrono::steady_clock::now().time_since_epoch().count());
 
     auto jpegData = GenerateEmuJPEG(id);
 

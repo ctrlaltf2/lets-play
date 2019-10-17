@@ -160,6 +160,14 @@ namespace EmulatorController {
              {"r3", RETRO_DEVICE_ID_JOYPAD_R3},
              {"l3", RETRO_DEVICE_ID_JOYPAD_L3}
      };
+
+     /**
+      * Value to keep track of the user count
+      *
+      * NOTE: This is accessed only in ::Run inside the main loop. All accesses are sequential and not subject to data races.
+      * If, for some reason, this value is exported via the EmulatorProxy, then it should be changed to an atomic.
+      */
+      static thread_local std::uint64_t users{0};
 }
 
 
@@ -321,7 +329,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                         }
                     }
                 }
-            } else { // Something happened to the user, so skip them
+            } else { // Something happened :( to the user, so skip them
                 std::unique_lock <std::mutex> lk(turnMutex);
                 if (!turnQueue.empty()) {
                     turnQueue.erase(turnQueue.begin());
@@ -351,6 +359,8 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                         AddTurnRequest(*command.user_hdl);
                     break;
                 case kEmuCommandType::UserDisconnect:
+                    if(users)
+                        --users;
                     if (command.user_hdl)
                         UserDisconnected(*command.user_hdl);
                     break;
@@ -358,6 +368,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                     FastForward();
                     break;
                 case kEmuCommandType::UserConnect:
+                    ++users;
                     EmulatorController::SendTurnList();
                     break;
             }
@@ -372,12 +383,14 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         nextRun = std::chrono::steady_clock::now() + std::chrono::milliseconds(msWait / (fastForward ? 2 : 1));
         Core.Run();
 
-        if (overrideFPS && (nextFrame < std::chrono::steady_clock::now())) {
-            server->SendFrame(id);
-            nextFrame = std::chrono::steady_clock::now() + frameDeltaTime;
-        } else if (!overrideFPS) {
-            if (fastForward && (frameSkip ^= true)) server->SendFrame(id);
-            else server->SendFrame(id);
+        if(users) {
+            if (overrideFPS && (nextFrame < std::chrono::steady_clock::now())) {
+                server->SendFrame(id);
+                nextFrame = std::chrono::steady_clock::now() + frameDeltaTime;
+            } else if (!overrideFPS) {
+                if (fastForward && (frameSkip ^= true)) server->SendFrame(id);
+                else server->SendFrame(id);
+            }
         }
     }
 }
@@ -392,10 +405,10 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
 
             return SetPixelFormat(*fmt);
         }
-        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // system dir, dataDir / system
+        case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY: // system dir = dataDir / system
             *static_cast<const char **>(data) = server->systemDirectory.string().c_str();
             break;
-        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir, dataDir / emulators / emu_id / saves
+        case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: // save dir = dataDir / emulators / emu_id / saves
             saveDirString = saveDirectory.string();
             *static_cast<const char **>(data) = saveDirString.c_str();
             break;
