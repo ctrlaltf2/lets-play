@@ -52,25 +52,23 @@ set_target_properties(letsplay
 if(NOT WIN32)
     # TODO(modeco80): Figure out a way to make this work on the Windows because microsoft bad
     add_custom_target(update-client ALL
-            DEPENDS
-            ${CMAKE_SOURCE_DIR}/bin/client
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/client
-            COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
-            COMMENT Updating client...
-            )
+        DEPENDS ${CMAKE_SOURCE_DIR}/bin/client
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin/client
+        COMMAND git pull || (true && echo Local client change overriding remote change...) # Having this will prioritize local changes over remote ones
+        COMMENT Updating client...
+    )
     add_custom_command(
-            OUTPUT
-            ${CMAKE_SOURCE_DIR}/bin/client
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
-            COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
-            COMMENT Fetching client..
-            )
+        OUTPUT ${CMAKE_SOURCE_DIR}/bin/client
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
+        COMMAND git clone https://github.com/ctrlaltf2/lets-play-client client
+        COMMENT Fetching client..
+    )
 
     add_dependencies(letsplay update-client)
 endif()		
 
 target_compile_features(letsplay
-    PUBLIC
+    PRIVATE
         cxx_auto_type
         cxx_binary_literals
         cxx_constexpr
@@ -89,14 +87,14 @@ target_compile_features(letsplay
 )
 
 target_include_directories(letsplay
-    PUBLIC
+    PRIVATE
         include
         include/common
 )
 
 if(UNIX)
 target_compile_options(letsplay
-    PUBLIC
+    PRIVATE
         -Wall
         -Wextra
         -Werror=return-type
@@ -124,7 +122,7 @@ if(WIN32)
 endif()
 
 target_link_libraries(letsplay
-    PUBLIC
+    PRIVATE
         Boost::boost
         Boost::system
 		Boost::program_options
