@@ -71,6 +71,11 @@ namespace EmulatorController {
     static thread_local retro_system_av_info avinfo;
 
     /**
+     * libretro logging interface struct (points to server->logger.logFormatted)
+     */
+    static thread_local retro_log_callback log_cb;
+
+    /**
      * Whether or not this emulator is fast forwarded
      */
     static thread_local std::atomic<bool> fastForward{false};
@@ -175,10 +180,11 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
                              LetsPlayServer *t_server, EmuID_t t_id, const std::string &description) {
     boost::filesystem::path coreFile = corePath, romFile = romPath;
     if (!boost::filesystem::is_regular_file(coreFile)) {
-        server->logger.err("Provided core path '", corePath, "' was invalid.");
+        t_server->logger.err("Provided core path '", corePath, "' was invalid.");
         return;
     }
-    if (!boost::filesystem::is_regular_file(romFile)) {
+
+    if (!romPath.empty() && !boost::filesystem::is_regular_file(romFile)) {
         server->logger.err("Provided rom path '", romPath, "' was not valid.");
         return;
     }
@@ -202,6 +208,7 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     server = t_server;
     id = t_id;
     proxy = EmulatorControllerProxy{&workQueue, &queueMutex, &queueNotifier, GetFrame, &joypad, description, &forbiddenCombos};
+
     server->AddEmu(id, &proxy);
 
     // Add emu specific config if it doesn't already exist
@@ -245,32 +252,38 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     server->logger.log(id, ": Finished initialization.");
 
-    retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(boost::filesystem::file_size(romFile)), nullptr};
-    std::ifstream fo(romFile.string(), std::ios::binary);
+    // Set the RetroArch default color format just in case the core *doesn't*.
+    SetPixelFormat(RETRO_PIXEL_FORMAT_0RGB1555);
 
-    retro_system_info system{};
-    Core.GetSystemInfo(&system);
+    // If provided an empty path, just skip this part. Leaving a blank path allows for cores that don't need roms to be loaded
+    if(!romPath.empty()) {
+        retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(boost::filesystem::file_size(romFile)), nullptr};
+        std::ifstream fo(romFile.string(), std::ios::binary);
 
-    if (!system.need_fullpath) {
-        romData = new char[boost::filesystem::file_size(romFile)];
-        info.data = static_cast<void *>(romData);
+        retro_system_info system{};
+        Core.GetSystemInfo(&system);
 
-        if (!info.data) {
-            server->logger.err(id, ": Failed to allocate memory for the ROM");
-            return;
+        if (!system.need_fullpath) {
+            romData = new char[boost::filesystem::file_size(romFile)];
+            info.data = static_cast<void *>(romData);
+
+            if (!info.data) {
+                server->logger.err(id, ": Failed to allocate memory for the ROM");
+                return;
+            }
+
+            if (!fo.read(romData, boost::filesystem::file_size(romFile))) {
+                server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
+                return;
+            }
         }
 
-        if (!fo.read(romData, boost::filesystem::file_size(romFile))) {
-            server->logger.err(id, ": Failed to load data from the file. Do you have the correct access rights?");
+        // TODO: compressed roms and stuff
+
+        if (!Core.LoadGame(&info)) {
+            server->logger.err(id, ": Failed to load game. Was the rom the correct file type?");
             return;
         }
-    }
-
-    // TODO: compressed roms and stuff
-
-    if (!Core.LoadGame(&info)) {
-        server->logger.err(id, ": Failed to load game. Was the rom the correct file type?");
-        return;
     }
 
     // Load state if applicable
@@ -418,11 +431,12 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_OVERSCAN: // We don't (usually) want overscan
             return false;
             // Will be implemented
+        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: // See core logs
+
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
         case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: // Use this instead of sleep_until?
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE: // For rumble support for later on
-        case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: // See core logs
         case RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY: // Where assets are stored
         case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: // Use to see if the core recognizes the retropad (if it doesn't well....)
         case RETRO_ENVIRONMENT_GET_LANGUAGE: // Some cores might use this and its simple to add
@@ -511,11 +525,12 @@ void EmulatorController::UserConnected(LetsPlayUserHdl) {
 }
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
+
     switch (fmt) {
         // TODO: Find a core that uses this and test it
         case RETRO_PIXEL_FORMAT_0RGB1555:  // 16 bit
             // rrrrrgggggbbbbba
-            std::clog << "0RGB1555" << '\n';
+            server->logger.log(" Format set: 0RGB1555");
             videoFormat.rMask = 0b1111100000000000;
             videoFormat.gMask = 0b0000011111000000;
             videoFormat.bMask = 0b0000000000111110;
@@ -531,7 +546,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
             // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
-            std::clog << "XRGB8888\n";
+            server->logger.log(" Format set: XRGB8888");
             videoFormat.rMask = 0xff000000;
             videoFormat.gMask = 0x00ff0000;
             videoFormat.bMask = 0x0000ff00;
@@ -546,7 +561,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             return true;
         case RETRO_PIXEL_FORMAT_RGB565:  // 16 bit
             // rrrrrggggggbbbbb
-            std::clog << "RGB656\n";
+            server->logger.log(" Format set: RGB565");
             videoFormat.rMask = 0b1111100000000000;
             videoFormat.gMask = 0b0000011111100000;
             videoFormat.bMask = 0b0000000000011111;
