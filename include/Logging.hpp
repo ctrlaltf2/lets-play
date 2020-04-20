@@ -6,10 +6,14 @@
  */
 #pragma once
 #include <chrono>
+#include <cstdarg>
+#include <vector>
 #include <iostream>
 #include <mutex>
 #include <sstream>
 #include <string>
+
+#include <libretro.h>
 
 class Logger {
     std::mutex m;
