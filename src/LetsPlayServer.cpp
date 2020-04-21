@@ -55,7 +55,7 @@ void LetsPlayServer::Run(std::uint16_t port) {
         {
             std::unique_lock<std::mutex> lk(m_QueueMutex);
             m_WorkQueue.push(
-                    Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Super Mario World (SNES)"}, {}, ""});
+                    Command{kCommandType::AddEmu, {"emu1", "./core", "./rom", "Test Emu"}, {}, ""});
             //m_WorkQueue.push(
             //        Command{kCommandType::AddEmu, {"emu2", "./snes9x.so", "./Earthbound.smc", "Earthbound (SNES)"}, {}, ""});
             m_QueueNotifier.notify_one();
@@ -1217,8 +1217,8 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
 
     long unsigned int jpegSize = _jpegBufferSize;
     std::uint8_t *cjpegData = &jpegData[1];
-    tjCompress2(_jpegCompressor, frame.data.data(), frame.width, frame.width * 3, frame.height,
-                TJPF_RGB, &cjpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
+    tjCompress2(_jpegCompressor, frame.data.data(), frame.width, 16*std::ceil(frame.width/16.0) * 4, frame.height,
+                TJPF_XRGB, &cjpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
 
     std::vector<std::uint8_t> slicedData(std::begin(jpegData), std::next(jpegData.begin(), jpegSize + 1));
 

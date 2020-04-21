@@ -35,6 +35,11 @@ struct Frame;
 #include <boost/filesystem.hpp>
 #include <boost/optional.hpp>
 
+#include <tmmintrin.h>
+#include <emmintrin.h>
+#include <mmintrin.h>
+#include <smmintrin.h>
+
 #include "libretro.h"
 
 #include "common/typedefs.h"
@@ -45,6 +50,7 @@ struct Frame;
 #include "RetroCore.h"
 #include "RetroPad.h"
 #include "Scheduler.h"
+
 
 
 /**
@@ -221,12 +227,38 @@ struct Frame {
     std::uint32_t height{0};
 
     /**
+     * Stride of the frame in px
+     */
+     std::uint32_t pitch{0};
+
+    /**
      * Packed RGB array containing the data of the frame
      * @note Doesn't have a pitch
      */
     std::vector<std::uint8_t> data;
 };
 
+/**
+ * @union SSE128i
+ *
+ * Union to allow simpler access to m128i items
+ */
+union SSE128i {
+    /**
+     * Underlying vector represented by this data
+     */
+    __m128i vec128i;
+
+    /**
+     * Thing you'd use to access it as if it were a bunch of 16 bit uints
+     */
+    std::uint16_t data16[8];
+
+    /**
+     * Similar to data16
+     */
+    std::uint8_t data8[16];
+};
 
 /**
  * @namespace EmulatorController
