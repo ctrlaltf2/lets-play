@@ -250,9 +250,8 @@ struct Frame {
 
     /**
      * Packed RGB array containing the data of the frame
-     * @note Doesn't have a pitch
      */
-    std::vector<std::uint8_t> data;
+    const std::uint8_t* data{nullptr};
 };
 
 /**

@@ -550,22 +550,8 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
             // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
-            videoFormat.fmt = fmt;
-            server->logger.log("Error: Using unimplemented XRGB8888");
-            return false;
             server->logger.log(" Format set: XRGB8888");
-            videoFormat.rMask = 0xff000000;
-            videoFormat.gMask = 0x00ff0000;
-            videoFormat.bMask = 0x0000ff00;
-            videoFormat.aMask = 0x00000000;  // normally 0xff but who cares about alpha
-
-            videoFormat.rShift = 16;
-            videoFormat.gShift = 8;
-            videoFormat.bShift = 0;
-            videoFormat.aShift = 24;
-
-            videoFormat.bitsPerPel = 32;
-
+            videoFormat.fmt = fmt;
             return true;
         case RETRO_PIXEL_FORMAT_RGB565:  // 16 bit
             // rrrrrggggggbbbbb
@@ -592,6 +578,9 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 Frame EmulatorController::GetFrame() {
     std::unique_lock <std::mutex> lk(videoMutex);
     if (currentBuffer == nullptr) return Frame{0, 0, {}};
+
+    if(videoFormat.fmt == RETRO_PIXEL_FORMAT_XRGB8888)
+        return Frame{videoFormat.width, videoFormat.height, videoFormat.stride, static_cast<const std::uint8_t *>(currentBuffer)};
 
     size_t j{0};
 
@@ -748,7 +737,7 @@ Frame EmulatorController::GetFrame() {
         i += videoFormat.pitch - 2*videoFormat.width;
     }
 
-    return Frame{videoFormat.width, videoFormat.height, videoFormat.stride, videoFormat.buffer};
+    return Frame{videoFormat.width, videoFormat.height, videoFormat.stride, videoFormat.buffer.data()};
 }
 
 void EmulatorController::Save() {
