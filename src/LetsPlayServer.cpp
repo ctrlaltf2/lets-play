@@ -1218,7 +1218,7 @@ std::vector<std::uint8_t> LetsPlayServer::GenerateEmuJPEG(const EmuID_t &id) {
     long unsigned int jpegSize = _jpegBufferSize;
     std::uint8_t *cjpegData = &jpegData[1];
     tjCompress2(_jpegCompressor, frame.data.data(), frame.width, 16*std::ceil(frame.width/16.0) * 4, frame.height,
-                TJPF_XRGB, &cjpegData, &jpegSize, TJSAMP_420, quality, TJFLAG_ACCURATEDCT);
+                TJPF_XRGB, &cjpegData, &jpegSize, TJSAMP_444, quality, TJFLAG_ACCURATEDCT);
 
     std::vector<std::uint8_t> slicedData(std::begin(jpegData), std::next(jpegData.begin(), jpegSize + 1));
 
