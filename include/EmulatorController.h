@@ -144,6 +144,8 @@ struct EmulatorControllerProxy {
 struct VideoFormat {
     /*--- Bit masks ---*/
 
+    /* -- 0RGB1555 by default -- */
+
     /**
      * Red mask for the current video format
      */
@@ -164,7 +166,7 @@ struct VideoFormat {
      *
      * @note This is typically not used by the RetroArch cores
      */
-    std::atomic<std::uint32_t> aMask{0b0};
+    std::atomic<std::uint32_t> aMask{0b0000000000111110};
 
     /*--- Bit shifts ---*/
 
@@ -208,6 +210,11 @@ struct VideoFormat {
      * Pitch for the current video buffer
      */
     std::atomic<std::uint32_t> pitch{0};
+
+    /**
+     * RetroArch format
+     */
+    retro_pixel_format fmt{RETRO_PIXEL_FORMAT_0RGB1555};
 };
 
 /**

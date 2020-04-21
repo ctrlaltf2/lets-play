@@ -218,9 +218,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         server->config.set("serverConfig", "emulators", id, emuTemplate);
     }
 
-    // Set the RetroArch default color format just in case the core *doesn't*.
-    SetPixelFormat(RETRO_PIXEL_FORMAT_0RGB1555);
-
     server->config.SaveConfig();
 
     Core.SetEnvironment(OnEnvironment);
@@ -302,7 +299,6 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
     auto overrideFPS = server->config.get<bool>(nlohmann::json::value_t::boolean, "serverConfig", "emulators", id,
                                                 "overrideFramerate");
     std::chrono::microseconds frameDeltaTime;
-
 
     if (overrideFPS) {
         auto newFPS = server->config.get<std::uint64_t>(nlohmann::json::value_t::number_unsigned, "serverConfig",
@@ -433,7 +429,6 @@ bool EmulatorController::OnEnvironment(unsigned cmd, void *data) {
             return false;
             // Will be implemented
         case RETRO_ENVIRONMENT_GET_LOG_INTERFACE: // See core logs
-
         case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: // I think this is called when the avinfo changes
         case RETRO_ENVIRONMENT_GET_LIBRETRO_PATH: // Path to the libretro so core
         case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: // Use this instead of sleep_until?
@@ -526,6 +521,8 @@ void EmulatorController::UserConnected(LetsPlayUserHdl) {
 }
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
+    if(fmt == videoFormat.fmt)
+        return;
 
     switch (fmt) {
         // TODO: Find a core that uses this and test it
@@ -543,11 +540,14 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             videoFormat.aShift = 15;
 
             videoFormat.bitsPerPel = 16;
+
+            videoFormat.fmt = fmt;
         }
             return true;
             // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
             // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
+            videoFormat.fmt = fmt;
             server->logger.log("Error: Using unimplemented XRGB8888");
             return false;
             server->logger.log(" Format set: XRGB8888");
@@ -562,6 +562,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             videoFormat.aShift = 24;
 
             videoFormat.bitsPerPel = 32;
+
             return true;
         case RETRO_PIXEL_FORMAT_RGB565:  // 16 bit
             // rrrrrggggggbbbbb
@@ -577,6 +578,8 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             videoFormat.aShift = 16;
 
             videoFormat.bitsPerPel = 16;
+
+            videoFormat.fmt = fmt;
             return true;
         default:
             return false;
