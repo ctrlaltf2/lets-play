@@ -215,6 +215,16 @@ struct VideoFormat {
      * RetroArch format
      */
     retro_pixel_format fmt{RETRO_PIXEL_FORMAT_0RGB1555};
+
+    /**
+     * Stride for the video format
+     */
+    std::atomic<std::uint32_t> stride{0};
+
+    /**
+     * Buffer for the video data output
+     */
+    std::vector<std::uint8_t> buffer;
 };
 
 /**
