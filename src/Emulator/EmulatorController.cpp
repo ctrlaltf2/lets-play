@@ -456,7 +456,10 @@ void EmulatorController::OnVideoRefresh(const void *data, unsigned width, unsign
         videoFormat.width = width;
         videoFormat.height = height;
         videoFormat.pitch = pitch;
+        videoFormat.stride = videoFormat.width - 16 * std::ceil(videoFormat.width / 16.0);
+        videoFormat.buffer = std::vector <std::uint8_t>((videoFormat.width + videoFormat.stride) * videoFormat.height * 4);
     }
+
     currentBuffer = data;
 }
 
@@ -522,7 +525,7 @@ void EmulatorController::UserConnected(LetsPlayUserHdl) {
 
 bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
     if(fmt == videoFormat.fmt)
-        return;
+        return true;
 
     switch (fmt) {
         // TODO: Find a core that uses this and test it
@@ -590,9 +593,6 @@ Frame EmulatorController::GetFrame() {
     std::unique_lock <std::mutex> lk(videoMutex);
     if (currentBuffer == nullptr) return Frame{0, 0, {}};
 
-    const std::uint32_t stride = videoFormat.width - 16*std::ceil(videoFormat.width/16.0);
-    std::vector <std::uint8_t> outVec((videoFormat.width + stride) * videoFormat.height * 4);
-
     size_t j{0};
 
     const auto *i = static_cast<const std::uint8_t *>(currentBuffer);
@@ -612,7 +612,7 @@ Frame EmulatorController::GetFrame() {
     const std::uint16_t bScalar = 255.0 / bMax;
 
     for (size_t h = 0; h < videoFormat.height; ++h) {
-        for (size_t w = 0; w < (videoFormat.width+stride) / 16; w++) {
+        for (size_t w = 0; w < (videoFormat.width + videoFormat.stride) / 16; w++) {
             // Translation step: format -> generic pixel vectors
             // 2x 8 bytes (pixels) packed -> 3 vecs, R, G, B, __m128i (16px)
             __m128i rVec, gVec, bVec;
@@ -694,7 +694,7 @@ Frame EmulatorController::GetFrame() {
             {
                 SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
                 for(const auto& u8 : xrgb.data8)
-                    outVec[j++] = u8;
+                    videoFormat.buffer[j++] = u8;
             }
 
             // 2nd value...
@@ -709,7 +709,7 @@ Frame EmulatorController::GetFrame() {
             {
                 SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
                 for(const auto& u8 : xrgb.data8)
-                    outVec[j++] = u8;
+                    videoFormat.buffer[j++] = u8;
             }
 
             // 3rd value...
@@ -724,7 +724,7 @@ Frame EmulatorController::GetFrame() {
             {
                 SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
                 for(const auto& u8 : xrgb.data8)
-                    outVec[j++] = u8;
+                    videoFormat.buffer[j++] = u8;
             }
 
             // aaaand the 4th value
@@ -739,16 +739,16 @@ Frame EmulatorController::GetFrame() {
             {
                 SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
                 for(const auto& u8 : xrgb.data8)
-                    outVec[j++] = u8;
+                    videoFormat.buffer[j++] = u8;
             }
 
         }
 
-        i -= 2*stride; // We will have overrun the row by *stride* number of pixels, so correct that before the next line which assumes we're at the end
+        i -= 2*videoFormat.stride; // We will have overrun the row by *stride* number of pixels, so correct that before the next line which assumes we're at the end
         i += videoFormat.pitch - 2*videoFormat.width;
     }
 
-    return Frame{videoFormat.width, videoFormat.height, stride, outVec};
+    return Frame{videoFormat.width, videoFormat.height, videoFormat.stride, videoFormat.buffer};
 }
 
 void EmulatorController::Save() {
