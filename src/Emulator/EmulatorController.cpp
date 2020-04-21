@@ -218,6 +218,9 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
         server->config.set("serverConfig", "emulators", id, emuTemplate);
     }
 
+    // Set the RetroArch default color format just in case the core *doesn't*.
+    SetPixelFormat(RETRO_PIXEL_FORMAT_0RGB1555);
+
     server->config.SaveConfig();
 
     Core.SetEnvironment(OnEnvironment);
@@ -252,12 +255,10 @@ void EmulatorController::Run(const std::string& corePath, const std::string& rom
 
     server->logger.log(id, ": Finished initialization.");
 
-    // Set the RetroArch default color format just in case the core *doesn't*.
-    SetPixelFormat(RETRO_PIXEL_FORMAT_0RGB1555);
-
     // If provided an empty path, just skip this part. Leaving a blank path allows for cores that don't need roms to be loaded
     if(!romPath.empty()) {
-        retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(boost::filesystem::file_size(romFile)), nullptr};
+        retro_game_info info = {romPath.c_str(), nullptr, static_cast<size_t>(boost::filesystem::file_size(romFile)),
+                                nullptr};
         std::ifstream fo(romFile.string(), std::ios::binary);
 
         retro_system_info system{};
@@ -528,7 +529,7 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
 
     switch (fmt) {
         // TODO: Find a core that uses this and test it
-        case RETRO_PIXEL_FORMAT_0RGB1555:  // 16 bit
+        case RETRO_PIXEL_FORMAT_0RGB1555: {  // 16 bit
             // rrrrrgggggbbbbba
             server->logger.log(" Format set: 0RGB1555");
             videoFormat.rMask = 0b1111100000000000;
@@ -542,10 +543,13 @@ bool EmulatorController::SetPixelFormat(const retro_pixel_format fmt) {
             videoFormat.aShift = 15;
 
             videoFormat.bitsPerPel = 16;
+        }
             return true;
             // TODO: Fix (find a core that uses this, bsnes accuracy gives a zeroed
             // out video buffer so thats a no go)
         case RETRO_PIXEL_FORMAT_XRGB8888:  // 32 bit
+            server->logger.log("Error: Using unimplemented XRGB8888");
+            return false;
             server->logger.log(" Format set: XRGB8888");
             videoFormat.rMask = 0xff000000;
             videoFormat.gMask = 0x00ff0000;
@@ -583,44 +587,165 @@ Frame EmulatorController::GetFrame() {
     std::unique_lock <std::mutex> lk(videoMutex);
     if (currentBuffer == nullptr) return Frame{0, 0, {}};
 
-    std::vector <std::uint8_t> outVec(videoFormat.width * videoFormat.height * 3);
+    const std::uint32_t stride = videoFormat.width - 16*std::ceil(videoFormat.width/16.0);
+    std::vector <std::uint8_t> outVec((videoFormat.width + stride) * videoFormat.height * 4);
 
     size_t j{0};
 
     const auto *i = static_cast<const std::uint8_t *>(currentBuffer);
-    for (size_t h = 0; h < videoFormat.height; ++h) {
-        for (size_t w = 0; w < videoFormat.width; ++w) {
-            std::uint32_t pixel{0};
-            // Assuming little endian
-            pixel |= *(i++);
-            pixel |= *(i++) << 8;
+    // TODO: The possible address boundary error on the last row. Probably have a check on this loop then manually do the last row
+    /*
+     * NOTE: This will assume a 16-bit format. This is due to the fact that the only 32-bit format supported by RetroArch
+     * is XRGB8888, which is supported by turbojpeg2 out of the box. The rest of the possible formats are 16-bit.
+     */
 
-            if (videoFormat.bitsPerPel == 32) {
-                pixel |= *(i++) << 16;
-                pixel |= *(i++) << 24;
+    // Get a scalar to multiply our three R, G, and B vecs by to move it from nbit to 8bit
+    const std::uint8_t &rMax = 1 << (videoFormat.aShift - videoFormat.rShift);
+    const std::uint8_t &gMax = 1 << (videoFormat.rShift - videoFormat.gShift);
+    const std::uint8_t &bMax = 1 << (videoFormat.gShift - videoFormat.bShift);
+
+    const std::uint16_t rScalar = 255.0 / rMax;
+    const std::uint16_t gScalar = 255.0 / gMax;
+    const std::uint16_t bScalar = 255.0 / bMax;
+
+    for (size_t h = 0; h < videoFormat.height; ++h) {
+        for (size_t w = 0; w < (videoFormat.width+stride) / 16; w++) {
+            // Translation step: format -> generic pixel vectors
+            // 2x 8 bytes (pixels) packed -> 3 vecs, R, G, B, __m128i (16px)
+            __m128i rVec, gVec, bVec;
+            for(int q = 0; q < 2; ++q) {
+                __m128i px8 = _mm_loadu_si128((__m128i *)i);
+                i += 16;
+
+                // Pull out the r, g, b values from the packed pixels
+                __m128i mask = _mm_set1_epi16(videoFormat.rMask);
+                __m128i rVals = _mm_and_si128(px8, mask);
+                rVals = _mm_srli_epi16(rVals, videoFormat.rShift);
+                __m128i rMult = _mm_set1_epi16(rScalar);
+                rVals = _mm_mullo_epi16(rVals, rMult);
+
+                mask = _mm_set1_epi16(videoFormat.gMask);
+                __m128i gVals = _mm_and_si128(px8, mask);
+                gVals = _mm_srli_epi16(gVals, videoFormat.gShift);
+                __m128i gMult = _mm_set1_epi16(gScalar);
+                gVals = _mm_mullo_epi16(gVals, gMult);
+
+                mask = _mm_set1_epi16(videoFormat.bMask);
+                __m128i bVals = _mm_and_si128(px8, mask);
+                bVals = _mm_srli_epi16(bVals, videoFormat.bShift);
+                __m128i bMult = _mm_set1_epi16(bScalar);
+                bVals = _mm_mullo_epi16(bVals, bMult);
+
+                // At this point, each of the individual vecs has values like so (1 block = 8 bits):
+                // | 0 | X | 0 | X | 0 | X | 0 | X | 0 | X | 0 | X | 0 | X | 0 | X |
+                // So, we need to pack the numbers together (remove the 0) and make a 64bit vec, which in another loop of this is combined into a 128i vec
+                if (q == 0) {
+                    const __m128i hiMask = _mm_setr_epi8(0, 2, 4, 6, 8, 10, 12, 14, 128, 128, 128, 128, 128, 128, 128,
+                                                         128);
+
+                    rVec = _mm_shuffle_epi8(rVals, hiMask);
+                    gVec = _mm_shuffle_epi8(gVals, hiMask);
+                    bVec = _mm_shuffle_epi8(bVals, hiMask);
+                } else {
+                    const __m128i loMask = _mm_setr_epi8(128, 128, 128, 128, 128, 128, 128, 128, 0, 2, 4, 6, 8, 10, 12, 14);
+
+                    // Have a temporary to store the result of the shuffle
+                    __m128i temp = _mm_shuffle_epi8(rVals, loMask);
+                    // OR the hi and lo parts of the
+                    rVec = _mm_or_si128(temp, rVec);
+
+                    temp = _mm_shuffle_epi8(gVals, loMask);
+                    gVec = _mm_or_si128(temp, gVec);
+
+                    temp = _mm_shuffle_epi8(bVals, loMask);
+                    bVec = _mm_or_si128(temp, bVec);
+                }
             }
 
-            // Calculate the rgb 0 - 255 values
-            const std::uint8_t &rMax = 1 << (videoFormat.aShift - videoFormat.rShift);
-            const std::uint8_t &gMax = 1 << (videoFormat.rShift - videoFormat.gShift);
-            const std::uint8_t &bMax = 1 << (videoFormat.gShift - videoFormat.bShift);
+            // With translation done, we now have a 16px R, G, B vecs that need interleaved into XRGB8888
+            // This interleaving will yield 16px * 4 channels per px * 8 bits per channel / 128 bits per vec = 4 XRGB vecs
 
-            const std::uint8_t &rVal = (pixel & videoFormat.rMask) >> videoFormat.rShift;
-            const std::uint8_t &gVal = (pixel & videoFormat.gMask) >> videoFormat.gShift;
-            const std::uint8_t &bVal = (pixel & videoFormat.bMask) >> videoFormat.bShift;
+            // Interleaving masks
+            const __m128i rInterleaveMask = _mm_setr_epi8(128, 0, 128, 128, 128, 1, 128, 128, 128, 2, 128, 128, 128, 3, 128, 128);
+            const __m128i gInterleaveMask = _mm_setr_epi8(128, 128, 0, 128, 128, 128, 1, 128, 128, 128, 2, 128, 128, 128, 3, 128);
+            const __m128i bInterleaveMask = _mm_setr_epi8(128, 128, 128, 0, 128, 128, 128, 1, 128, 128, 128, 2, 128, 128, 128, 3);
 
-            std::uint8_t rNormalized = (rVal / (double) rMax) * 255;
-            std::uint8_t gNormalized = (gVal / (double) gMax) * 255;
-            std::uint8_t bNormalized = (bVal / (double) bMax) * 255;
+            /*
+             * Now, usually you could just use a loop for this kind of thing, but, the way that SSE is
+             * implemented or the way its spec is, I couldn't use a loop for this kinda thing, you need a
+             * compile-time constant
+             *
+             * So, without further ado, copy-pasta-orama!
+             */
 
-            outVec[j++] = rNormalized;
-            outVec[j++] = gNormalized;
-            outVec[j++] = bNormalized;
+            // Extract first value
+            __m128i ri = _mm_shuffle_epi32(rVec, 0);
+            __m128i gi = _mm_shuffle_epi32(gVec, 0);
+            __m128i bi = _mm_shuffle_epi32(bVec, 0);
+
+            // Space out values so they can be OR'd together (interleaved)
+            __m128i r0 = _mm_shuffle_epi8(ri, rInterleaveMask);
+            __m128i g0 = _mm_shuffle_epi8(gi, gInterleaveMask);
+            __m128i b0 = _mm_shuffle_epi8(bi, bInterleaveMask);
+
+            {
+                SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
+                for(const auto& u8 : xrgb.data8)
+                    outVec[j++] = u8;
+            }
+
+            // 2nd value...
+            ri = _mm_shuffle_epi32(rVec, 1);
+            gi = _mm_shuffle_epi32(gVec, 1);
+            bi = _mm_shuffle_epi32(bVec, 1);
+
+            r0 = _mm_shuffle_epi8(ri, rInterleaveMask);
+            g0 = _mm_shuffle_epi8(gi, gInterleaveMask);
+            b0 = _mm_shuffle_epi8(bi, bInterleaveMask);
+
+            {
+                SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
+                for(const auto& u8 : xrgb.data8)
+                    outVec[j++] = u8;
+            }
+
+            // 3rd value...
+            ri = _mm_shuffle_epi32(rVec, 2);
+            gi = _mm_shuffle_epi32(gVec, 2);
+            bi = _mm_shuffle_epi32(bVec, 2);
+
+            r0 = _mm_shuffle_epi8(ri, rInterleaveMask);
+            g0 = _mm_shuffle_epi8(gi, gInterleaveMask);
+            b0 = _mm_shuffle_epi8(bi, bInterleaveMask);
+
+            {
+                SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
+                for(const auto& u8 : xrgb.data8)
+                    outVec[j++] = u8;
+            }
+
+            // aaaand the 4th value
+            ri = _mm_shuffle_epi32(rVec, 3);
+            gi = _mm_shuffle_epi32(gVec, 3);
+            bi = _mm_shuffle_epi32(bVec, 3);
+
+            r0 = _mm_shuffle_epi8(ri, rInterleaveMask);
+            g0 = _mm_shuffle_epi8(gi, gInterleaveMask);
+            b0 = _mm_shuffle_epi8(bi, bInterleaveMask);
+
+            {
+                SSE128i xrgb = {_mm_or_si128( _mm_or_si128(r0, g0), b0)};
+                for(const auto& u8 : xrgb.data8)
+                    outVec[j++] = u8;
+            }
+
         }
-        i += videoFormat.pitch - 2 * videoFormat.width;
+
+        i -= 2*stride; // We will have overrun the row by *stride* number of pixels, so correct that before the next line which assumes we're at the end
+        i += videoFormat.pitch - 2*videoFormat.width;
     }
 
-    return Frame{videoFormat.width, videoFormat.height, outVec};
+    return Frame{videoFormat.width, videoFormat.height, stride, outVec};
 }
 
 void EmulatorController::Save() {

@@ -103,6 +103,7 @@ target_compile_options(letsplay
         -ggdb
         -pedantic-errors
         -Wfatal-errors
+        -march=native
 )
 endif()
 
