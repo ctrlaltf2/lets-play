@@ -12,6 +12,7 @@ Why thanks for asking, a A web-based collaborative RetroArch frontend is just a 
 # Requirements
  - Compiler with support for C++14
  - CMake version >= 3.2
+ - CPU with support for SSE2 and SSSE3 (most CPUs do)
 
 # Building
 To build, simply type `cmake .` in the top level directory, then type `make`. To do parallel builds (recommended), type `make -j#` where `#` is the number of cores you have on your machine. After the build, the binary will be in `./bin/` as `letsplay`.
