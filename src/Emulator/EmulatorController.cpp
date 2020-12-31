@@ -1,5 +1,20 @@
 #include "EmulatorController.h"
 
+/**
+ * Now, you're probably wondering: static thread_local? namespaced pseudo-classes? Surely this guy is crazy!
+ * Well, you're in for a story. Basically, the libretro API, the thing that this 'class' interacts with
+ * and allows emulators to be run, provides no way for functions that you register to have a void*
+ * params I can throw around, so frontends (i.e. this program) are stuck storing state in global variables.
+ * Not *that* terrible (other than, you know, globals), until you realise you want to load in multiple
+ * emulators and... well... can't do that if they share the same global state! So, the current solution
+ * to that is to run every emulator in its own thread (yikes!), so that they each can get their own state.
+ *
+ * Something I'm looking into for solving this in a more elegant way is to:
+ *      - fork() off and spawn a new process when creating a EmulatorController
+ *      - Use TIPC as the IPC protocol for EmulatorControler <-> LetsPlayServer communication
+ *          - Why TIPC? Well, just in case I wanted to cluster this and allow my RPI to run a SNES emulator,
+ *            while my laptop runs the actual server, because, why not? Also TIPC sounds pretty cool
+ */
 namespace EmulatorController {
     /**
      * ID of the emulator controller / emulator.
