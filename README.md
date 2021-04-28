@@ -1,5 +1,7 @@
 # Let's Play
 
+## As of May 1st, 2021 this is being rewritten, see the v2.0 branch
+
 [![Discord](https://discordapp.com/api/guilds/572941118065606667/widget.png)](https://discord.gg/GNChjnn)
 
 A web-based collaborative RetroArch frontend
