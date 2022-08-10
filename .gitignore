@@ -6,6 +6,7 @@ CMakeFiles/
 bin/
 vgcore*
 perf*
+build/
 
 trash/
 
