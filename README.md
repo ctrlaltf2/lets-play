@@ -1,6 +1,6 @@
 # Let's Play
 
-## As of June 1st, 2024 this is being rewritten, see the [next](https://github.com/ctrlaltf2/lets-play/tree/gl) branch and [project](https://github.com/users/ctrlaltf2/projects/3)
+## As of June 1st, 2024 this is being rewritten, see the [next](https://github.com/ctrlaltf2/lets-play/tree/next) branch and [project](https://github.com/users/ctrlaltf2/projects/3)
 
 [![Discord](https://discordapp.com/api/guilds/572941118065606667/widget.png)](https://discord.gg/GNChjnn)
 
