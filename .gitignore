@@ -17,3 +17,6 @@ core
 # CLion
 .idea/
 cmake-build-debug/
+
+# Rust
+target/
