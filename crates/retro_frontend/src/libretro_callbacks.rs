@@ -5,7 +5,7 @@ use rgb565::Rgb565;
 
 use std::ffi;
 
-use tracing::{error, info, debug};
+use tracing::{debug, error, info};
 
 pub(crate) unsafe extern "C" fn environment_callback(
 	environment_command: u32,
@@ -25,21 +25,10 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		ENVIRONMENT_SET_CONTROLLER_INFO => {
 			let ptr = data as *const ControllerInfo;
-			let mut len = 0usize;
 
-			let mut iter = ptr.clone();
-			loop {
-				let item = iter.as_ref().unwrap();
-
-				if item.num_types == 0 && item.types.is_null() {
-					break;
-				}
-
-				len += 1;
-				iter = iter.add(1);
-			}
-
-			let slice = std::slice::from_raw_parts(ptr, len);
+			let slice = util::terminated_array(ptr, |item| {
+				return item.num_types == 0 && item.types.is_null();
+			});
 
 			for desc in slice {
 				debug!("{:?}", desc);
@@ -59,25 +48,12 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		ENVIRONMENT_SET_INPUT_DESCRIPTORS => {
 			let ptr = data as *const InputDescriptor;
-			let mut len = 0usize;
 
-			// Calculate the length of the array
-			// I'm not aware of any funny magic (besides macros) that would
-			// let me make this logic "shared", but I'll probably make a macro for it
-			// or something.
-			let mut iter = ptr.clone();
-			loop {
-				if (*iter).description.is_null() {
-					break;
-				}
+			let slice = util::terminated_array(ptr, |item| {
+				return item.description.is_null();
+			});
 
-				len += 1;
-				iter = iter.add(1);
-			}
-
-			debug!("{len} input descriptor entries");
-
-			let slice = std::slice::from_raw_parts(ptr, len);
+			debug!("{} input descriptor entries", slice.len());
 
 			for desc in slice {
 				debug!("Descriptor {:?}", desc);
@@ -139,7 +115,10 @@ pub(crate) unsafe extern "C" fn environment_callback(
 					return false;
 				}
 				Err(err) => {
-					error!("Core gave an invalid key for ENVIRONMENT_GET_VARIABLE: {:?}", err);
+					error!(
+						"Core gave an invalid key for ENVIRONMENT_GET_VARIABLE: {:?}",
+						err
+					);
 					return false;
 				}
 			}
@@ -159,19 +138,10 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		//	 use that to save/restore (by injecting keys from another source)
 		ENVIRONMENT_SET_VARIABLES => {
 			let ptr = data as *const Variable;
-			let mut _len = 0usize;
 
-			let mut iter = ptr.clone();
-			loop {
-				if (*iter).key.is_null() {
-					break;
-				}
+			let _slice = util::terminated_array(ptr, |item| { item.key.is_null() });
 
-				_len += 1;
-				iter = iter.add(1);
-			}
-
-			/*let slice = std::slice::from_raw_parts(ptr, len);
+			/*
 
 			for var in slice {
 				let key = std::ffi::CStr::from_ptr(var.key).to_str().unwrap();
