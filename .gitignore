@@ -1,14 +1,7 @@
-*.o
-CMakeCache.txt
-Makefile
-cmake_install.cmake
-CMakeFiles/
-bin/
 vgcore*
 perf*
 
 trash/
-
 cores/
 roms/
 libretro.so
@@ -20,3 +13,6 @@ cmake-build-debug/
 
 # Rust
 target/
+
+# misc test data
+testdata/
