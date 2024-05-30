@@ -17,6 +17,10 @@ use std::ffi;
 
 use tracing::{error, info};
 
+// FIXME(lily): Rust 2024 will make a good chunk of this code illegal. 
+// It might be wise to just bind some "simpler" C++ code and make it safe with lifetimes here,
+// or something. It's a bit of a pickle.
+
 /// The frontend implementation.
 ///
 /// # Safety

@@ -39,7 +39,7 @@ pub fn set_input_poll_callback(cb: impl FnMut() + 'static) {
 	}
 }
 
-/// Sets the given port's input device. This takes a implementation of the [crate::joypad::JoyPad]
+/// Sets the given port's input device. This takes a implementation of the [crate::joypad::Joypad]
 /// trait, which will provide the information needed for libretro to work and all that.
 pub fn set_input_port_device(port: u32, device: Rc<RefCell<dyn Joypad>>) {
 	unsafe {
