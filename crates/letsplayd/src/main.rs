@@ -1,9 +1,7 @@
-use retro_frontend::Frontend;
+use retro_frontend::frontend;
 
 fn main() {
-	let mut fe = Frontend::new();
-
-	fe.load_core("./cores/gambatte_libretro.so")
+	frontend::load_core("./cores/gambatte_libretro.so")
 		.expect("Core should have loaded");
 
 	// We could now do interesting stuff

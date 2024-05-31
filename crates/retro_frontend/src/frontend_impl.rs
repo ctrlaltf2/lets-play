@@ -15,15 +15,6 @@ pub(crate) static mut FRONTEND_IMPL : Lazy<FrontendStateImpl> = Lazy::new(|| {
 	FrontendStateImpl::default()
 });
 
-/// Used to assert that another [crate::Frontend] wrapper object is not created
-/// while this implementation layer isn't cleaned up.
-pub(crate) fn assert_cleaned_up() {
-	unsafe {
-		assert!(FRONTEND_IMPL.core_library.is_none());
-		assert!(FRONTEND_IMPL.current_core_api.is_none());
-	}
-}
-
 #[derive(Default)]
 pub(crate) struct FrontendStateImpl {
 
@@ -35,7 +26,6 @@ pub(crate) struct FrontendStateImpl {
 
 }
 
-
 impl FrontendStateImpl {
 	// Just for testing. I'll write a much better one (that is actually useful) later
 	unsafe extern "C" fn libretro_environment_callback(
@@ -46,12 +36,6 @@ impl FrontendStateImpl {
 		false
 	}
 
-	/// Loads a core from the given path.
-	///
-	/// ```rust
-	/// let mut fe = Frontend::new();
-	/// fe.load_core("./cores/gbasp.so");
-	/// ```
 	pub(crate) fn load_core<P: AsRef<std::path::Path>>(&mut self, path: P) -> Result<()> {
 		unsafe {
 			let lib = Box::new(Library::new(path.as_ref())?);
