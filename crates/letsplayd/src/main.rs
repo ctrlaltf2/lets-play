@@ -6,4 +6,9 @@ fn main() {
 
 	// We could now do interesting stuff
 	println!("Core loaded!");
+
+	frontend::load_rom("./roms/smw.gb")
+		.expect("ROM should have loaded");
+
+	println!("ROM loaded!")
 }

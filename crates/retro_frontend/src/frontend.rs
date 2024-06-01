@@ -10,6 +10,7 @@ use crate::result::Result;
 pub fn load_core<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 	unsafe { FRONTEND_IMPL.load_core(path) }
 }
+
 /// Unloads the core currently running in the global frontend state.
 ///
 /// ```rust
@@ -18,4 +19,14 @@ pub fn load_core<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 /// ```
 pub fn unload_core() {
 	unsafe { FRONTEND_IMPL.unload_core() }
+}
+
+/// Loads a ROM into the given core.
+/// 
+/// ```rust
+/// use retro_frontend::frontend;
+/// frontend::load_rom("./roms/sma2.gba");
+/// ```
+pub fn load_rom<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
+	unsafe { FRONTEND_IMPL.load_rom(path) }
 }
