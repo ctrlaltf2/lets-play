@@ -1,3 +1,9 @@
+//! The primary frontend API.
+//! This is a singleton API, not by choice, but due to Libretro's design.
+//!
+//! # Safety
+//! Don't even think about using this across multiple threads. If you want to run multiple frontends,
+//! it's easier to just host this crate in a runner process and fork off those runners.
 use crate::frontend_impl::FRONTEND_IMPL;
 use crate::result::Result;
 
@@ -21,8 +27,8 @@ pub fn unload_core() {
 	unsafe { FRONTEND_IMPL.unload_core() }
 }
 
-/// Loads a ROM into the given core.
-/// 
+/// Loads a ROM into the given core. This function requires that [load_core] has been called and has succeeded first.
+///
 /// ```rust
 /// use retro_frontend::frontend;
 /// frontend::load_rom("./roms/sma2.gba");
