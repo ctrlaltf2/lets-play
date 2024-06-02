@@ -7,6 +7,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, mem::MaybeUninit};
 
+use tracing::{error, info, warn};
+
 /// The frontend implementation.
 ///
 /// # Safety
@@ -22,7 +24,7 @@ pub(crate) static mut FRONTEND_IMPL: Lazy<FrontendStateImpl> =
 #[derive(Default)]
 pub(crate) struct FrontendStateImpl {
 	/// The current core's libretro functions.
-	current_core_api: Option<CoreAPI>,
+	core_api: Option<CoreAPI>,
 
 	/// The current core library.
 	core_library: Option<Box<Library>>,
@@ -45,17 +47,26 @@ impl FrontendStateImpl {
 			}
 
 			ENVIRONMENT_GET_VARIABLE => {
-				// Safety: This should always be a valid pointer, if it's not we're in bigger deep anyways.
+				// Make sure the core actually is giving us a pointer
+				if data.is_null() {
+					return false;
+				}
+
 				let var = (data as *mut Variable).as_mut().unwrap();
-				let key = std::ffi::CStr::from_ptr(var.key).to_str().expect("bruhg");
-				println!("Core wants to get variable \"{}\" from us", key);
+
+				match std::ffi::CStr::from_ptr(var.key).to_str() {
+					Ok(key) => {
+						info!("Core wants to get variable \"{}\" from us", key);
+					}
+					Err(_err) => {
+						// Maybe notify about this.
+						return false;
+					}
+				}
 			}
 
-			// tracing? Long Answer
 			_ => {
-				println!(
-					"Environment callback called with unhandled command: {environment_command}"
-				);
+				warn!("Environment callback called with unhandled command: {environment_command}");
 			}
 		}
 
@@ -64,7 +75,7 @@ impl FrontendStateImpl {
 
 	pub(crate) fn core_loaded(&self) -> bool {
 		// Ideally this logic could be simplified but just to make sure..
-		self.core_library.is_some() && self.current_core_api.is_some()
+		self.core_library.is_some() && self.core_api.is_some()
 	}
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
@@ -72,8 +83,10 @@ impl FrontendStateImpl {
 		// but if it doesn't, add it
 
 		// Make sure to unload and deinitalize an existing core.
+		// If this fails, we will probably end up in a unclean state, so 
+		// /shrug.
 		if self.core_loaded() {
-			self.unload_core();
+			self.unload_core()?;
 		}
 
 		unsafe {
@@ -125,6 +138,10 @@ impl FrontendStateImpl {
 			// If we can't then stop here.
 			let api_version = (core_api.retro_api_version)();
 			if api_version != libretro_sys::API_VERSION {
+				error!(
+					"Core {} has invalid API version {api_version}",
+					path.as_ref().display()
+				);
 				return Err(Error::InvalidLibRetroAPI {
 					expected: libretro_sys::API_VERSION,
 					got: api_version,
@@ -137,31 +154,38 @@ impl FrontendStateImpl {
 			// Initalize the libretro core
 			(core_api.retro_init)();
 
+			info!("Core {} loaded", path.as_ref().display());
+
 			self.core_library = Some(lib);
-			self.current_core_api = Some(core_api);
+			self.core_api = Some(core_api);
 		}
 
 		Ok(())
 	}
 
-	pub(crate) fn unload_core(&mut self) {
+	pub(crate) fn unload_core(&mut self) -> Result<()> {
+		if !self.core_loaded() {
+			return Err(Error::CoreNotLoaded);
+		}
+
 		// First deinitalize the libretro core before unloading the library.
-		if let Some(core_api) = &self.current_core_api {
+		if let Some(core_api) = &self.core_api {
 			unsafe {
 				(core_api.retro_deinit)();
 			}
-		} else {
-			// Return early if we have no core API; this means we don't have
-			// a library either.
-			return ();
 		}
 
 		// Unload the library. We don't worry about error handling right now, but
 		// we could (at least, when not being dropped.)
 		let lib = self.core_library.take().unwrap();
-		let _ = lib.close();
+		lib.close()?;
+
+		self.core_api = None;
+		self.core_library = None;
 
 		// FIXME: Do other various cleanup (when we need to do said cleanup)
+
+		Ok(())
 	}
 
 	pub(crate) fn load_rom<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
@@ -171,8 +195,8 @@ impl FrontendStateImpl {
 
 		// For now I'm only implementing the gameinfo garbage that
 		// makes you read the whole file in. Later on I'll look into VFS
-		// support; but for now, it seems more cores play ball with this.
-		// :(
+		// support; but for now, it seems more cores will probably
+		// play ball with this.. which sucks :(
 
 		// I'm aware this is nasty but bleh
 		let slice = path.as_ref().as_os_str().as_bytes();
@@ -186,7 +210,7 @@ impl FrontendStateImpl {
 			meta: std::ptr::null(),
 		};
 
-		let core_api = self.current_core_api.as_ref().unwrap();
+		let core_api = self.core_api.as_ref().unwrap();
 
 		unsafe {
 			if !(core_api.retro_load_game)(&gameinfo) {

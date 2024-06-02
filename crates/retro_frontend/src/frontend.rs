@@ -23,7 +23,7 @@ pub fn load_core<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 /// use retro_frontend::frontend;
 /// frontend::unload_core();
 /// ```
-pub fn unload_core() {
+pub fn unload_core() -> Result<()> {
 	unsafe { FRONTEND_IMPL.unload_core() }
 }
 
