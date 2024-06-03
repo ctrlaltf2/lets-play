@@ -1,0 +1,10 @@
+[package]
+name = "retrodemo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+retro_frontend = { path = "../retro_frontend" }
+
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"

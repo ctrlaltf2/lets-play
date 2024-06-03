@@ -289,6 +289,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "retrodemo"
+version = "0.1.0"
+dependencies = [
+ "retro_frontend",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
