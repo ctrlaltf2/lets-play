@@ -2,6 +2,8 @@
 name = "retro_frontend"
 version = "0.1.0"
 edition = "2021"
+# Could be useful, and does build seperately, so...
+# publish = false
 
 [dependencies]
 libloading = "0.8.3"
