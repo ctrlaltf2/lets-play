@@ -5,9 +5,12 @@ edition = "2021"
 publish = false
 
 [dependencies]
-pixels = "0.13.0"
 retro_frontend = { path = "../retro_frontend" }
+
+# Later on
+#winit = "0.30.0"
+#softbuffer = "0.4.3"
 
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-winit = "0.30.0"
+singlyton = "4.1.1"

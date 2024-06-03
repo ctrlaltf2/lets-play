@@ -17,9 +17,8 @@ use tracing::{error, info, warn};
 pub(crate) static mut FRONTEND_IMPL: Lazy<FrontendStateImpl> =
 	Lazy::new(|| FrontendStateImpl::default());
 
-//pub trait FrontendCallbacks {
-//
-//}
+pub(crate) type RefreshCallback = dyn FnMut(&[u8], u32, u32, u32);
+pub(crate) type SetPixelFormatCallback = dyn FnMut(PixelFormat);
 
 #[derive(Default)]
 pub(crate) struct FrontendStateImpl {
@@ -28,6 +27,11 @@ pub(crate) struct FrontendStateImpl {
 
 	/// The current core library.
 	core_library: Option<Box<Library>>,
+
+	// Callbacks:
+
+	video_refresh_callback: Option<Box<RefreshCallback>>,
+	video_set_pixel_format_callback: Option<Box<SetPixelFormatCallback>>
 }
 
 impl FrontendStateImpl {
@@ -43,6 +47,12 @@ impl FrontendStateImpl {
 
 			ENVIRONMENT_SET_PIXEL_FORMAT => {
 				let _pixel_format = *(data as *const std::ffi::c_uint);
+				let pixel_format = PixelFormat::from_uint(_pixel_format).unwrap();
+
+				if let Some(video_set_pixel_format) = &mut FRONTEND_IMPL.video_set_pixel_format_callback {
+					video_set_pixel_format(pixel_format);
+				}
+
 				return true;
 			}
 
@@ -73,9 +83,32 @@ impl FrontendStateImpl {
 		false
 	}
 
+	unsafe extern "C" fn libretro_video_refresh(
+		pixels: *const std::ffi::c_void,
+		width: std::ffi::c_uint,
+		height: std::ffi::c_uint,
+		pitch: usize,
+	) {
+		warn!("Video refresh called");
+		// TODO:..
+
+		//if let Some(video_refresh) = &mut FRONTEND_IMPL.video_refresh_callback {
+			//video_refresh()
+		//}
+
+	}
+
 	pub(crate) fn core_loaded(&self) -> bool {
 		// Ideally this logic could be simplified but just to make sure..
 		self.core_library.is_some() && self.core_api.is_some()
+	}
+
+	pub(crate) fn set_video_refresh_callback(&mut self, cb: impl FnMut(&[u8], u32, u32, u32) + 'static) {
+		self.video_refresh_callback = Some(Box::new(cb));
+	}
+
+	pub(crate) fn set_video_pixel_format_callback(&mut self, cb: impl FnMut(PixelFormat) + 'static) {
+		self.video_set_pixel_format_callback = Some(Box::new(cb));
 	}
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
@@ -83,7 +116,7 @@ impl FrontendStateImpl {
 		// but if it doesn't, add it
 
 		// Make sure to unload and deinitalize an existing core.
-		// If this fails, we will probably end up in a unclean state, so 
+		// If this fails, we will probably end up in a unclean state, so
 		// /shrug.
 		if self.core_loaded() {
 			self.unload_core()?;
@@ -150,6 +183,7 @@ impl FrontendStateImpl {
 
 			// Set required libretro callbacks. This is required to avoid a crash.
 			(core_api.retro_set_environment)(Self::libretro_environment_callback);
+			(core_api.retro_set_video_refresh)(Self::libretro_video_refresh);
 
 			// Initalize the libretro core
 			(core_api.retro_init)();

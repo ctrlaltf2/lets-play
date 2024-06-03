@@ -1,6 +1,15 @@
+
+
 use retro_frontend::frontend;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
+
+use singlyton::SingletonUninit;
+
+mod app;
+
+static APP: SingletonUninit<app::App> = SingletonUninit::uninit();
+
 
 fn main() {
 	// Setup a tracing subscriber
@@ -10,17 +19,14 @@ fn main() {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
+	APP.init(app::App::new());
+
+	frontend::set_video_pixel_format_callback(|pf| {
+		println!("Core wants to set pixel format {:?}", pf);
+
+		(*APP.get_mut()).current_pixel_format = pf;
+	});
+
 	frontend::load_core("./cores/gambatte_libretro.so").expect("Core should have loaded");
-
-	// We could now do interesting stuff
-	println!("Core loaded!");
-
 	frontend::load_rom("./roms/smw.gb").expect("ROM should have loaded");
-
-	println!("ROM loaded!");
-
-	// Unload the core since we're shutting down now
-	frontend::unload_core().expect("Core should have unloaded");
-	
-	println!("Core unloaded.")
 }

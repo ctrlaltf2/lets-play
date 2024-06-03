@@ -4,8 +4,25 @@
 //! # Safety
 //! Don't even think about using this across multiple threads. If you want to run multiple frontends,
 //! it's easier to just host this crate in a runner process and fork off those runners.
+use libretro_sys::PixelFormat;
+
 use crate::frontend_impl::FRONTEND_IMPL;
 use crate::result::Result;
+
+//pub use crate::frontend_impl::*;
+
+
+pub fn set_video_refresh_callback(cb: impl FnMut(&[u8], u32, u32, u32) + 'static) {
+	unsafe {
+		FRONTEND_IMPL.set_video_refresh_callback(cb);
+	}
+}
+
+pub fn set_video_pixel_format_callback(cb: impl FnMut(PixelFormat) + 'static) {
+	unsafe {
+		FRONTEND_IMPL.set_video_pixel_format_callback(cb);
+	}
+}
 
 /// Loads a core from the given path into the global frontend state.
 ///
