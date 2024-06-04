@@ -1,15 +1,24 @@
+use std::{cell::RefCell, rc::Rc};
 
-
-use retro_frontend::frontend;
+use retro_frontend::{frontend, libretro_sys};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
-use singlyton::SingletonUninit;
+struct App {
+}
 
-mod app;
+impl App {
+	fn new() -> Self {
+		Self {
+		}
+	}
 
-static APP: SingletonUninit<app::App> = SingletonUninit::uninit();
 
+	// ?
+	fn render(&self) {
+
+	}
+}
 
 fn main() {
 	// Setup a tracing subscriber
@@ -19,14 +28,21 @@ fn main() {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-	APP.init(app::App::new());
+	let app: Rc<RefCell<App>> = Rc::new(RefCell::new(App::new()));
 
-	frontend::set_video_pixel_format_callback(|pf| {
-		println!("Core wants to set pixel format {:?}", pf);
+	//let app_clone = app.clone();
 
-		(*APP.get_mut()).current_pixel_format = pf;
-	});
+
+	// TODO
+	//frontend::set_video_refresh_callback()
 
 	frontend::load_core("./cores/gambatte_libretro.so").expect("Core should have loaded");
 	frontend::load_rom("./roms/smw.gb").expect("ROM should have loaded");
+
+	loop {
+		frontend::run();
+
+		app.borrow().render();
+	}
+
 }

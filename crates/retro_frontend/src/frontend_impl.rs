@@ -1,11 +1,14 @@
 use crate::result::{Error, Result};
+use crate::util;
 use libloading::Library;
 use libretro_sys::*;
 use once_cell::sync::Lazy;
-use std::ffi::CString;
+use ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, mem::MaybeUninit};
+
+use std::ffi;
 
 use tracing::{error, info, warn};
 
@@ -15,12 +18,11 @@ use tracing::{error, info, warn};
 /// Note that Libretro itself is not thread safe, so we do not try and pretend
 /// that we are thread safe either.
 pub(crate) static mut FRONTEND_IMPL: Lazy<FrontendStateImpl> =
-	Lazy::new(|| FrontendStateImpl::default());
+	Lazy::new(|| FrontendStateImpl::new());
 
-pub(crate) type RefreshCallback = dyn FnMut(&[u8], u32, u32, u32);
-pub(crate) type SetPixelFormatCallback = dyn FnMut(PixelFormat);
+// TODO: This probably won't need to match the libretro callback.
+pub(crate) type RefreshCallback = dyn FnMut(&[u8], u32, u32, usize);
 
-#[derive(Default)]
 pub(crate) struct FrontendStateImpl {
 	/// The current core's libretro functions.
 	core_api: Option<CoreAPI>,
@@ -28,16 +30,37 @@ pub(crate) struct FrontendStateImpl {
 	/// The current core library.
 	core_library: Option<Box<Library>>,
 
+	av_info: Option<SystemAvInfo>,
+
+	/// Core requested pixel format.
+	pixel_format: PixelFormat,
+
+	// Converted pixel buffer. We store it here so we don't keep allocating over and over.
+	converted_pixel_buffer: Vec<u32>,
+
 	// Callbacks:
 
 	video_refresh_callback: Option<Box<RefreshCallback>>,
-	video_set_pixel_format_callback: Option<Box<SetPixelFormatCallback>>
 }
 
 impl FrontendStateImpl {
+	fn new() -> Self {
+		Self {
+			core_api: None,
+			core_library: None,
+
+			av_info: None,
+
+			pixel_format: PixelFormat::RGB565,
+			converted_pixel_buffer: Vec::new(),
+
+			video_refresh_callback: None,
+		}
+	}
+
 	unsafe extern "C" fn libretro_environment_callback(
 		environment_command: u32,
-		data: *mut std::ffi::c_void,
+		data: *mut ffi::c_void,
 	) -> bool {
 		match environment_command {
 			ENVIRONMENT_GET_CAN_DUPE => {
@@ -46,27 +69,25 @@ impl FrontendStateImpl {
 			}
 
 			ENVIRONMENT_SET_PIXEL_FORMAT => {
-				let _pixel_format = *(data as *const std::ffi::c_uint);
+				let _pixel_format = *(data as *const ffi::c_uint);
 				let pixel_format = PixelFormat::from_uint(_pixel_format).unwrap();
-
-				if let Some(video_set_pixel_format) = &mut FRONTEND_IMPL.video_set_pixel_format_callback {
-					video_set_pixel_format(pixel_format);
-				}
-
+				FRONTEND_IMPL.pixel_format = pixel_format;
 				return true;
 			}
 
 			ENVIRONMENT_GET_VARIABLE => {
-				// Make sure the core actually is giving us a pointer
+				// Make sure the core actually is giving us a pointer to a *Variable
+				// so we can (if we have it!) fill it in.
 				if data.is_null() {
 					return false;
 				}
 
 				let var = (data as *mut Variable).as_mut().unwrap();
 
-				match std::ffi::CStr::from_ptr(var.key).to_str() {
-					Ok(key) => {
-						info!("Core wants to get variable \"{}\" from us", key);
+				match ffi::CStr::from_ptr(var.key).to_str() {
+					Ok(_key) => {
+						//info!("Core wants to get variable \"{}\" from us", key);
+
 					}
 					Err(_err) => {
 						// Maybe notify about this.
@@ -76,7 +97,7 @@ impl FrontendStateImpl {
 			}
 
 			_ => {
-				warn!("Environment callback called with unhandled command: {environment_command}");
+				error!("Environment callback called with currently unhandled command: {environment_command}");
 			}
 		}
 
@@ -84,18 +105,65 @@ impl FrontendStateImpl {
 	}
 
 	unsafe extern "C" fn libretro_video_refresh(
-		pixels: *const std::ffi::c_void,
-		width: std::ffi::c_uint,
-		height: std::ffi::c_uint,
+		pixels: *const ffi::c_void,
+		width: ffi::c_uint,
+		height: ffi::c_uint,
 		pitch: usize,
 	) {
-		warn!("Video refresh called");
-		// TODO:..
+		info!("Video refresh called");
+		// TODO: Finish this code.
 
-		//if let Some(video_refresh) = &mut FRONTEND_IMPL.video_refresh_callback {
-			//video_refresh()
-		//}
+		/* 
+		let slice = std::slice::from_raw_parts(
+			pixels as *const u8,
+			(pitch * height as usize) * util::bytes_per_pixel_from_libretro(FRONTEND_IMPL.pixel_format) as usize
+		);
 
+		match FRONTEND_IMPL.pixel_format {
+			PixelFormat::RGB565 => {
+				// Resize the pixel buffer if we need to
+				if (width * height) as usize != FRONTEND_IMPL.converted_pixel_buffer.len() {
+					FRONTEND_IMPL.converted_pixel_buffer.resize((width * height) as usize, 0);
+				}
+
+				// Convert the pixel data to RGBX8888
+			}
+			
+			_ => panic!("Unhandled pixel format {:?}", FRONTEND_IMPL.pixel_format)
+		}
+		*/
+
+	}
+
+	unsafe extern "C" fn libretro_input_poll_callback() {
+		// TODO
+		info!("Input poll called");
+	}
+	
+	unsafe extern "C" fn libretro_input_state_callback(
+		port: ffi::c_uint,
+		device: ffi::c_uint,
+		index: ffi::c_uint,
+		id: ffi::c_uint
+	) -> ffi::c_short {
+		// For now
+		0
+	}
+
+	unsafe extern "C" fn libretro_audio_sample_callback(
+		left: ffi::c_short,
+		right: ffi::c_short
+	) {
+		info!("audio sample called");
+	}
+
+	unsafe extern "C" fn libretro_audio_sample_batch_callback(
+		// Is actually a [[l, r]] pair.
+		samples: *const i16,
+		frames: usize
+	) -> usize {
+		info!("Audio batch called");
+		frames
 	}
 
 	pub(crate) fn core_loaded(&self) -> bool {
@@ -103,12 +171,8 @@ impl FrontendStateImpl {
 		self.core_library.is_some() && self.core_api.is_some()
 	}
 
-	pub(crate) fn set_video_refresh_callback(&mut self, cb: impl FnMut(&[u8], u32, u32, u32) + 'static) {
+	pub(crate) fn set_video_refresh_callback(&mut self, cb: impl FnMut(&[u8], u32, u32, usize) + 'static) {
 		self.video_refresh_callback = Some(Box::new(cb));
-	}
-
-	pub(crate) fn set_video_pixel_format_callback(&mut self, cb: impl FnMut(PixelFormat) + 'static) {
-		self.video_set_pixel_format_callback = Some(Box::new(cb));
 	}
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
@@ -181,14 +245,27 @@ impl FrontendStateImpl {
 				});
 			}
 
-			// Set required libretro callbacks. This is required to avoid a crash.
+			// Set required libretro callbacks.
 			(core_api.retro_set_environment)(Self::libretro_environment_callback);
 			(core_api.retro_set_video_refresh)(Self::libretro_video_refresh);
+			(core_api.retro_set_input_poll)(Self::libretro_input_poll_callback);
+			(core_api.retro_set_input_state)(Self::libretro_input_state_callback);
+			// This one probably isn't needed so I'll remove it
+			//(core_api.retro_set_audio_sample)(Self::libretro_audio_sample_callback);
+
+			(core_api.retro_set_audio_sample_batch)(Self::libretro_audio_sample_batch_callback);
 
 			// Initalize the libretro core
 			(core_api.retro_init)();
 
 			info!("Core {} loaded", path.as_ref().display());
+
+			// Get AV info
+			// Like core API, we have to MaybeUninit again but bleh
+			let mut av_info : MaybeUninit<SystemAvInfo> = MaybeUninit::uninit();
+			(core_api.retro_get_system_av_info)(av_info.as_mut_ptr());
+
+			self.av_info = Some(av_info.assume_init());
 
 			self.core_library = Some(lib);
 			self.core_api = Some(core_api);
@@ -218,6 +295,7 @@ impl FrontendStateImpl {
 		self.core_library = None;
 
 		// FIXME: Do other various cleanup (when we need to do said cleanup)
+		self.av_info = None;
 
 		Ok(())
 	}
@@ -239,7 +317,7 @@ impl FrontendStateImpl {
 
 		let gameinfo = GameInfo {
 			path: path_string.as_ptr(),
-			data: contents.as_ptr() as *const std::ffi::c_void,
+			data: contents.as_ptr() as *const ffi::c_void,
 			size: contents.len(),
 			meta: std::ptr::null(),
 		};
@@ -252,6 +330,15 @@ impl FrontendStateImpl {
 			}
 
 			Ok(())
+		}
+	}
+
+
+	pub(crate) fn run(&mut self) {
+		let core_api = self.core_api.as_ref().unwrap();
+
+		unsafe {
+			(core_api.retro_run)();
 		}
 	}
 }

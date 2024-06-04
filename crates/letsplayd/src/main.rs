@@ -1,4 +1,3 @@
-use retro_frontend::frontend;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 

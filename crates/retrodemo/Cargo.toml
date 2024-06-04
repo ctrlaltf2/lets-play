@@ -13,4 +13,3 @@ retro_frontend = { path = "../retro_frontend" }
 
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-singlyton = "4.1.1"
