@@ -14,6 +14,9 @@ pub enum Error {
 	#[error("no core is currently loaded into the frontend")]
 	CoreNotLoaded,
 
+	#[error("a core is already loaded into the frontend")]
+	CoreAlreadyLoaded,
+
 	#[error("ROM load failed")]
 	RomLoadFailed
 }

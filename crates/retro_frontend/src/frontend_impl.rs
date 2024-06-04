@@ -39,6 +39,7 @@ pub(crate) struct FrontendStateImpl {
 
 	pub(crate) fb_width: u32,
 	pub(crate) fb_height: u32,
+	pub(crate) fb_pitch: u32,
 
 	// Callbacks that consumers can set
 	pub(crate) video_update_callback: Option<Box<UpdateCallback>>,
@@ -57,6 +58,7 @@ impl FrontendStateImpl {
 
 			fb_width: 0,
 			fb_height: 0,
+			fb_pitch: 0,
 
 			video_update_callback: None,
 		}
@@ -72,11 +74,8 @@ impl FrontendStateImpl {
 	}
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-		// Make sure to unload and deinitalize any existing core.
-		// If this fails, we will probably end up in a unclean state,
-		// but that kind of seems unavoidable with libretro /shrug.
 		if self.core_loaded() {
-			self.unload_core()?;
+			return Err(Error::CoreAlreadyLoaded);
 		}
 
 		unsafe {

@@ -19,7 +19,7 @@ impl App {
 		Self {
 			window: Window::new(
 				"RetroDemo - retro_frontend demo",
-				160,
+				256,
 				144,
 				WindowOptions {
 					scale: minifb::Scale::X2,
@@ -40,14 +40,14 @@ impl App {
 	}
 
 	fn init(&mut self) {
-		//self.window.set_target_fps(60);
+		self.window.set_target_fps(60);
 	}
 
 	fn update_video_contents(&mut self, slice: &[u32]) {
 		let size = frontend::get_size();
 		let _ = self
 			.window
-			.update_with_buffer(&slice, size.0 as usize, size.1 as usize);
+			.update_with_buffer(&slice, 256 as usize, size.1 as usize);
 		self.window_updated = true;
 	}
 
@@ -81,8 +81,8 @@ fn main() {
 	core.load_rom("./roms/smw.gb").expect("ROM failed to load");
 
 	// For later
-	//frontend::load_core("./cores/nestopia_libretro.so").expect("Core should have loaded");
-	//frontend::load_rom("./roms/smb1.nes").expect("ROM should have loaded");
+	//let mut core = Core::load("./cores/nestopia_libretro.so").expect("Core failed to load");
+	//core.load_rom("./roms/smb1.nes").expect("ROM failed to load");
 
 	loop {
 		frontend::run_frame();

@@ -1,4 +1,4 @@
-use crate::frontend_impl::*;
+use crate::{frontend_impl::*, util};
 use libretro_sys::*;
 
 use rgb565::Rgb565;
@@ -75,44 +75,37 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 	// bleh
 	FRONTEND_IMPL.fb_width = width;
 	FRONTEND_IMPL.fb_height = height;
+	FRONTEND_IMPL.fb_pitch = pitch as u32 / util::bytes_per_pixel_from_libretro(FRONTEND_IMPL.pixel_format);
+
+	let pitch = FRONTEND_IMPL.fb_pitch as usize;
 
 	match FRONTEND_IMPL.pixel_format {
 		PixelFormat::RGB565 => {
 			let pixel_data_slice = std::slice::from_raw_parts(
 				pixels as *const u16,
-				(width * height) as usize,
+				(pitch * height as usize) as usize,
 			);
 
 			// Resize the pixel buffer if we need to
-			if (width * height) as usize != FRONTEND_IMPL.converted_pixel_buffer.len() {
+			if (pitch * height as usize) as usize != FRONTEND_IMPL.converted_pixel_buffer.len() {
 				info!("Resizing RGB565 -> RGBA buffer");
 				FRONTEND_IMPL
 					.converted_pixel_buffer
-					.resize((width * height) as usize, 0);
+					.resize((pitch * height as usize) as usize, 0);
 			}
 
-			/* 
-			for x in 0..width as usize {
+			// TODO: Make this convert from weird pitches to native resolution where possible.
+			for x in 0..pitch as usize {
 				for y in 0..height as usize {
-					let rgb = Rgb565::from_rgb565(pixel_data_slice[y * width as usize + x]);
+					let rgb = Rgb565::from_rgb565(pixel_data_slice[y * pitch as usize + x]);
 					let comp = rgb.to_rgb888_components();
 
 					// Finally save the pixel data in the result array as an XRGB8888 value
-					FRONTEND_IMPL.converted_pixel_buffer[y * width as usize + x] =
+					FRONTEND_IMPL.converted_pixel_buffer[y * pitch as usize + x] =
 						((comp[0] as u32) << 16) | ((comp[1] as u32) << 8) | (comp[2] as u32);
 				}
 			}
-			*/
-
-			for y in 0..(width * height) as usize {
-				let rgb = Rgb565::from_rgb565(pixel_data_slice[y]);
-				let comp = rgb.to_rgb888_components();
-
-				// Finally save the pixel data in the result array as an XRGB8888 value
-				FRONTEND_IMPL.converted_pixel_buffer[y] =
-					((comp[0] as u32) << 16) | ((comp[1] as u32) << 8) | (comp[2] as u32);
-			}
-			
+		
 			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
 				update_callback(&FRONTEND_IMPL.converted_pixel_buffer.as_slice());
 			}
