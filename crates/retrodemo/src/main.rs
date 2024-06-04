@@ -1,7 +1,7 @@
 use core::slice;
 use std::{cell::RefCell, rc::Rc};
 
-use retro_frontend::{frontend, libretro_sys};
+use retro_frontend::{core::Core, frontend, libretro_sys};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
@@ -76,8 +76,9 @@ fn main() {
 		app_clone.borrow_mut().update_video_contents(slice);
 	});
 
-	frontend::load_core("./cores/gambatte_libretro.so").expect("Core should have loaded");
-	frontend::load_rom("./roms/smw.gb").expect("ROM should have loaded");
+	// Load a core
+	let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
+	core.load_rom("./roms/smw.gb").expect("ROM failed to load");
 
 	// For later
 	//frontend::load_core("./cores/nestopia_libretro.so").expect("Core should have loaded");
@@ -100,6 +101,4 @@ fn main() {
 			}
 		}
 	}
-
-	frontend::unload_core().expect("Core unload failed. Oh well, we're exiting anyways")
 }
