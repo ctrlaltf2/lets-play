@@ -1,5 +1,5 @@
-use crate::result::{Error, Result};
 use crate::libretro_callbacks;
+use crate::result::{Error, Result};
 use ffi::CString;
 use libloading::Library;
 use libretro_sys::*;
@@ -29,6 +29,8 @@ pub(crate) struct FrontendStateImpl {
 	/// The current core library.
 	pub(crate) core_library: Option<Box<Library>>,
 
+	pub(crate) game_loaded: bool,
+
 	pub(crate) av_info: Option<SystemAvInfo>,
 
 	/// Core requested pixel format.
@@ -51,6 +53,8 @@ impl FrontendStateImpl {
 			core_api: None,
 			core_library: None,
 
+			game_loaded: false,
+
 			av_info: None,
 
 			pixel_format: PixelFormat::RGB565,
@@ -63,7 +67,7 @@ impl FrontendStateImpl {
 			video_update_callback: None,
 		}
 	}
-	
+
 	pub(crate) fn core_loaded(&self) -> bool {
 		// Ideally this logic could be simplified but just to make sure..
 		self.core_library.is_some() && self.core_api.is_some()
@@ -150,7 +154,9 @@ impl FrontendStateImpl {
 			(core_api.retro_set_video_refresh)(libretro_callbacks::video_refresh_callback);
 			(core_api.retro_set_input_poll)(libretro_callbacks::input_poll_callback);
 			(core_api.retro_set_input_state)(libretro_callbacks::input_state_callback);
-			(core_api.retro_set_audio_sample_batch)(libretro_callbacks::audio_sample_batch_callback);
+			(core_api.retro_set_audio_sample_batch)(
+				libretro_callbacks::audio_sample_batch_callback,
+			);
 
 			info!("Core {} loaded", path.as_ref().display());
 
@@ -171,6 +177,10 @@ impl FrontendStateImpl {
 	pub(crate) fn unload_core(&mut self) -> Result<()> {
 		if !self.core_loaded() {
 			return Err(Error::CoreNotLoaded);
+		}
+
+		if self.game_loaded {
+			self.unload_game()?;
 		}
 
 		// First deinitalize the libretro core before unloading the library.
@@ -194,7 +204,7 @@ impl FrontendStateImpl {
 		Ok(())
 	}
 
-	pub(crate) fn load_rom<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+	pub(crate) fn load_game<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if !self.core_loaded() {
 			return Err(Error::CoreNotLoaded);
 		}
@@ -223,8 +233,27 @@ impl FrontendStateImpl {
 				return Err(Error::RomLoadFailed);
 			}
 
+			self.game_loaded = true;
 			Ok(())
 		}
+	}
+
+	pub(crate) fn unload_game(&mut self) -> Result<()> {
+		if !self.core_loaded() {
+			return Err(Error::CoreNotLoaded);
+		}
+
+		let core_api = self.core_api.as_ref().unwrap();
+
+		if self.game_loaded {
+			unsafe {
+				(core_api.retro_unload_game)();
+			}
+
+			self.game_loaded = false;
+		}
+
+		Ok(())
 	}
 
 	pub(crate) fn get_size(&mut self) -> (u32, u32) {

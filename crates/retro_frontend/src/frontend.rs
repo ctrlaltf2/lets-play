@@ -39,9 +39,15 @@ pub fn unload_core() -> Result<()> {
 /// use retro_frontend::frontend;
 /// frontend::load_rom("./roms/sma2.gba");
 /// ```
-pub fn load_rom<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
-	unsafe { FRONTEND_IMPL.load_rom(path) }
+pub fn load_game<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
+	unsafe { FRONTEND_IMPL.load_game(path) }
 }
+
+/// Unloads a ROM from the given core.
+pub fn unload_game() -> Result<()> {
+	unsafe { FRONTEND_IMPL.unload_game() }
+}
+
 
 pub fn get_size() -> (u32, u32) {
 	unsafe {  FRONTEND_IMPL.get_size() }

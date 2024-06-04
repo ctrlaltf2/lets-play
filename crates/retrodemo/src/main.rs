@@ -78,11 +78,11 @@ fn main() {
 
 	// Load a core
 	let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
-	core.load_rom("./roms/smw.gb").expect("ROM failed to load");
+	core.load_game("./roms/smw.gb").expect("ROM failed to load");
 
 	// For later
 	//let mut core = Core::load("./cores/nestopia_libretro.so").expect("Core failed to load");
-	//core.load_rom("./roms/smb1.nes").expect("ROM failed to load");
+	//core.load_game("./roms/smb1.nes").expect("ROM failed to load");
 
 	loop {
 		frontend::run_frame();

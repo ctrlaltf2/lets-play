@@ -17,11 +17,17 @@ impl Core {
 		Ok(Self {})
 	}
 
-	/// Same as [frontend::load_rom].
-	pub fn load_rom<P: AsRef<Path>>(&mut self, rom_path: P) -> Result<()> {
-		frontend::load_rom(rom_path)?;
+	/// Same as [frontend::load_game].
+	pub fn load_game<P: AsRef<Path>>(&mut self, rom_path: P) -> Result<()> {
+		frontend::load_game(rom_path)?;
 		Ok(())
 	}
+
+	/// Same as [frontend::unload_game].
+	pub fn unload_game(&mut self) -> Result<()> {
+		frontend::unload_game()?;
+		Ok(())
+	} 
 }
 
 impl Drop for Core {
