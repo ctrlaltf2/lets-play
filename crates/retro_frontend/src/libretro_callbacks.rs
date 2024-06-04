@@ -1,21 +1,11 @@
 use crate::frontend_impl::*;
-
-use crate::result::{Error, Result};
-use crate::util;
-use ffi::CString;
-use libloading::Library;
 use libretro_sys::*;
-use once_cell::sync::Lazy;
-use std::os::unix::ffi::OsStrExt;
-use std::path::Path;
-use std::{fs, mem::MaybeUninit};
 
 use rgb565::Rgb565;
 
 use std::ffi;
 
 use tracing::{error, info, warn};
-
 
 pub(crate) unsafe extern "C" fn environment_callback(
 	environment_command: u32,
