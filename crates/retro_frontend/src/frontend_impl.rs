@@ -43,6 +43,8 @@ pub(crate) struct FrontendStateImpl {
 	pub(crate) fb_height: u32,
 	pub(crate) fb_pitch: u32,
 
+	pub(crate) system_directory: CString,
+
 	// Callbacks that consumers can set
 	pub(crate) video_update_callback: Option<Box<UpdateCallback>>,
 }
@@ -63,6 +65,8 @@ impl FrontendStateImpl {
 			fb_width: 0,
 			fb_height: 0,
 			fb_pitch: 0,
+
+			system_directory: CString::new("system").unwrap(),
 
 			video_update_callback: None,
 		}

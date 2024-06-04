@@ -17,6 +17,11 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			return true;
 		}
 
+		ENVIRONMENT_GET_SYSTEM_DIRECTORY => {
+			*(data as *mut *const ffi::c_char) = FRONTEND_IMPL.system_directory.as_ptr();
+			return true;
+		}
+
 		ENVIRONMENT_SET_PIXEL_FORMAT => {
 			let _pixel_format = *(data as *const ffi::c_uint);
 			let pixel_format = PixelFormat::from_uint(_pixel_format).unwrap();
