@@ -4,6 +4,10 @@
 pub use libretro_sys;
 
 mod frontend_impl;
+mod libretro_callbacks;
+
+pub mod core;
+
 pub mod util;
 pub mod frontend;
 pub mod result;

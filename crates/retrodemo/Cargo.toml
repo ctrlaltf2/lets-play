@@ -5,11 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
+minifb = "0.27.0"
 retro_frontend = { path = "../retro_frontend" }
-
-# Later on
-#winit = "0.30.0"
-#softbuffer = "0.4.3"
 
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"

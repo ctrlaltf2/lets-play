@@ -7,11 +7,9 @@
 use crate::frontend_impl::FRONTEND_IMPL;
 use crate::result::Result;
 
-//pub use crate::frontend_impl::*;
-
-pub fn set_video_refresh_callback(cb: impl FnMut(&[u8], u32, u32, usize) + 'static) {
+pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 	unsafe {
-		FRONTEND_IMPL.set_video_refresh_callback(cb);
+		FRONTEND_IMPL.set_video_update_callback(cb);
 	}
 }
 
@@ -45,8 +43,11 @@ pub fn load_rom<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 	unsafe { FRONTEND_IMPL.load_rom(path) }
 }
 
+pub fn get_size() -> (u32, u32) {
+	unsafe {  FRONTEND_IMPL.get_size() }
+}
 
-/// Runs the loaded core for one video frame
-pub fn run() {
+/// Runs the loaded core for one video frame.
+pub fn run_frame() {
 	unsafe { FRONTEND_IMPL.run() }
 }
