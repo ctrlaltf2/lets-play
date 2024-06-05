@@ -260,6 +260,14 @@ impl FrontendStateImpl {
 		Ok(())
 	}
 
+	pub(crate) fn get_av_info(&mut self) -> Result<SystemAvInfo> {
+		if !self.core_loaded() {
+			return Err(Error::CoreNotLoaded);
+		}
+
+		Ok(self.av_info.as_ref().unwrap().clone())
+	}
+
 	pub(crate) fn get_size(&mut self) -> (u32, u32) {
 		(self.fb_width, self.fb_height)
 	}

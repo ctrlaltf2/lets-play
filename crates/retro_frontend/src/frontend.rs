@@ -6,6 +6,7 @@
 //! it's easier to just host this crate in a runner process and fork off those runners.
 use crate::frontend_impl::FRONTEND_IMPL;
 use crate::result::Result;
+use crate::libretro_sys::*;
 
 pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 	unsafe {
@@ -48,6 +49,12 @@ pub fn unload_game() -> Result<()> {
 	unsafe { FRONTEND_IMPL.unload_game() }
 }
 
+
+
+/// Get's the core's current AV information.
+pub fn get_av_info() -> Result<SystemAvInfo> {
+	unsafe { FRONTEND_IMPL.get_av_info() }
+}
 
 pub fn get_size() -> (u32, u32) {
 	unsafe {  FRONTEND_IMPL.get_size() }

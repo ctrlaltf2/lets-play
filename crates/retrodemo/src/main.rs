@@ -1,14 +1,13 @@
-use core::slice;
 use std::{cell::RefCell, rc::Rc};
 
-use retro_frontend::{core::Core, frontend, libretro_sys};
+use retro_frontend::{core::Core, frontend};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 use minifb::{Window, WindowOptions};
 
 struct App {
-	window: Window,
+	window: Option<Window>,
 
 	/// True if the app's window has already been updated.
 	window_updated: bool,
@@ -17,17 +16,7 @@ struct App {
 impl App {
 	fn new() -> Self {
 		Self {
-			window: Window::new(
-				"RetroDemo - retro_frontend demo",
-				256,
-				144,
-				WindowOptions {
-					scale: minifb::Scale::X2,
-					..Default::default()
-				},
-			)
-			.expect("Could not open window"),
-
+			window: None,
 			window_updated: false,
 		}
 	}
@@ -40,24 +29,42 @@ impl App {
 	}
 
 	fn init(&mut self) {
-		self.window.set_target_fps(60);
+		let av_info = frontend::get_av_info().expect("No AV info");
+
+		println!("AV info: {:#?}", av_info);
+
+		let mut window = Window::new(
+			"RetroDemo - retro_frontend demo",
+			av_info.geometry.base_width as usize,
+			av_info.geometry.base_height as usize,
+			WindowOptions {
+				scale: minifb::Scale::X2,
+				..Default::default()
+			},
+		)
+		.expect("Could not open window");
+
+		window.set_target_fps((av_info.timing.fps) as usize);
+		self.window = Some(window);
 	}
 
 	fn update_video_contents(&mut self, slice: &[u32]) {
-		let size = frontend::get_size();
+		let framebuffer_size = frontend::get_size();
 		let _ = self
 			.window
-			.update_with_buffer(&slice, 256 as usize, size.1 as usize);
+			.as_mut()
+			.unwrap()
+			.update_with_buffer(&slice, framebuffer_size.0 as usize, framebuffer_size.1 as usize);
 		self.window_updated = true;
 	}
 
 	// ?
 	fn update(&mut self) {
-		self.window.update();
+		self.window.as_mut().unwrap().update();
 	}
 
 	fn should_run(&self) -> bool {
-		self.window.is_open()
+		self.window.as_ref().unwrap().is_open()
 	}
 }
 
@@ -69,6 +76,15 @@ fn main() {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
+
+
+	// Load a core
+	//let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
+	//core.load_game("./roms/smw.gb").expect("ROM failed to load");
+
+	let mut core = Core::load("./cores/nestopia_libretro.so").expect("Core failed to load");
+	core.load_game("./roms/smb1.nes").expect("ROM failed to load");
+	
 	let app = App::new_and_init();
 
 	let app_clone = app.clone();
@@ -76,16 +92,7 @@ fn main() {
 		app_clone.borrow_mut().update_video_contents(slice);
 	});
 
-	// Load a core
-	let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
-	core.load_game("./roms/smw.gb").expect("ROM failed to load");
-
-	// For later
-	//let mut core = Core::load("./cores/nestopia_libretro.so").expect("Core failed to load");
-	//core.load_game("./roms/smb1.nes").expect("ROM failed to load");
-
 	loop {
-		frontend::run_frame();
 
 		{
 			let mut borrowed_app = app.borrow_mut();
@@ -100,5 +107,8 @@ fn main() {
 				borrowed_app.window_updated = false;
 			}
 		}
+
+
+		frontend::run_frame();
 	}
 }

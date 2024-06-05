@@ -42,8 +42,8 @@ pub(crate) unsafe extern "C" fn environment_callback(
 				Ok(_key) => {
 					//info!("Core wants to get variable \"{}\" from us", key);
 				}
-				Err(_err) => {
-					// Maybe notify about this.
+				Err(err) => {
+					error!("Core gave an invalid key: {:?}", err);
 					return false;
 				}
 			}
@@ -115,16 +115,22 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 				update_callback(&FRONTEND_IMPL.converted_pixel_buffer.as_slice());
 			}
 		}
-		
+		_ => {
+			let pixel_data_slice = std::slice::from_raw_parts(
+				pixels as *const u32,
+				(pitch * height as usize) as usize,
+			);
 
-		// We should just be able to make a slice to &[u32] and pass that directly,
-		// unless there's any more stupid pitch trickery.
-		_ => panic!("Unhandled pixel format {:?}", FRONTEND_IMPL.pixel_format),
+
+			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
+				update_callback(&pixel_data_slice);
+			}
+		},
 	}
 }
 
 pub(crate)  unsafe extern "C" fn input_poll_callback() {
-	// TODO tell consumer about this
+	// TODO tell consumer about this.
 	//info!("Input poll called");
 }
 
