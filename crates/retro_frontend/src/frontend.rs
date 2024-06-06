@@ -44,7 +44,7 @@ pub fn unload_core() -> Result<()> {
 ///
 /// ```rust
 /// use retro_frontend::frontend;
-/// frontend::load_rom("./roms/sma2.gba");
+/// frontend::load_game("./roms/sma2.gba");
 /// ```
 pub fn load_game<P: AsRef<std::path::Path>>(path: P) -> Result<()> {
 	unsafe { FRONTEND_IMPL.load_game(path) }
