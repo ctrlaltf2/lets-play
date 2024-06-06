@@ -14,6 +14,12 @@ pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 	}
 }
 
+pub fn set_video_resize_callback(cb: impl FnMut(u32, u32) + 'static) {
+	unsafe {
+		FRONTEND_IMPL.set_video_resize_callback(cb);
+	}
+}
+
 /// Loads a core from the given path into the global frontend state.
 ///
 /// ```rust

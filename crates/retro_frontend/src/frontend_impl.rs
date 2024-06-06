@@ -20,7 +20,8 @@ use tracing::{error, info};
 pub(crate) static mut FRONTEND_IMPL: Lazy<FrontendStateImpl> =
 	Lazy::new(|| FrontendStateImpl::new());
 
-pub(crate) type UpdateCallback = dyn FnMut(&[u32]);
+	pub(crate) type VideoUpdateCallback = dyn FnMut(&[u32]);
+	pub(crate) type VideoResizeCallback = dyn FnMut(u32, u32);
 
 pub(crate) struct FrontendStateImpl {
 	/// The current core's libretro functions.
@@ -44,9 +45,11 @@ pub(crate) struct FrontendStateImpl {
 	pub(crate) fb_pitch: u32,
 
 	pub(crate) system_directory: CString,
+	pub(crate) save_directory: CString,
 
 	// Callbacks that consumers can set
-	pub(crate) video_update_callback: Option<Box<UpdateCallback>>,
+	pub(crate) video_update_callback: Option<Box<VideoUpdateCallback>>,
+	pub(crate) video_resize_callback: Option<Box<VideoResizeCallback>>,
 }
 
 impl FrontendStateImpl {
@@ -66,9 +69,12 @@ impl FrontendStateImpl {
 			fb_height: 0,
 			fb_pitch: 0,
 
+			// TODO: We should let callers set these!!
 			system_directory: CString::new("system").unwrap(),
+			save_directory: CString::new("save").unwrap(),
 
 			video_update_callback: None,
+			video_resize_callback: None,
 		}
 	}
 
@@ -80,6 +86,11 @@ impl FrontendStateImpl {
 	pub(crate) fn set_video_update_callback(&mut self, cb: impl FnMut(&[u32]) + 'static) {
 		self.video_update_callback = Some(Box::new(cb));
 	}
+
+	pub(crate) fn set_video_resize_callback(&mut self, cb: impl FnMut(u32, u32) + 'static) {
+		self.video_resize_callback = Some(Box::new(cb));
+	}
+
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if self.core_loaded() {

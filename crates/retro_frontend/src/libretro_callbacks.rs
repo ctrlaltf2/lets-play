@@ -15,6 +15,12 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		ENVIRONMENT_GET_LOG_INTERFACE => {
 			*(data as *mut LogCallback) = libretro_log::LOG_INTERFACE.clone();
 			return true;
+		},
+
+		ENVIRONMENT_SET_PERFORMANCE_LEVEL => {
+			let level = *(data as *const ffi::c_uint);
+			info!("Core is performance level {level}");
+			return true;
 		}
 
 		ENVIRONMENT_GET_CAN_DUPE => {
@@ -27,10 +33,31 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			return true;
 		}
 
+		ENVIRONMENT_GET_SAVE_DIRECTORY => {
+			*(data as *mut *const ffi::c_char) = FRONTEND_IMPL.save_directory.as_ptr();
+			return true;
+		}
+
 		ENVIRONMENT_SET_PIXEL_FORMAT => {
 			let _pixel_format = *(data as *const ffi::c_uint);
 			let pixel_format = PixelFormat::from_uint(_pixel_format).unwrap();
 			FRONTEND_IMPL.pixel_format = pixel_format;
+			return true;
+		}
+
+		ENVIRONMENT_SET_GEOMETRY => {
+			if data.is_null() {
+				return false;
+			}
+
+			let geometry = (data as *const GameGeometry).as_ref().unwrap();
+
+			FRONTEND_IMPL.fb_width = geometry.base_width;
+			FRONTEND_IMPL.fb_height = geometry.base_height;
+
+			if let Some(resize_callback) = &mut FRONTEND_IMPL.video_resize_callback {
+				resize_callback(geometry.base_width, geometry.base_height);
+			}
 			return true;
 		}
 
@@ -46,13 +73,14 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			match ffi::CStr::from_ptr(var.key).to_str() {
 				Ok(_key) => {
 					//info!("Core wants to get variable \"{}\" from us", key);
+					return false;
 				}
 				Err(err) => {
 					error!("Core gave an invalid key: {:?}", err);
 					return false;
 				}
 			}
-		},
+		}
 
 		ENVIRONMENT_GET_VARIABLE_UPDATE => {
 			// We currently pressent no changed variables to the core.
@@ -62,10 +90,9 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		_ => {
 			error!("Environment callback called with currently unhandled command: {environment_command}");
+			return false
 		}
 	}
-
-	false
 }
 
 pub(crate) unsafe extern "C" fn video_refresh_callback(
@@ -85,7 +112,8 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 	// bleh
 	FRONTEND_IMPL.fb_width = width;
 	FRONTEND_IMPL.fb_height = height;
-	FRONTEND_IMPL.fb_pitch = pitch as u32 / util::bytes_per_pixel_from_libretro(FRONTEND_IMPL.pixel_format);
+	FRONTEND_IMPL.fb_pitch =
+		pitch as u32 / util::bytes_per_pixel_from_libretro(FRONTEND_IMPL.pixel_format);
 
 	let pitch = FRONTEND_IMPL.fb_pitch as usize;
 
@@ -115,7 +143,7 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 						((comp[0] as u32) << 16) | ((comp[1] as u32) << 8) | (comp[2] as u32);
 				}
 			}
-		
+
 			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
 				update_callback(&FRONTEND_IMPL.converted_pixel_buffer.as_slice());
 			}
@@ -126,15 +154,14 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 				(pitch * height as usize) as usize,
 			);
 
-
 			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
 				update_callback(&pixel_data_slice);
 			}
-		},
+		}
 	}
 }
 
-pub(crate)  unsafe extern "C" fn input_poll_callback() {
+pub(crate) unsafe extern "C" fn input_poll_callback() {
 	// TODO tell consumer about this.
 	//info!("Input poll called");
 }
@@ -151,7 +178,7 @@ pub(crate) unsafe extern "C" fn input_state_callback(
 }
 
 //pub(crate) unsafe extern "C" fn libretro_audio_sample_callback(left: ffi::c_short, right: ffi::c_short) {
-	//info!("audio sample called");
+//info!("audio sample called");
 //}
 
 pub(crate) unsafe extern "C" fn audio_sample_batch_callback(

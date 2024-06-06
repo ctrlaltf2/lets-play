@@ -30,13 +30,18 @@ impl App {
 
 	fn init(&mut self) {
 		let av_info = frontend::get_av_info().expect("No AV info");
+		self.resize(av_info.geometry.base_width, av_info.geometry.base_height);
+	}
 
-		println!("AV info: {:#?}", av_info);
+	fn resize(&mut self, width: u32, height: u32) {
+		let av_info = frontend::get_av_info().expect("No AV info");
+
+		println!("Resized to {width}x{height}");
 
 		let mut window = Window::new(
 			"RetroDemo - retro_frontend demo",
-			av_info.geometry.base_width as usize,
-			av_info.geometry.base_height as usize,
+			width as usize,
+			height as usize,
 			WindowOptions {
 				scale: minifb::Scale::X2,
 				..Default::default()
@@ -48,17 +53,16 @@ impl App {
 		self.window = Some(window);
 	}
 
-	fn update_video_contents(&mut self, slice: &[u32]) {
+	fn frame_update(&mut self, slice: &[u32]) {
 		let framebuffer_size = frontend::get_size();
-		let _ = self
-			.window
-			.as_mut()
-			.unwrap()
-			.update_with_buffer(&slice, framebuffer_size.0 as usize, framebuffer_size.1 as usize);
+		let _ = self.window.as_mut().unwrap().update_with_buffer(
+			&slice,
+			framebuffer_size.0 as usize,
+			framebuffer_size.1 as usize,
+		);
 		self.window_updated = true;
 	}
 
-	// ?
 	fn update(&mut self) {
 		self.window.as_mut().unwrap().update();
 	}
@@ -76,28 +80,32 @@ fn main() {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-
-
 	// Load a core
 	//let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
 	//core.load_game("./roms/smw.gb").expect("ROM failed to load");
 
-	let mut core = Core::load("./cores/nestopia_libretro.so").expect("Core failed to load");
-	core.load_game("./roms/smb1.nes").expect("ROM failed to load");
-	
+	let mut core = Core::load("./cores/mesen_libretro.so").expect("Core failed to load");
+
 	let app = App::new_and_init();
 
 	let app_clone = app.clone();
 	frontend::set_video_update_callback(move |slice| {
-		app_clone.borrow_mut().update_video_contents(slice);
+		app_clone.borrow_mut().frame_update(slice);
 	});
 
-	loop {
+	let app_resize_clone = app.clone();
+	frontend::set_video_resize_callback(move |width, height| {
+		app_resize_clone.borrow_mut().resize(width, height);
+	});
 
+	core.load_game("./roms/smb1.nes")
+		.expect("ROM failed to load");
+
+	loop {
 		{
 			let mut borrowed_app = app.borrow_mut();
 			if !borrowed_app.should_run() {
-				break
+				break;
 			}
 
 			if borrowed_app.window_updated == false {
@@ -107,7 +115,6 @@ fn main() {
 				borrowed_app.window_updated = false;
 			}
 		}
-
 
 		frontend::run_frame();
 	}
