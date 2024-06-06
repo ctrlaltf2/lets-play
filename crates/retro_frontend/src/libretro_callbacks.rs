@@ -1,4 +1,4 @@
-use crate::{frontend_impl::*, util};
+use crate::{frontend_impl::*, libretro_log, util};
 use libretro_sys::*;
 
 use rgb565::Rgb565;
@@ -12,6 +12,11 @@ pub(crate) unsafe extern "C" fn environment_callback(
 	data: *mut ffi::c_void,
 ) -> bool {
 	match environment_command {
+		ENVIRONMENT_GET_LOG_INTERFACE => {
+			*(data as *mut LogCallback) = libretro_log::LOG_INTERFACE.clone();
+			return true;
+		}
+
 		ENVIRONMENT_GET_CAN_DUPE => {
 			*(data as *mut bool) = true;
 			return true;
@@ -56,7 +61,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		}
 
 		_ => {
-			//error!("Environment callback called with currently unhandled command: {environment_command}");
+			error!("Environment callback called with currently unhandled command: {environment_command}");
 		}
 	}
 
@@ -138,9 +143,10 @@ pub(crate) unsafe extern "C" fn input_state_callback(
 	port: ffi::c_uint,
 	device: ffi::c_uint,
 	index: ffi::c_uint,
-	id: ffi::c_uint,
+	button_id: ffi::c_uint,
 ) -> ffi::c_short {
 	// For now, consumer should have a say in this though
+	//info!("input state port {port} device {device}, index {index}, id {button_id}");
 	0
 }
 

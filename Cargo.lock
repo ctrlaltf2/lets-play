@@ -537,6 +537,7 @@ dependencies = [
 name = "retro_frontend"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "libloading",
  "libretro-sys",
  "once_cell",
