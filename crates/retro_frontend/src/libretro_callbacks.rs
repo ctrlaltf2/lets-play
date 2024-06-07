@@ -89,7 +89,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		}
 
 		_ => {
-			error!("Environment callback called with currently unhandled command: {environment_command}");
+			warn!("Environment callback called with currently unhandled command: {environment_command}");
 			return false
 		}
 	}
@@ -167,10 +167,10 @@ pub(crate) unsafe extern "C" fn input_poll_callback() {
 }
 
 pub(crate) unsafe extern "C" fn input_state_callback(
-	port: ffi::c_uint,
-	device: ffi::c_uint,
-	index: ffi::c_uint,
-	button_id: ffi::c_uint,
+	_port: ffi::c_uint,
+	_device: ffi::c_uint,
+	_index: ffi::c_uint,
+	_button_id: ffi::c_uint,
 ) -> ffi::c_short {
 	// For now, consumer should have a say in this though
 	//info!("input state port {port} device {device}, index {index}, id {button_id}");
@@ -182,8 +182,8 @@ pub(crate) unsafe extern "C" fn input_state_callback(
 //}
 
 pub(crate) unsafe extern "C" fn audio_sample_batch_callback(
-	// Is actually a [[l, r]] pair.
-	samples: *const i16,
+	// Is actually a [[l, r]] interleaved pair.
+	_samples: *const i16,
 	frames: usize,
 ) -> usize {
 	//info!("Audio batch called");
