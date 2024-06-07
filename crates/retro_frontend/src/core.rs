@@ -1,10 +1,7 @@
-//! A "RAII" wrapper over a core. Mostly for having a play around with
-//! a more rustic approach to app state.
-
 use std::path::Path;
 
-use crate::result::Result;
 use crate::frontend;
+use crate::result::Result;
 
 /// A "RAII" wrapper over a core, useful for making cleanup a bit less ardous.
 pub struct Core();
@@ -27,7 +24,7 @@ impl Core {
 	pub fn unload_game(&mut self) -> Result<()> {
 		frontend::unload_game()?;
 		Ok(())
-	} 
+	}
 }
 
 impl Drop for Core {

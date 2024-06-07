@@ -21,14 +21,12 @@ pub trait Joypad {
 /// RetroPad; which is essentially a standard PS1 controller,
 /// with a couple more buttons inherited from the Dual Analog/DualShock.
 pub struct RetroPad {
-	buttons: [i16; 16]
+	buttons: [i16; 16],
 }
 
 impl RetroPad {
 	pub fn new() -> Self {
-		Self {
-			buttons: [0; 16]
-		}
+		Self { buttons: [0; 16] }
 	}
 }
 
@@ -59,7 +57,7 @@ impl Joypad for RetroPad {
 		match pressure {
 			Some(pressure_value) => {
 				self.buttons[id as usize] = pressure_value;
-			},
+			}
 			None => {
 				// ? or 0x7fff ? Unsure
 				self.buttons[id as usize] = 1;

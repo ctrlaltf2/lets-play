@@ -1,10 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
-use retro_frontend::{core::Core, frontend, joypad::{Joypad, RetroPad}, libretro_sys_new};
+use retro_frontend::{
+	core::Core,
+	frontend,
+	joypad::{Joypad, RetroPad},
+	libretro_sys_new,
+};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
-use minifb::{Window, Key, WindowOptions};
+use minifb::{Key, Window, WindowOptions};
 
 use clap::{arg, command};
 
@@ -18,7 +23,7 @@ impl App {
 		Self {
 			window: None,
 			// nasty, but idk a better way
-			pad: Rc::new(RefCell::new(RetroPad::new()))
+			pad: Rc::new(RefCell::new(RetroPad::new())),
 		}
 	}
 
@@ -77,28 +82,44 @@ impl App {
 			match key {
 				// hardcoded specifcially for mesen, but it proves that it works!
 				Key::Backslash => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_SELECT, None);
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_SELECT, None);
 				}
 				Key::Enter => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_START, None);
-				},
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_START, None);
+				}
 				Key::Up => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_UP, None);
-				},
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_UP, None);
+				}
 				Key::Down => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_DOWN, None);
-				},
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_DOWN, None);
+				}
 				Key::Left => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_LEFT, None);
-				},
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_LEFT, None);
+				}
 				Key::Right => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_RIGHT, None);
-				},
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_RIGHT, None);
+				}
 				Key::A => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_A, None);
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_A, None);
 				}
 				Key::Z => {
-					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_B, None);
+					self.pad
+						.borrow_mut()
+						.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_B, None);
 				}
 				_ => {}
 			}
@@ -149,7 +170,6 @@ fn main() {
 	frontend::set_input_poll_callback(move || {
 		app_input_poll_clone.borrow_mut().input_poll();
 	});
-
 
 	core.load_game(rom_path).expect("ROM failed to load");
 

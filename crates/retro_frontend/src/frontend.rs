@@ -8,8 +8,8 @@ use crate::frontend_impl::FRONTEND_IMPL;
 use crate::joypad::Joypad;
 use crate::libretro_sys_new::*;
 use crate::result::Result;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Sets the callback used to update video.
 pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {

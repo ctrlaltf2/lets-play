@@ -18,7 +18,7 @@ pub enum Error {
 	CoreAlreadyLoaded,
 
 	#[error("ROM load failed")]
-	RomLoadFailed
+	RomLoadFailed,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

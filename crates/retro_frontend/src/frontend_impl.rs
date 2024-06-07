@@ -10,8 +10,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, mem::MaybeUninit};
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use std::ffi;
 
