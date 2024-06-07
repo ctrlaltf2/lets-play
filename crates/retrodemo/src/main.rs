@@ -1,25 +1,24 @@
 use std::{cell::RefCell, rc::Rc};
 
-use retro_frontend::{core::Core, frontend};
+use retro_frontend::{core::Core, frontend, joypad::{Joypad, RetroPad}, libretro_sys_new};
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
-use minifb::{Window, WindowOptions};
+use minifb::{Window, Key, WindowOptions};
 
 use clap::{arg, command};
 
 struct App {
 	window: Option<Window>,
-
-	/// True if the app's window has already been updated.
-	window_updated: bool,
+	pad: Rc<RefCell<RetroPad>>,
 }
 
 impl App {
 	fn new() -> Self {
 		Self {
 			window: None,
-			window_updated: false,
+			// nasty, but idk a better way
+			pad: Rc::new(RefCell::new(RetroPad::new()))
 		}
 	}
 
@@ -32,6 +31,9 @@ impl App {
 
 	fn init(&mut self) {
 		let av_info = frontend::get_av_info().expect("No AV info");
+
+		frontend::set_input_port_device(0, self.pad.clone());
+
 		self.resize(av_info.geometry.base_width, av_info.geometry.base_height);
 	}
 
@@ -63,11 +65,44 @@ impl App {
 			framebuffer_size.0 as usize,
 			framebuffer_size.1 as usize,
 		);
-		self.window_updated = true;
 	}
 
-	fn update(&mut self) {
-		self.window.as_mut().unwrap().update();
+	fn input_poll(&mut self) {
+		let window = self.window.as_ref().unwrap();
+
+		// reset the pad state
+		self.pad.borrow_mut().reset();
+
+		for key in &window.get_keys() {
+			match key {
+				// hardcoded specifcially for mesen, but it proves that it works!
+				Key::Backslash => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_SELECT, None);
+				}
+				Key::Enter => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_START, None);
+				},
+				Key::Up => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_UP, None);
+				},
+				Key::Down => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_DOWN, None);
+				},
+				Key::Left => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_LEFT, None);
+				},
+				Key::Right => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_RIGHT, None);
+				},
+				Key::A => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_A, None);
+				}
+				Key::Z => {
+					self.pad.borrow_mut().press_button(libretro_sys_new::DEVICE_ID_JOYPAD_B, None);
+				}
+				_ => {}
+			}
+		}
 	}
 
 	fn should_run(&self) -> bool {
@@ -78,7 +113,7 @@ impl App {
 fn main() {
 	// Setup a tracing subscriber
 	let subscriber = FmtSubscriber::builder()
-		.with_max_level(Level::TRACE)
+		.with_max_level(Level::INFO)
 		.finish();
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
@@ -110,20 +145,19 @@ fn main() {
 		//println!("Got audio sample batch with {_frames} frames");
 	});
 
+	let app_input_poll_clone = app.clone();
+	frontend::set_input_poll_callback(move || {
+		app_input_poll_clone.borrow_mut().input_poll();
+	});
+
+
 	core.load_game(rom_path).expect("ROM failed to load");
 
 	loop {
 		{
-			let mut borrowed_app = app.borrow_mut();
+			let borrowed_app = app.borrow();
 			if !borrowed_app.should_run() {
 				break;
-			}
-
-			if borrowed_app.window_updated == false {
-				borrowed_app.update();
-				borrowed_app.window_updated = true;
-			} else {
-				borrowed_app.window_updated = false;
 			}
 		}
 

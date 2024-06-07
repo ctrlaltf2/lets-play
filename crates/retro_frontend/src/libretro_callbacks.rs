@@ -42,16 +42,20 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			let slice = std::slice::from_raw_parts(ptr, len);
 
 			for desc in slice {
-				//info!("{:?}", desc);
+				tracing::debug!("{:?}", desc);
 
 				for i in 0..desc.num_types as usize {
 					let p = desc.types.add(i).as_ref().unwrap();
-					info!("type {i} = {:?} (name is {})", p, std::ffi::CStr::from_ptr(p.desc).to_str().unwrap());
+					tracing::debug!(
+						"type {i} = {:?} (name is {})",
+						p,
+						std::ffi::CStr::from_ptr(p.desc).to_str().unwrap()
+					);
 				}
 			}
 
 			return true;
-		},
+		}
 
 		ENVIRONMENT_SET_INPUT_DESCRIPTORS => {
 			let ptr = data as *const InputDescriptor;
@@ -76,7 +80,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			let slice = std::slice::from_raw_parts(ptr, len);
 
 			for desc in slice {
-				//info!("Descriptor {:?}", desc);
+				tracing::debug!("Descriptor {:?}", desc);
 			}
 
 			return true;
@@ -251,18 +255,29 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 }
 
 pub(crate) unsafe extern "C" fn input_poll_callback() {
-	// TODO tell consumer about this.
-	//info!("Input poll called");
+	if let Some(poll) = &mut FRONTEND_IMPL.input_poll_callback {
+		poll();
+	}
 }
 
 pub(crate) unsafe extern "C" fn input_state_callback(
-	_port: ffi::c_uint,
-	_device: ffi::c_uint,
-	_index: ffi::c_uint,
-	_button_id: ffi::c_uint,
+	port: ffi::c_uint,
+	device: ffi::c_uint,
+	_index: ffi::c_uint, // not used?
+	button_id: ffi::c_uint,
 ) -> ffi::c_short {
-	// For now, consumer should have a say in this though
-	//info!("input state port {port} device {device}, index {index}, id {button_id}");
+	if FRONTEND_IMPL.joypads.contains_key(&port) {
+		let joypad = FRONTEND_IMPL
+			.joypads
+			.get(&port)
+			.expect("How do we get here when contains_key() returns true but the key doen't exist")
+			.borrow();
+
+		if device == joypad.device_type() {
+			return joypad.get_button(button_id);
+		}
+	}
+
 	0
 }
 

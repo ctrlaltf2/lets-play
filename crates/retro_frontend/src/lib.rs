@@ -10,6 +10,8 @@ pub mod libretro_sys_new;
 
 pub mod core;
 
+pub mod joypad;
+
 pub mod util;
 pub mod frontend;
 pub mod result;

@@ -1,12 +1,17 @@
+use crate::joypad::Joypad;
 use crate::libretro_callbacks;
 use crate::result::{Error, Result};
 use ffi::CString;
 use libloading::Library;
 use libretro_sys::*;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::{fs, mem::MaybeUninit};
+
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use std::ffi;
 
@@ -26,6 +31,8 @@ pub(crate) type VideoResizeCallback = dyn FnMut(u32, u32);
 // TODO(lily): This should probably return the amount of consumed frames,
 // as in some cases that *might* differ?
 pub(crate) type AudioSampleCallback = dyn FnMut(&[i16], usize);
+
+pub(crate) type InputPollCallback = dyn FnMut();
 
 pub(crate) struct FrontendStateImpl {
 	/// The current core's libretro functions.
@@ -51,10 +58,13 @@ pub(crate) struct FrontendStateImpl {
 	pub(crate) system_directory: CString,
 	pub(crate) save_directory: CString,
 
+	pub(crate) joypads: HashMap<u32 /* port */, Rc<RefCell<dyn Joypad>>>,
+
 	// Callbacks that consumers can set
 	pub(crate) video_update_callback: Option<Box<VideoUpdateCallback>>,
 	pub(crate) video_resize_callback: Option<Box<VideoResizeCallback>>,
 	pub(crate) audio_sample_callback: Option<Box<AudioSampleCallback>>,
+	pub(crate) input_poll_callback: Option<Box<InputPollCallback>>,
 }
 
 impl FrontendStateImpl {
@@ -78,9 +88,12 @@ impl FrontendStateImpl {
 			system_directory: CString::new("system").unwrap(),
 			save_directory: CString::new("save").unwrap(),
 
+			joypads: HashMap::new(),
+
 			video_update_callback: None,
 			video_resize_callback: None,
 			audio_sample_callback: None,
+			input_poll_callback: None,
 		}
 	}
 
@@ -100,6 +113,24 @@ impl FrontendStateImpl {
 	pub(crate) fn set_audio_sample_callback(&mut self, cb: impl FnMut(&[i16], usize) + 'static) {
 		self.audio_sample_callback = Some(Box::new(cb));
 	}
+
+	pub(crate) fn set_input_poll_callback(&mut self, cb: impl FnMut() + 'static) {
+		self.input_poll_callback = Some(Box::new(cb));
+	}
+
+	pub(crate) fn set_input_port_device(&mut self, port: u32, device: Rc<RefCell<dyn Joypad>>) {
+		if self.core_loaded() {
+			let core_api = self.core_api.as_mut().unwrap();
+
+			unsafe {
+				(core_api.retro_set_controller_port_device)(port, device.borrow().device_type());
+			}
+
+			self.joypads.insert(port, device);
+		}
+	}
+
+	// clear_input_port_device?
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if self.core_loaded() {
