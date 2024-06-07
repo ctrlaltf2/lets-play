@@ -1,5 +1,5 @@
 use crate::{frontend_impl::*, libretro_log, util};
-use libretro_sys::*;
+use crate::libretro_sys_new::*;
 
 use rgb565::Rgb565;
 

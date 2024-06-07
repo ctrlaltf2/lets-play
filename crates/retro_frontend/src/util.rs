@@ -1,8 +1,8 @@
-use crate::libretro_sys;
+use crate::libretro_sys_new::*;
 
-pub fn bytes_per_pixel_from_libretro(pf: libretro_sys::PixelFormat) -> u32 {
+pub fn bytes_per_pixel_from_libretro(pf: PixelFormat) -> u32 {
 	match pf {
-		libretro_sys::PixelFormat::ARGB1555 | libretro_sys::PixelFormat::RGB565 => 2,
-		libretro_sys::PixelFormat::ARGB8888 => 4,
+		PixelFormat::ARGB1555 | PixelFormat::RGB565 => 2,
+		PixelFormat::ARGB8888 => 4,
 	}
 }

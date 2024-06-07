@@ -1,5 +1,5 @@
 use libc;
-use libretro_sys::*;
+use crate::libretro_sys_new::*;
 use std::ffi;
 use tracing::*;
 

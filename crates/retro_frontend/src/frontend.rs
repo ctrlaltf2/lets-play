@@ -6,7 +6,7 @@
 //! it's easier to just host this crate in a runner process and fork off those runners.
 use crate::frontend_impl::FRONTEND_IMPL;
 use crate::result::Result;
-use crate::libretro_sys::*;
+use crate::libretro_sys_new::*;
 
 pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 	unsafe {
