@@ -57,6 +57,7 @@ impl App {
 		let framebuffer_size = frontend::get_size();
 		let _ = self.window.as_mut().unwrap().update_with_buffer(
 			&slice,
+			//framebuffer_size.0 as usize,
 			framebuffer_size.0 as usize,
 			framebuffer_size.1 as usize,
 		);
@@ -81,9 +82,6 @@ fn main() {
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
 	// Load a core
-	//let mut core = Core::load("./cores/gambatte_libretro.so").expect("Core failed to load");
-	//core.load_game("./roms/smw.gb").expect("ROM failed to load");
-
 	let mut core = Core::load("./cores/mesen_libretro.so").expect("Core failed to load");
 
 	let app = App::new_and_init();

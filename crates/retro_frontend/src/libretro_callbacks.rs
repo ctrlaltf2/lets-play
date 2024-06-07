@@ -23,6 +23,65 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			return true;
 		}
 
+		ENVIRONMENT_SET_CONTROLLER_INFO => {
+			let ptr = data as *const ControllerInfo;
+			let mut len = 0usize;
+
+			let mut iter = ptr.clone();
+			loop {
+				let item = iter.as_ref().unwrap();
+
+				if item.num_types == 0 && item.types.is_null() {
+					break;
+				}
+
+				len += 1;
+				iter = iter.add(1);
+			}
+
+			let slice = std::slice::from_raw_parts(ptr, len);
+
+			for desc in slice {
+				//info!("{:?}", desc);
+
+				for i in 0..desc.num_types as usize {
+					let p = desc.types.add(i).as_ref().unwrap();
+					info!("type {i} = {:?} (name is {})", p, std::ffi::CStr::from_ptr(p.desc).to_str().unwrap());
+				}
+			}
+
+			return true;
+		},
+
+		ENVIRONMENT_SET_INPUT_DESCRIPTORS => {
+			let ptr = data as *const InputDescriptor;
+			let mut len = 0usize;
+
+			// Calculate the length of the array
+			// I'm not aware of any funny magic (besides macros) that would
+			// let me make this logic "shared", but I'll probably make a macro for it
+			// or something.
+			let mut iter = ptr.clone();
+			loop {
+				if (*iter).description.is_null() {
+					break;
+				}
+
+				len += 1;
+				iter = iter.add(1);
+			}
+
+			info!("{len} descriptor entries");
+
+			let slice = std::slice::from_raw_parts(ptr, len);
+
+			for desc in slice {
+				//info!("Descriptor {:?}", desc);
+			}
+
+			return true;
+		}
+
 		ENVIRONMENT_GET_CAN_DUPE => {
 			*(data as *mut bool) = true;
 			return true;
@@ -72,7 +131,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 			match ffi::CStr::from_ptr(var.key).to_str() {
 				Ok(_key) => {
-					//info!("Core wants to get variable \"{}\" from us", key);
+					info!("Core wants to get variable \"{_key}\"",);
 					return false;
 				}
 				Err(err) => {
@@ -84,7 +143,37 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		ENVIRONMENT_GET_VARIABLE_UPDATE => {
 			// We currently pressent no changed variables to the core.
+			// TODO: this will change
 			*(data as *mut bool) = false;
+			return true;
+		}
+
+		// TODO: Fully implement, we'll need to implement above more fully.
+		// Ideas:
+		// - FrontendStateImpl can have a HashMap<CString, CString> which will then
+		//	 be where we can store stuff. Also the consumer application could in theory
+		//	 use that to save/restore (by injecting keys from another source)
+		ENVIRONMENT_SET_VARIABLES => {
+			let ptr = data as *const Variable;
+			let mut _len = 0usize;
+
+			let mut iter = ptr.clone();
+			loop {
+				if (*iter).key.is_null() {
+					break;
+				}
+
+				_len += 1;
+				iter = iter.add(1);
+			}
+
+			/*let slice = std::slice::from_raw_parts(ptr, len);
+
+			for var in slice {
+				let key = std::ffi::CStr::from_ptr(var.key).to_str().unwrap();
+				let value = std::ffi::CStr::from_ptr(var.value).to_str().unwrap();
+			}*/
+
 			return true;
 		}
 
