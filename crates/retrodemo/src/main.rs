@@ -6,6 +6,8 @@ use tracing_subscriber::FmtSubscriber;
 
 use minifb::{Window, WindowOptions};
 
+use clap::{arg, command};
+
 struct App {
 	window: Option<Window>,
 
@@ -81,8 +83,16 @@ fn main() {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
+	let matches = command!()
+		.arg(arg!(--core <VALUE>).required(true))
+		.arg(arg!(--rom <VALUE>).required(true))
+		.get_matches();
+
+	let core_path: &String = matches.get_one("core").unwrap();
+	let rom_path: &String = matches.get_one("rom").unwrap();
+
 	// Load a core
-	let mut core = Core::load("./cores/mesen_libretro.so").expect("Core failed to load");
+	let mut core = Core::load(core_path).expect("Core failed to load");
 
 	let app = App::new_and_init();
 
@@ -100,8 +110,7 @@ fn main() {
 		//println!("Got audio sample batch with {_frames} frames");
 	});
 
-	core.load_game("./roms/smb1.nes")
-		.expect("ROM failed to load");
+	core.load_game(rom_path).expect("ROM failed to load");
 
 	loop {
 		{

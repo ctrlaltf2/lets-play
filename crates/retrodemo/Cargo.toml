@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+clap = { version = "4.5.6", features = ["cargo"] }
 minifb = "0.27.0"
 retro_frontend = { path = "../retro_frontend" }
 
