@@ -98,6 +98,10 @@ fn main() {
 		app_resize_clone.borrow_mut().resize(width, height);
 	});
 
+	frontend::set_audio_sample_callback(|_slice, _frames| {
+		//println!("Got audio sample batch with {_frames} frames");
+	});
+
 	core.load_game("./roms/smb1.nes")
 		.expect("ROM failed to load");
 

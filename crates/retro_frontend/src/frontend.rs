@@ -5,8 +5,8 @@
 //! Don't even think about using this across multiple threads. If you want to run multiple frontends,
 //! it's easier to just host this crate in a runner process and fork off those runners.
 use crate::frontend_impl::FRONTEND_IMPL;
-use crate::result::Result;
 use crate::libretro_sys_new::*;
+use crate::result::Result;
 
 pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 	unsafe {
@@ -17,6 +17,12 @@ pub fn set_video_update_callback(cb: impl FnMut(&[u32]) + 'static) {
 pub fn set_video_resize_callback(cb: impl FnMut(u32, u32) + 'static) {
 	unsafe {
 		FRONTEND_IMPL.set_video_resize_callback(cb);
+	}
+}
+
+pub fn set_audio_sample_callback(cb: impl FnMut(&[i16], usize) + 'static) {
+	unsafe {
+		FRONTEND_IMPL.set_audio_sample_callback(cb);
 	}
 }
 
@@ -55,15 +61,13 @@ pub fn unload_game() -> Result<()> {
 	unsafe { FRONTEND_IMPL.unload_game() }
 }
 
-
-
 /// Get's the core's current AV information.
 pub fn get_av_info() -> Result<SystemAvInfo> {
 	unsafe { FRONTEND_IMPL.get_av_info() }
 }
 
 pub fn get_size() -> (u32, u32) {
-	unsafe {  FRONTEND_IMPL.get_size() }
+	unsafe { FRONTEND_IMPL.get_size() }
 }
 
 /// Runs the loaded core for one video frame.

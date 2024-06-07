@@ -1,5 +1,5 @@
-use crate::{frontend_impl::*, libretro_log, util};
 use crate::libretro_sys_new::*;
+use crate::{frontend_impl::*, libretro_log, util};
 
 use rgb565::Rgb565;
 
@@ -15,7 +15,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		ENVIRONMENT_GET_LOG_INTERFACE => {
 			*(data as *mut LogCallback) = libretro_log::LOG_INTERFACE.clone();
 			return true;
-		},
+		}
 
 		ENVIRONMENT_SET_PERFORMANCE_LEVEL => {
 			let level = *(data as *const ffi::c_uint);
@@ -90,7 +90,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		_ => {
 			warn!("Environment callback called with currently unhandled command: {environment_command}");
-			return false
+			return false;
 		}
 	}
 }
@@ -177,15 +177,18 @@ pub(crate) unsafe extern "C" fn input_state_callback(
 	0
 }
 
-//pub(crate) unsafe extern "C" fn libretro_audio_sample_callback(left: ffi::c_short, right: ffi::c_short) {
-//info!("audio sample called");
-//}
-
 pub(crate) unsafe extern "C" fn audio_sample_batch_callback(
 	// Is actually a [[l, r]] interleaved pair.
-	_samples: *const i16,
+	samples: *const i16,
 	frames: usize,
 ) -> usize {
+	if let Some(callback) = &mut FRONTEND_IMPL.audio_sample_callback {
+		let slice = std::slice::from_raw_parts(samples, frames * 2);
+
+		// I might not need to give the callback the amount of frames since it can figure it out as
+		// slice.len() / 2, but /shrug
+		callback(slice, frames);
+	}
 	//info!("Audio batch called");
 	frames
 }

@@ -20,8 +20,12 @@ use tracing::{error, info};
 pub(crate) static mut FRONTEND_IMPL: Lazy<FrontendStateImpl> =
 	Lazy::new(|| FrontendStateImpl::new());
 
-	pub(crate) type VideoUpdateCallback = dyn FnMut(&[u32]);
-	pub(crate) type VideoResizeCallback = dyn FnMut(u32, u32);
+pub(crate) type VideoUpdateCallback = dyn FnMut(&[u32]);
+pub(crate) type VideoResizeCallback = dyn FnMut(u32, u32);
+
+// TODO(lily): This should probably return the amount of consumed frames,
+// as in some cases that *might* differ?
+pub(crate) type AudioSampleCallback = dyn FnMut(&[i16], usize);
 
 pub(crate) struct FrontendStateImpl {
 	/// The current core's libretro functions.
@@ -50,6 +54,7 @@ pub(crate) struct FrontendStateImpl {
 	// Callbacks that consumers can set
 	pub(crate) video_update_callback: Option<Box<VideoUpdateCallback>>,
 	pub(crate) video_resize_callback: Option<Box<VideoResizeCallback>>,
+	pub(crate) audio_sample_callback: Option<Box<AudioSampleCallback>>,
 }
 
 impl FrontendStateImpl {
@@ -75,6 +80,7 @@ impl FrontendStateImpl {
 
 			video_update_callback: None,
 			video_resize_callback: None,
+			audio_sample_callback: None,
 		}
 	}
 
@@ -91,6 +97,9 @@ impl FrontendStateImpl {
 		self.video_resize_callback = Some(Box::new(cb));
 	}
 
+	pub(crate) fn set_audio_sample_callback(&mut self, cb: impl FnMut(&[i16], usize) + 'static) {
+		self.audio_sample_callback = Some(Box::new(cb));
+	}
 
 	pub(crate) fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if self.core_loaded() {
