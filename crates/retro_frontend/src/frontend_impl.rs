@@ -256,6 +256,13 @@ impl FrontendStateImpl {
 		// FIXME: Do other various cleanup (when we need to do said cleanup)
 		self.av_info = None;
 
+		self.fb_width = 0;
+		self.fb_height = 0;
+		self.fb_pitch = 0;
+
+		// disconnect all currently connected joypads
+		self.joypads.clear();
+
 		Ok(())
 	}
 

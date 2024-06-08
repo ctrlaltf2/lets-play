@@ -33,20 +33,20 @@ unsafe extern "C" fn libretro_log(level: LogLevel, fmt: *const ffi::c_char, mut 
 	match ffi::CStr::from_ptr(buffer.as_ptr()).to_str() {
 		Ok(message) => match level {
 			LogLevel::Debug => {
-				debug!("{}", message)
+				debug!("Core log: {}", message)
 			}
 			LogLevel::Info => {
-				info!("{}", message)
+				info!("Core log: {}", message)
 			}
 			LogLevel::Warn => {
-				warn!("{}", message)
+				warn!("Core log: {}", message)
 			}
 			LogLevel::Error => {
-				error!("{}", message)
+				error!("Core log: {}", message)
 			}
 		},
 		Err(err) => {
-			error!("core for some reason gave a broken string {:?}", err);
+			error!("Core for some reason gave a broken string to log interface: {:?}", err);
 		}
 	}
 }

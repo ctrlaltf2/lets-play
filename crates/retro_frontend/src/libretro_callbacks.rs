@@ -5,7 +5,7 @@ use rgb565::Rgb565;
 
 use std::ffi;
 
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, debug};
 
 pub(crate) unsafe extern "C" fn environment_callback(
 	environment_command: u32,
@@ -19,7 +19,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 		ENVIRONMENT_SET_PERFORMANCE_LEVEL => {
 			let level = *(data as *const ffi::c_uint);
-			info!("Core is performance level {level}");
+			debug!("Core is performance level {level}");
 			return true;
 		}
 
@@ -42,11 +42,11 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			let slice = std::slice::from_raw_parts(ptr, len);
 
 			for desc in slice {
-				tracing::debug!("{:?}", desc);
+				debug!("{:?}", desc);
 
 				for i in 0..desc.num_types as usize {
 					let p = desc.types.add(i).as_ref().unwrap();
-					tracing::debug!(
+					debug!(
 						"type {i} = {:?} (name is {})",
 						p,
 						std::ffi::CStr::from_ptr(p.desc).to_str().unwrap()
@@ -75,12 +75,12 @@ pub(crate) unsafe extern "C" fn environment_callback(
 				iter = iter.add(1);
 			}
 
-			info!("{len} descriptor entries");
+			debug!("{len} input descriptor entries");
 
 			let slice = std::slice::from_raw_parts(ptr, len);
 
 			for desc in slice {
-				tracing::debug!("Descriptor {:?}", desc);
+				debug!("Descriptor {:?}", desc);
 			}
 
 			return true;
@@ -135,11 +135,11 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 			match ffi::CStr::from_ptr(var.key).to_str() {
 				Ok(_key) => {
-					info!("Core wants to get variable \"{_key}\"",);
+					debug!("Core wants to get variable \"{_key}\"",);
 					return false;
 				}
 				Err(err) => {
-					error!("Core gave an invalid key: {:?}", err);
+					error!("Core gave an invalid key for ENVIRONMENT_GET_VARIABLE: {:?}", err);
 					return false;
 				}
 			}
@@ -182,7 +182,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		}
 
 		_ => {
-			warn!("Environment callback called with currently unhandled command: {environment_command}");
+			debug!("Environment callback called with currently unhandled command: {environment_command}");
 			return false;
 		}
 	}
@@ -293,6 +293,5 @@ pub(crate) unsafe extern "C" fn audio_sample_batch_callback(
 		// slice.len() / 2, but /shrug
 		callback(slice, frames);
 	}
-	//info!("Audio batch called");
 	frames
 }
