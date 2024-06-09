@@ -1,37 +1,29 @@
 use crate::libretro_sys_new::*;
-use libc;
 use std::ffi;
 use tracing::*;
 
-extern "C" {
-	fn vsnprintf(
-		buffer: *mut libc::c_char,
-		len: usize,
-		fmt: *const libc::c_char,
-		args: ffi::VaList,
-	) -> libc::c_int;
-}
+#[allow(dead_code)] // This *is* used; just not in Rust code
+#[no_mangle]
+/// This recieves log messages from our C++ helper code, and pulls them out into Tracing messages.
+pub extern "C" fn libretro_log_recieve(level: LogLevel, buf: *const ffi::c_char) {
+	let mut msg: Option<&str> = None;
 
-unsafe extern "C" fn libretro_log(level: LogLevel, fmt: *const ffi::c_char, mut args: ...) {
-	let mut buffer: [ffi::c_char; 512] = [0; 512];
-	let n = vsnprintf(
-		buffer.as_mut_ptr(),
-		buffer.len() - 1,
-		fmt,
-		args.as_va_list(),
-	);
-
-	if n == -1 {
-		return;
+	// Safety: This pointer is never null, and always comes from the stack;
+	// we really only should get UTF-8 errors here in the case a core spits out something invalid.
+	unsafe {
+		match ffi::CStr::from_ptr(buf).to_str() {
+			Ok(message) => msg = Some(message),
+			Err(err) => {
+				error!(
+					"Core for some reason gave a broken string to log interface: {:?}",
+					err
+				);
+			}
+		}
 	}
 
-	// Remove the last newline. This is messy and probably not the best code to do so,
-	// but I'm not aware of any alternatives that *don't* imply making a alloc::String
-	// (which I don't want to do in this case) soooo /shrug
-	buffer[n as usize - 1] = 0;
-
-	match ffi::CStr::from_ptr(buffer.as_ptr()).to_str() {
-		Ok(message) => match level {
+	if let Some(message) = &msg {
+		match level {
 			LogLevel::Debug => {
 				debug!("Core log: {}", message)
 			}
@@ -44,21 +36,16 @@ unsafe extern "C" fn libretro_log(level: LogLevel, fmt: *const ffi::c_char, mut 
 			LogLevel::Error => {
 				error!("Core log: {}", message)
 			}
-		},
-		Err(err) => {
-			error!("Core for some reason gave a broken string to log interface: {:?}", err);
 		}
 	}
 }
 
-pub static LOG_INTERFACE: LogCallback = LogCallback {
-	// This is needed because libretro_sys actually defines the log printf callback
-	// *without* the last varadic arm; presumably because it was a nightly feature even back then.
-	// (which is very upsetting considering it still is, but meh.)
-	// That's kind of very important to a printf-like function.
-	log: unsafe {
-		std::mem::transmute::<unsafe extern "C" fn(LogLevel, *const ffi::c_char, ...), LogPrintfFn>(
-			libretro_log,
-		)
-	},
-};
+extern "C" {
+	// We intententionally do not declare the ... varadic arm here,
+	// because libretro_sys doesn't want it, and additionally,
+	// that requires nightly Rust to even do, which defeats the purpose
+	// of moving it into a helper.
+	fn libretro_log(level: LogLevel, fmt: *const ffi::c_char);
+}
+
+pub static LOG_INTERFACE: LogCallback = LogCallback { log: libretro_log };

@@ -1,6 +1,6 @@
 //! A libretro frontend as a reusable library crate.
 
-#![feature(c_variadic)]
+//#![feature(c_variadic)]
 
 mod frontend_impl;
 mod libretro_callbacks;

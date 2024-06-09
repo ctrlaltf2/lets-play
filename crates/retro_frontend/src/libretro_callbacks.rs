@@ -5,7 +5,7 @@ use rgb565::Rgb565;
 
 use std::ffi;
 
-use tracing::{error, info, warn, debug};
+use tracing::{error, info, debug};
 
 pub(crate) unsafe extern "C" fn environment_callback(
 	environment_command: u32,
