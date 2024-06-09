@@ -1,14 +1,12 @@
 [package]
-name = "letsplayd"
+name = "retrodemo"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dependencies]
-# for now; we can slim down later
-tokio = { version = "1.37.0", features = [ "full" ] }
-toml_edit = "0.22.13"
-
+clap = { version = "4.5.6", features = ["cargo"] }
+minifb = "0.27.0"
 retro_frontend = { path = "../retro_frontend" }
 
 tracing = "0.1.40"
