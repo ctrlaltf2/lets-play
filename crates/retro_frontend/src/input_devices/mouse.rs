@@ -5,7 +5,6 @@ use crate::libretro_sys_new;
 /// Implementation of the [InputDevice] trait for the Libretro mouse.
 pub struct Mouse {
 	buttons: [i16; 8],
-
 	// TODO: hold the last x/y so we can calculate relative position
 }
 

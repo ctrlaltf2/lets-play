@@ -20,7 +20,6 @@ pub struct CoreVariable {
 }
 
 impl CoreVariable {
-
 	/// Parses this core variable.
 	pub fn parse(str: &str) -> Self {
 		let string = str.to_string();
