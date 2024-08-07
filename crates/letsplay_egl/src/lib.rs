@@ -58,7 +58,10 @@ mod egl_impl {
 		// This is how many devices are actually present,
 		let mut devices_present: EGLint = 0;
 
-		assert!(index <= NR_DEVICES_MAX, "More than {NR_DEVICES_MAX} devices are not supported right now");
+		assert!(
+			index <= NR_DEVICES_MAX,
+			"More than {NR_DEVICES_MAX} devices are not supported right now"
+		);
 
 		unsafe {
 			// TODO: These should probbaly be using CStr like above.
