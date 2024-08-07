@@ -184,16 +184,17 @@ impl Frontend {
 		}
 	}
 
-	fn get_config_file_path(&self) -> String {
+	fn get_config_file_path(&mut self) -> Result<String> {
+		let system_info = self.get_system_info()?;
+
+		// SAFETY: libretro declares that the pointers inside of the SystemInfo structure
+		// must always point to valid constant data. If it doesn't then other frontends
+		// would probably blow up too.
 		let path = unsafe {
-			let core_api = self.core_api.as_ref().unwrap();
+			#[cfg(debug_assertions)]
+			assert!(!system_info.library_name.is_null(), "Core library name is somehow null");
 
-			let mut system_info: MaybeUninit<SystemInfo> = MaybeUninit::uninit();
-			(core_api.retro_get_system_info)(system_info.as_mut_ptr());
-
-			let info = system_info.assume_init();
-
-			let c_name = ffi::CStr::from_ptr(info.library_name);
+			let c_name = ffi::CStr::from_ptr(system_info.library_name);
 
 			format!(
 				"{}/{}.toml",
@@ -202,13 +203,13 @@ impl Frontend {
 			)
 		};
 
-		path
+		Ok(path)
 	}
 
 	// TODO: make this a bit less janky (and use Results)
 
 	pub fn load_settings(&mut self) {
-		let path_string = self.get_config_file_path();
+		let path_string = self.get_config_file_path().expect("Could not get config file path");
 		let path: &Path = path_string.as_ref();
 
 		match path.try_exists() {
@@ -230,7 +231,7 @@ impl Frontend {
 	}
 
 	pub fn save_settings(&mut self) {
-		let path = self.get_config_file_path();
+		let path = self.get_config_file_path().expect("Could not get config file path");
 
 		let settings = CoreSettingsFile {
 			variables: self.variables.clone(),
