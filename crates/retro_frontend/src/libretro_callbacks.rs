@@ -1,11 +1,17 @@
-use crate::libretro_sys_new::*;
-use crate::{frontend_impl::*, libretro_log, util};
+//! Callbacks for libretro
+use crate::{frontend::*, libretro_log, util};
+use crate::{libretro_core_variable, libretro_sys_new::*};
 
 use rgb565::Rgb565;
 
 use std::ffi;
 
-use tracing::{debug, error, info};
+use tracing::{debug, error};
+
+/// This function is used with HW OpenGL cores to transfer the current FBO's ID.
+unsafe extern "C" fn hw_gl_get_framebuffer() -> usize {
+	(*FRONTEND).gl_fbo_id as usize
+}
 
 pub(crate) unsafe extern "C" fn environment_callback(
 	environment_command: u32,
@@ -68,19 +74,19 @@ pub(crate) unsafe extern "C" fn environment_callback(
 		}
 
 		ENVIRONMENT_GET_SYSTEM_DIRECTORY => {
-			*(data as *mut *const ffi::c_char) = FRONTEND_IMPL.system_directory.as_ptr();
+			*(data as *mut *const ffi::c_char) = (*FRONTEND).system_directory.as_ptr();
 			return true;
 		}
 
 		ENVIRONMENT_GET_SAVE_DIRECTORY => {
-			*(data as *mut *const ffi::c_char) = FRONTEND_IMPL.save_directory.as_ptr();
+			*(data as *mut *const ffi::c_char) = (*FRONTEND).save_directory.as_ptr();
 			return true;
 		}
 
 		ENVIRONMENT_SET_PIXEL_FORMAT => {
 			let _pixel_format = *(data as *const ffi::c_uint);
 			let pixel_format = PixelFormat::from_uint(_pixel_format).unwrap();
-			FRONTEND_IMPL.pixel_format = pixel_format;
+			(*FRONTEND).pixel_format = pixel_format;
 			return true;
 		}
 
@@ -91,28 +97,64 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 			let geometry = (data as *const GameGeometry).as_ref().unwrap();
 
-			FRONTEND_IMPL.fb_width = geometry.base_width;
-			FRONTEND_IMPL.fb_height = geometry.base_height;
+			(*FRONTEND).fb_width = geometry.base_width;
+			(*FRONTEND).fb_height = geometry.base_height;
 
-			if let Some(resize_callback) = &mut FRONTEND_IMPL.video_resize_callback {
-				resize_callback(geometry.base_width, geometry.base_height);
+			(*(*FRONTEND).interface).video_resize(geometry.base_width, geometry.base_height);
+			return true;
+		}
+
+		ENVIRONMENT_SET_HW_RENDER => {
+			let hw_render = (data as *mut HwRenderCallback).as_mut().unwrap();
+
+			let hw_render_context_type =
+				HwContextType::from_uint(hw_render.context_type).expect("Uh oh!");
+
+			if hw_render_context_type != HwContextType::OpenGL
+				&& hw_render_context_type != HwContextType::OpenGLCore
+			{
+				error!(
+					"Core is trying to request an context type we don't support ({:?}), failing",
+					hw_render_context_type
+				);
+				return false;
 			}
+
+			let init_data = (*(*FRONTEND).interface).hw_gl_init();
+
+			hw_render.get_current_framebuffer = hw_gl_get_framebuffer;
+			hw_render.get_proc_address = std::mem::transmute(init_data.get_proc_address);
+
+			// reset context
+			(hw_render.context_reset)();
+
+			// Once we have initalized HW rendering any data here doesn't matter and isn't needed.
+			(*FRONTEND).converted_pixel_buffer.clear();
+
 			return true;
 		}
 
 		ENVIRONMENT_GET_VARIABLE => {
 			// Make sure the core actually is giving us a pointer to a *Variable
-			// so we can (if we have it!) fill it in.
+			// so we can fill it in.
 			if data.is_null() {
 				return false;
 			}
 
-			let var = (data as *mut Variable).as_mut().unwrap();
+			let libretro_variable = (data as *mut Variable).as_mut().unwrap();
 
-			match ffi::CStr::from_ptr(var.key).to_str() {
-				Ok(_key) => {
-					debug!("Core wants to get variable \"{_key}\"",);
-					return false;
+			match ffi::CStr::from_ptr(libretro_variable.key).to_str() {
+				Ok(key) => {
+					if (*FRONTEND).variables.contains_key(key) {
+						let value = (*FRONTEND).variables.get_mut(key).unwrap();
+						let value_str = value.get_value();
+						libretro_variable.value = value_str.as_ptr() as *const i8;
+						return true;
+					} else {
+						// value doesn't exist, tell the core that
+						libretro_variable.value = std::ptr::null();
+						return false;
+					}
 				}
 				Err(err) => {
 					error!(
@@ -131,22 +173,22 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			return true;
 		}
 
-		// TODO: Fully implement, we'll need to implement above more fully.
-		// Ideas:
-		// - FrontendStateImpl can have a HashMap<CString, CString> which will then
-		//	 be where we can store stuff. Also the consumer application could in theory
-		//	 use that to save/restore (by injecting keys from another source)
 		ENVIRONMENT_SET_VARIABLES => {
 			let ptr = data as *const Variable;
+			let slice = util::terminated_array(ptr, |item| item.key.is_null());
 
-			let _slice = util::terminated_array(ptr, |item| { item.key.is_null() });
-
-			/*
-
+			// populate variables hashmap
 			for var in slice {
 				let key = std::ffi::CStr::from_ptr(var.key).to_str().unwrap();
 				let value = std::ffi::CStr::from_ptr(var.value).to_str().unwrap();
-			}*/
+
+				let parsed = libretro_core_variable::CoreVariable::parse(value);
+
+				(*FRONTEND).variables.insert(key.to_string(), parsed);
+			}
+
+			// Load settings
+			(*FRONTEND).load_settings();
 
 			return true;
 		}
@@ -172,44 +214,51 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 
 	//info!("Video refresh called, {width}, {height}, {pitch}");
 
+	if (*FRONTEND).fb_width != width || (*FRONTEND).fb_height != height {
+		(*(*FRONTEND).interface).video_resize(width, height);
+	}
+
 	// bleh
-	FRONTEND_IMPL.fb_width = width;
-	FRONTEND_IMPL.fb_height = height;
-	FRONTEND_IMPL.fb_pitch =
-		pitch as u32 / util::bytes_per_pixel_from_libretro(FRONTEND_IMPL.pixel_format);
+	(*FRONTEND).fb_width = width;
+	(*FRONTEND).fb_height = height;
 
-	let pitch = FRONTEND_IMPL.fb_pitch as usize;
+	if pixels == (-1i64 as *const ffi::c_void) {
+		(*(*FRONTEND).interface).video_update_gl();
+		return;
+	}
 
-	match FRONTEND_IMPL.pixel_format {
+	(*FRONTEND).fb_pitch =
+		pitch as u32 / util::bytes_per_pixel_from_libretro((*FRONTEND).pixel_format);
+
+	let pitch = (*FRONTEND).fb_pitch as usize;
+
+	match (*FRONTEND).pixel_format {
 		PixelFormat::RGB565 => {
 			let pixel_data_slice = std::slice::from_raw_parts(
 				pixels as *const u16,
 				(pitch * height as usize) as usize,
 			);
 
-			// Resize the pixel buffer if we need to
-			if (pitch * height as usize) as usize != FRONTEND_IMPL.converted_pixel_buffer.len() {
-				info!("Resizing RGB565 -> RGBA buffer");
-				FRONTEND_IMPL
+			// Resize the conversion buffer if we need to
+			if (pitch * height as usize) as usize != (*FRONTEND).converted_pixel_buffer.len() {
+				(*FRONTEND)
 					.converted_pixel_buffer
 					.resize((pitch * height as usize) as usize, 0);
 			}
 
-			// TODO: Make this convert from weird pitches to native resolution where possible.
 			for x in 0..pitch as usize {
 				for y in 0..height as usize {
 					let rgb = Rgb565::from_rgb565(pixel_data_slice[y * pitch as usize + x]);
 					let comp = rgb.to_rgb888_components();
 
 					// Finally save the pixel data in the result array as an XRGB8888 value
-					FRONTEND_IMPL.converted_pixel_buffer[y * pitch as usize + x] =
-						((comp[0] as u32) << 16) | ((comp[1] as u32) << 8) | (comp[2] as u32);
+					(*FRONTEND).converted_pixel_buffer[y * pitch as usize + x] =
+						((comp[2] as u32) << 16) | ((comp[1] as u32) << 8) | (comp[0] as u32);
 				}
 			}
 
-			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
-				update_callback(&FRONTEND_IMPL.converted_pixel_buffer.as_slice());
-			}
+			(*(*FRONTEND).interface)
+				.video_update(&(*FRONTEND).converted_pixel_buffer[..], pitch as u32);
 		}
 		_ => {
 			let pixel_data_slice = std::slice::from_raw_parts(
@@ -217,17 +266,13 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 				(pitch * height as usize) as usize,
 			);
 
-			if let Some(update_callback) = &mut FRONTEND_IMPL.video_update_callback {
-				update_callback(&pixel_data_slice);
-			}
+			(*(*FRONTEND).interface).video_update(&pixel_data_slice, pitch as u32);
 		}
 	}
 }
 
 pub(crate) unsafe extern "C" fn input_poll_callback() {
-	if let Some(poll) = &mut FRONTEND_IMPL.input_poll_callback {
-		poll();
-	}
+	(*(*FRONTEND).interface).input_poll();
 }
 
 pub(crate) unsafe extern "C" fn input_state_callback(
@@ -236,15 +281,14 @@ pub(crate) unsafe extern "C" fn input_state_callback(
 	_index: ffi::c_uint, // not used?
 	button_id: ffi::c_uint,
 ) -> ffi::c_short {
-	if FRONTEND_IMPL.joypads.contains_key(&port) {
-		let joypad = FRONTEND_IMPL
-			.joypads
+	if (*FRONTEND).input_devices.contains_key(&port) {
+		let joypad = *(*FRONTEND)
+			.input_devices
 			.get(&port)
-			.expect("How do we get here when contains_key() returns true but the key doen't exist")
-			.borrow();
+			.expect("How do we get here when contains_key() returns true but the key doen't exist");
 
-		if device == joypad.device_type() {
-			return joypad.get_button(button_id);
+		if device == (*joypad).device_type() {
+			return (*joypad).get_button(button_id);
 		}
 	}
 
@@ -256,12 +300,10 @@ pub(crate) unsafe extern "C" fn audio_sample_batch_callback(
 	samples: *const i16,
 	frames: usize,
 ) -> usize {
-	if let Some(callback) = &mut FRONTEND_IMPL.audio_sample_callback {
-		let slice = std::slice::from_raw_parts(samples, frames * 2);
+	let slice = std::slice::from_raw_parts(samples, frames * 2);
 
-		// I might not need to give the callback the amount of frames since it can figure it out as
-		// slice.len() / 2, but /shrug
-		callback(slice, frames);
-	}
+	// I might not need to give the callback the amount of frames since it can figure it out as
+	// slice.len() / 2, but /shrug
+	(*(*FRONTEND).interface).audio_sample(slice, frames);
 	frames
 }

@@ -1,23 +1,8 @@
-//! libretro pad abstraction
-
+//! RetroPad
+use super::InputDevice;
 use crate::libretro_sys_new;
 
-pub trait Joypad {
-	// TODO: is_pressed(id: u32)?
-
-	fn device_type(&self) -> u32;
-
-	fn get_button(&self, id: u32) -> i16;
-
-	fn reset(&mut self);
-
-	fn press_button(&mut self, id: u32, pressure: Option<i16>);
-}
-
-// TODO: Split this into a new module, and make this a dir based one
-// (mod.rs/retropad.rs/analogpad.rs) once we have AnalogPad support.
-
-/// Implementation of the [Joypad] trait for the Libretro
+/// Implementation of the [InputDevice] trait for the Libretro
 /// RetroPad; which is essentially a standard PS1 controller,
 /// with a couple more buttons inherited from the Dual Analog/DualShock.
 pub struct RetroPad {
@@ -30,7 +15,7 @@ impl RetroPad {
 	}
 }
 
-impl Joypad for RetroPad {
+impl InputDevice for RetroPad {
 	fn device_type(&self) -> u32 {
 		libretro_sys_new::DEVICE_JOYPAD
 	}
@@ -60,7 +45,7 @@ impl Joypad for RetroPad {
 			}
 			None => {
 				// ? or 0x7fff ? Unsure
-				self.buttons[id as usize] = 1;
+				self.buttons[id as usize] = 0x7fff;
 			}
 		}
 	}
