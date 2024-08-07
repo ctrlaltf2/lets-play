@@ -7,8 +7,12 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-            - uses: dtolnay/rust-toolchain@stable
+
+            - name: Install EGL development libraries
+              run: sudo apt install libegl1-mesa-dev
+
+            - name: Install Rust stable toolchain
+              uses: dtolnay/rust-toolchain@stable
+
             - run: |
-                cargo test
-
-
+                  cargo test
