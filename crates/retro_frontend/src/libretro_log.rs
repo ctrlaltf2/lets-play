@@ -6,35 +6,32 @@ use tracing::*;
 #[no_mangle]
 /// This recieves log messages from our C++ helper code, and pulls them out into Tracing messages.
 pub extern "C" fn libretro_log_recieve(level: LogLevel, buf: *const ffi::c_char) {
-	let mut msg: Option<&str> = None;
-
-	// Safety: This pointer is never null, and always comes from the stack;
+	// SAFETY: This pointer should never be null since it comes from the address of a C++ stack variable.
 	// we really only should get UTF-8 errors here in the case a core spits out something invalid.
 	unsafe {
+		#[cfg(debug_assertions)]
+		assert!(!buf.is_null(), "This pointer should NEVER be null");
+
 		match ffi::CStr::from_ptr(buf).to_str() {
-			Ok(message) => msg = Some(message),
+			Ok(message) => match level {
+				LogLevel::Debug => {
+					debug!("{}", message)
+				}
+				LogLevel::Info => {
+					info!("{}", message)
+				}
+				LogLevel::Warn => {
+					warn!("{}", message)
+				}
+				LogLevel::Error => {
+					error!("{}", message)
+				}
+			},
 			Err(err) => {
 				error!(
 					"Core for some reason gave a broken string to log interface: {:?}",
 					err
 				);
-			}
-		}
-	}
-
-	if let Some(message) = &msg {
-		match level {
-			LogLevel::Debug => {
-				debug!("Core log: {}", message)
-			}
-			LogLevel::Info => {
-				info!("Core log: {}", message)
-			}
-			LogLevel::Warn => {
-				warn!("Core log: {}", message)
-			}
-			LogLevel::Error => {
-				error!("Core log: {}", message)
 			}
 		}
 	}
