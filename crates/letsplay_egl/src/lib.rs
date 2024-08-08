@@ -17,6 +17,16 @@ mod egl_impl {
 
 	include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 
+	// link EGL as a library dependency
+	#[link(name = "EGL")]
+	extern "C" {}
+}
+
+/// Helper code for making EGL easier to use.
+pub mod helpers {
+	use super::egl_impl as egl;
+	use egl::*;
+
 	// TODO: Move these helpers to a new "helpers" module.
 
 	pub type GetPlatformDisplayExt = unsafe extern "C" fn(
@@ -31,6 +41,7 @@ mod egl_impl {
 		devices_present: *mut EGLint,
 	) -> types::EGLBoolean;
 
+	/// Queries all available extensions on a display.
 	pub fn get_extensions(display: types::EGLDisplay) -> Vec<String> {
 		// SAFETY: eglQueryString() should never return a null pointer.
 		// If it does your video drivers are more than likely broken beyond repair.
@@ -49,8 +60,8 @@ mod egl_impl {
 		}
 	}
 
-	/// A helper to get a display on the EGL "Device" platform, which allows headless rendering,
-	/// without any window system interface.
+	/// A helper to get a display on the EGL "Device" platform,
+	/// which allows headless rendering without any window system interface.
 	pub fn get_device_platform_display(index: usize) -> types::EGLDisplay {
 		const NR_DEVICES_MAX: usize = 16;
 		let mut devices: [types::EGLDeviceEXT; NR_DEVICES_MAX] = [std::ptr::null(); NR_DEVICES_MAX];
@@ -81,9 +92,100 @@ mod egl_impl {
 		}
 	}
 
-	// link EGL as a library dependency
-	#[link(name = "EGL")]
-	extern "C" {}
+	/// A wrapper over a EGL Device context. Provides easy initialization and
+	/// cleanup functions.
+	pub struct DeviceContext {
+		display: types::EGLDisplay,
+		context: types::EGLContext,
+	}
+
+	impl DeviceContext {
+		pub fn new(index: usize) -> DeviceContext {
+			let display = self::get_device_platform_display(index);
+
+			let context = unsafe {
+				const EGL_CONFIG_ATTRIBUTES: [types::EGLenum; 13] = [
+					egl::SURFACE_TYPE,
+					egl::PBUFFER_BIT,
+					egl::BLUE_SIZE,
+					8,
+					egl::RED_SIZE,
+					8,
+					egl::BLUE_SIZE,
+					8,
+					egl::DEPTH_SIZE,
+					8,
+					egl::RENDERABLE_TYPE,
+					egl::OPENGL_BIT,
+					egl::NONE,
+				];
+				let mut egl_major: egl::EGLint = 0;
+				let mut egl_minor: egl::EGLint = 0;
+
+				let mut egl_config_count: egl::EGLint = 0;
+
+				let mut config: egl::types::EGLConfig = std::ptr::null();
+
+				egl::Initialize(
+					display,
+					std::ptr::addr_of_mut!(egl_major),
+					std::ptr::addr_of_mut!(egl_minor),
+				);
+
+				egl::ChooseConfig(
+					display,
+					EGL_CONFIG_ATTRIBUTES.as_ptr() as *const egl::EGLint,
+					std::ptr::addr_of_mut!(config),
+					1,
+					std::ptr::addr_of_mut!(egl_config_count),
+				);
+
+				egl::BindAPI(egl::OPENGL_API);
+
+				let context =
+					egl::CreateContext(display, config, egl::NO_CONTEXT, std::ptr::null());
+
+				// Make the context current on the display so OpenGL routines "just work"
+				egl::MakeCurrent(display, egl::NO_SURFACE, egl::NO_SURFACE, context);
+
+				context
+			};
+
+			Self { display, context }
+		}
+
+		pub fn get_display(&self) -> types::EGLDisplay {
+			self.display
+		}
+
+		pub fn destroy(&mut self) {
+			if self.display.is_null() && self.context.is_null() {
+				return;
+			}
+
+			// Release the EGL context we created before destroying it
+			unsafe {
+				egl::MakeCurrent(
+					self.display,
+					egl::NO_SURFACE,
+					egl::NO_SURFACE,
+					egl::NO_CONTEXT,
+				);
+				egl::DestroyContext(self.display, self.context);
+				egl::Terminate(self.display);
+
+				self.display = std::ptr::null();
+				self.context = std::ptr::null();
+			}
+		}
+	}
+
+	// TODO: impl Drop? 
+	// This could be problematic because OpenGL resources need to be destroyed
+	// somehow *before* we are. This could be solved in a number of ways but
+	// honestly I think the best one (that I can think of)
+	// is to provide an explicit drop point where OpenGL resources are destroyed
+	// before the EGL device context is (and then tie that to an `impl Drop for T`.).
 }
 
 pub use egl_impl::*;
