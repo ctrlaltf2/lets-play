@@ -21,12 +21,10 @@ use tracing::{error, info};
 /// Only one instance of Frontend can be active in an application.
 pub(crate) static mut FRONTEND: *mut Frontend = std::ptr::null_mut();
 
-/// A "Generalized" type for OpenGL's "getProcAddress" idiom
-pub type GlGetProcAddress = *mut unsafe extern "C" fn(name: *const i8) -> unsafe extern "C" fn();
-
 /// Initalization data for HW OpenGL cores.
 pub struct HwGlInitData {
-	pub get_proc_address: GlGetProcAddress,
+	/// A pointer to a function to allow cores to request OpenGL extension functions.
+	pub get_proc_address: *mut ffi::c_void,
 }
 
 /// Interface for the frontend to call to user code.
@@ -48,7 +46,9 @@ pub trait FrontendInterface {
 	fn input_poll(&mut self);
 
 	/// Initalize hardware accelerated rendering using OpenGL.
-	fn hw_gl_init(&mut self) -> HwGlInitData;
+	/// If this returns [Option::None], then it is assumed that
+	/// OpenGL initalization has failed.
+	fn hw_gl_init(&mut self) -> Option<HwGlInitData>;
 }
 
 /// Per-core settings
@@ -192,7 +192,10 @@ impl Frontend {
 		// would probably blow up too.
 		let path = unsafe {
 			#[cfg(debug_assertions)]
-			assert!(!system_info.library_name.is_null(), "Core library name is somehow null");
+			assert!(
+				!system_info.library_name.is_null(),
+				"Core library name is somehow null"
+			);
 
 			let c_name = ffi::CStr::from_ptr(system_info.library_name);
 
@@ -209,7 +212,9 @@ impl Frontend {
 	// TODO: make this a bit less janky (and use Results)
 
 	pub fn load_settings(&mut self) {
-		let path_string = self.get_config_file_path().expect("Could not get config file path");
+		let path_string = self
+			.get_config_file_path()
+			.expect("Could not get config file path");
 		let path: &Path = path_string.as_ref();
 
 		match path.try_exists() {
@@ -231,7 +236,9 @@ impl Frontend {
 	}
 
 	pub fn save_settings(&mut self) {
-		let path = self.get_config_file_path().expect("Could not get config file path");
+		let path = self
+			.get_config_file_path()
+			.expect("Could not get config file path");
 
 		let settings = CoreSettingsFile {
 			variables: self.variables.clone(),

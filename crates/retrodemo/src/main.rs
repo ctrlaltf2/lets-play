@@ -20,6 +20,7 @@ use clap::{arg, command};
 // Mostly for code portability, but also
 // because I can't be bothered to type the larger name
 use letsplay_egl as egl;
+use egl::helpers::DeviceContext;
 
 /// Called by OpenGL. We use this to dump errors.
 extern "system" fn opengl_message_callback(
@@ -195,12 +196,8 @@ struct App {
 
 	pad: RetroPad,
 
-	/// True if HW rendering is active.
-	using_hardware_rendering: bool,
-
 	// EGL state
-	egl_display: egl::types::EGLDisplay,
-	egl_context: egl::types::EGLContext,
+	egl_context: Option<DeviceContext>,
 
 	// OpenGL object IDs
 	texture_id: gl::types::GLuint,
@@ -218,9 +215,7 @@ impl App {
 			frontend: None,
 			pad: RetroPad::new(),
 
-			using_hardware_rendering: false,
-			egl_display: null(),
-			egl_context: null(),
+			egl_context: None,
 			texture_id: 0,
 			renderbuffer_id: 0,
 			fbo_id: 0,
@@ -283,77 +278,15 @@ impl App {
 
 	/// Initalizes a headless EGL context for OpenGL rendering.
 	fn hw_gl_egl_init(&mut self) {
-		// Currently we assume the first device on the Device platform.
-		// In most cases (at least on NVIDIA), this is usually a real GPU.
-		self.egl_display = egl::get_device_platform_display(0);
-
-		self.egl_context = unsafe {
-			const EGL_CONFIG_ATTRIBUTES: [egl::types::EGLenum; 13] = [
-				egl::SURFACE_TYPE,
-				egl::PBUFFER_BIT,
-				egl::BLUE_SIZE,
-				8,
-				egl::RED_SIZE,
-				8,
-				egl::BLUE_SIZE,
-				8,
-				egl::DEPTH_SIZE,
-				8,
-				egl::RENDERABLE_TYPE,
-				egl::OPENGL_BIT,
-				egl::NONE,
-			];
-			let mut egl_major: egl::EGLint = 0;
-			let mut egl_minor: egl::EGLint = 0;
-
-			let mut egl_config_count: egl::EGLint = 0;
-
-			let mut config: egl::types::EGLConfig = null();
-
-			egl::Initialize(
-				self.egl_display,
-				addr_of_mut!(egl_major),
-				addr_of_mut!(egl_minor),
-			);
-
-			egl::ChooseConfig(
-				self.egl_display,
-				EGL_CONFIG_ATTRIBUTES.as_ptr() as *const egl::EGLint,
-				addr_of_mut!(config),
-				1,
-				addr_of_mut!(egl_config_count),
-			);
-
-			egl::BindAPI(egl::OPENGL_API);
-
-			let context = egl::CreateContext(self.egl_display, config, egl::NO_CONTEXT, null());
-
-			// Make the context current on the display so OpenGL routines "just work"
-			egl::MakeCurrent(self.egl_display, egl::NO_SURFACE, egl::NO_SURFACE, context);
-
-			context
-		};
+		self.egl_context = Some(DeviceContext::new(0));
 	}
 
 	/// Destroys EGL resources.
-	fn hw_gl_egl_exit(&mut self) {
-		if self.using_hardware_rendering {
+	fn hw_gl_exit(&mut self) {
+		if self.egl_context.is_some() {
 			// Delete FBO
 			self.hw_gl_delete_fbo();
-
-			// Release the EGL context we created before destroying it
-			unsafe {
-				egl::MakeCurrent(
-					self.egl_display,
-					egl::NO_SURFACE,
-					egl::NO_SURFACE,
-					egl::NO_CONTEXT,
-				);
-				egl::DestroyContext(self.egl_display, self.egl_context);
-				egl::Terminate(self.egl_display);
-			}
-			self.egl_display = null();
-			self.egl_context = null();
+			self.egl_context.take().unwrap().destroy()
 		}
 	}
 
@@ -378,9 +311,6 @@ impl App {
 				self.hw_gl_delete_fbo();
 			}
 
-			gl::GenFramebuffers(1, addr_of_mut!(self.fbo_id));
-			gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo_id);
-
 			gl::GenTextures(1, addr_of_mut!(self.texture_id));
 			gl::BindTexture(gl::TEXTURE_2D, self.texture_id);
 
@@ -396,6 +326,8 @@ impl App {
 				null(),
 			);
 
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+
 			gl::GenRenderbuffers(1, addr_of_mut!(self.renderbuffer_id));
 			gl::BindRenderbuffer(gl::RENDERBUFFER, self.renderbuffer_id);
 
@@ -406,6 +338,11 @@ impl App {
 				height as i32,
 			);
 
+			gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+
+			gl::GenFramebuffers(1, addr_of_mut!(self.fbo_id));
+			gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo_id);
+
 			gl::FramebufferTexture2D(
 				gl::FRAMEBUFFER,
 				gl::COLOR_ATTACHMENT0,
@@ -414,16 +351,12 @@ impl App {
 				0,
 			);
 
-			gl::BindTexture(gl::TEXTURE_2D, 0);
-
 			gl::FramebufferRenderbuffer(
 				gl::FRAMEBUFFER,
 				gl::DEPTH_ATTACHMENT,
 				gl::RENDERBUFFER,
 				self.renderbuffer_id,
 			);
-
-			gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
 
 			gl::Viewport(0, 0, width as i32, height as i32);
 
@@ -452,7 +385,6 @@ impl App {
 			std::thread::sleep(step_duration);
 		}
 
-		tracing::info!("done with main loop");
 		self.window.close();
 	}
 }
@@ -462,7 +394,7 @@ impl FrontendInterface for App {
 		tracing::info!("Resized to {width}x{height}");
 
 		// Recreate the OpenGL FBO on resize.
-		if self.using_hardware_rendering {
+		if self.egl_context.is_some() {
 			self.hw_gl_create_fbo(width, height);
 		}
 
@@ -578,59 +510,51 @@ impl FrontendInterface for App {
 		}
 	}
 
-	fn hw_gl_init(&mut self) -> HwGlInitData {
-		if self.using_hardware_rendering {
-			panic!("Cannot initalize HW rendering while already initalized");
-		}
+	fn hw_gl_init(&mut self) -> Option<HwGlInitData> {
+		// Only create a new EGL/OpenGL context if we have to.
+		if self.egl_context.is_none() {
+			// Initalize EGL
+			self.hw_gl_egl_init();
 
-		// Initalize EGL
-		self.hw_gl_egl_init();
+			let context = self.egl_context.as_ref().unwrap();
+			let extensions = egl::helpers::get_extensions(context.get_display());
 
-		let extensions = egl::get_extensions(self.egl_display);
+			tracing::debug!("Supported EGL extensions: {:?}", extensions);
 
-		tracing::debug!("Supported EGL extensions: {:?}", extensions);
+			// Check for EGL_KHR_get_all_proc_addresses, so we can use eglGetProcAddress() to load OpenGL functions
+			if !extensions.contains(&"EGL_KHR_get_all_proc_addresses".into()) {
+				tracing::error!("Your graphics driver doesn't support the EGL_KHR_get_all_proc_addresses extension.");
+				tracing::error!("Retrodemo currently needs this to load OpenGL functions. HW rendering will be disabled.");
+				return None;
+			}
 
-		// Check for EGL_KHR_get_all_proc_addresses, so we can use eglGetProcAddress() to load OpenGL functions
-		// TODO: instead of panicing, we should probably make this return a Option<_>, and treat None on the frontend side
-		// as a failure.
-		if !extensions.contains(&"EGL_KHR_get_all_proc_addresses".into()) {
-			tracing::error!("Your graphics driver doesn't support the EGL_KHR_get_all_proc_addresses extension. Failing");
-			panic!("Cannot initalize OpenGL rendering");
-		}
+			unsafe {
+				// Load OpenGL functions using the EGL loader.
+				gl::load_with(|s| {
+					let str = std::ffi::CString::new(s).expect("gl::load_with fail");
+					std::mem::transmute(egl::GetProcAddress(str.as_ptr()))
+				});
 
-		unsafe {
-			// Load OpenGL functions using the EGL loader.
-			gl::load_with(|s| {
-				let str = std::ffi::CString::new(s).expect("Uhh huh.");
-				std::mem::transmute(egl::GetProcAddress(str.as_ptr()))
-			});
-
-			// set OpenGL debug message callback
-			gl::Enable(gl::DEBUG_OUTPUT);
-			gl::DebugMessageCallback(Some(opengl_message_callback), null());
+				// set OpenGL debug message callback
+				gl::Enable(gl::DEBUG_OUTPUT);
+				gl::DebugMessageCallback(Some(opengl_message_callback), null());
+			}
 		}
 
 		// Create the initial FBO for the core to render to
 		let dimensions = self.get_frontend().get_size();
 		self.hw_gl_create_fbo(dimensions.0, dimensions.1);
 
-		self.using_hardware_rendering = true;
-
-		return unsafe {
-			HwGlInitData {
-				get_proc_address: std::mem::transmute(egl::GetProcAddress as *mut std::ffi::c_void),
-			}
-		};
+		return Some(HwGlInitData {
+			get_proc_address: egl::GetProcAddress as *mut std::ffi::c_void,
+		});
 	}
 }
 
 impl Drop for App {
 	fn drop(&mut self) {
-		// Terminate EGL and GL resources
-		if self.using_hardware_rendering {
-			tracing::info!("Releasing OpenGL resources");
-			self.hw_gl_egl_exit();
-		}
+		// Terminate EGL and GL resources if need be
+		self.hw_gl_exit();
 	}
 }
 
