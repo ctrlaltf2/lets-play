@@ -388,7 +388,7 @@ version = "0.1.0"
 dependencies = [
  "retro_frontend",
  "tokio",
- "toml_edit",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]

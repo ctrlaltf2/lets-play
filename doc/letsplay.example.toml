@@ -1,13 +1,11 @@
 [letsplay]
 
-# The listen address and port to use.
-listen-address = "0.0.0.0"
-listen-port = 5309
+# The listen address and port to use for QUIC
+listen_address = "0.0.0.0"
+listen_port = 5309
 
-# Filesystem location for RetroArch cores
-cores-location = "./cores"
+local_runner_datadir = "./data"
 
-# Filesystem location for ROMs
-rom-location = "./rom"
-
-# TODO: much more!
+# define local runners
+[local_runners]
+runner1 = { type = "retro", core = "cores/swanstation_libretro.so", rom = "roms/game.bin" }

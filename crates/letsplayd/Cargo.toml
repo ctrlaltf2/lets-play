@@ -5,11 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-# for now; we can slim down later
-tokio = { version = "1.37.0", features = [ "full" ] }
-toml_edit = "0.22.13"
+tokio = { workspace = true }
+toml = "0.8.19"
 
 retro_frontend = { path = "../retro_frontend" }
 
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
