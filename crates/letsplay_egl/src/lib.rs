@@ -180,7 +180,7 @@ pub mod helpers {
 		}
 	}
 
-	// TODO: impl Drop? 
+	// TODO: impl Drop?
 	// This could be problematic because OpenGL resources need to be destroyed
 	// somehow *before* we are. This could be solved in a number of ways but
 	// honestly I think the best one (that I can think of)
