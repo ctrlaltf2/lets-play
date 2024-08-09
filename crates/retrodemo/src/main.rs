@@ -19,8 +19,8 @@ use clap::{arg, command};
 
 // Mostly for code portability, but also
 // because I can't be bothered to type the larger name
-use letsplay_egl as egl;
 use egl::helpers::DeviceContext;
+use letsplay_egl as egl;
 
 /// Called by OpenGL. We use this to dump errors.
 extern "system" fn opengl_message_callback(
@@ -373,14 +373,11 @@ impl App {
 
 	/// The main loop. Should probably be abstracted a bit better.
 	pub fn main_loop(&mut self) {
-		// TODO: This can change, so it should probably be put in the loop.
-		let av_info = self.get_frontend().get_av_info().expect("???");
-		let step_ms = (1.0 / av_info.timing.fps) * 1000.;
-		let step_duration = Duration::from_micros((step_ms * 1000.) as u64);
-
-		// Do the main loop
-
 		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+			let av_info = self.get_frontend().get_av_info().expect("???");
+			let step_ms = (1.0 / av_info.timing.fps) * 1000.;
+			let step_duration = Duration::from_millis(step_ms as u64);
+
 			self.get_frontend().run_frame();
 			std::thread::sleep(step_duration);
 		}
