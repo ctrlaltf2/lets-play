@@ -17,7 +17,7 @@
 		- a/v thread (encodes a/v from runner thread)
 			- can have pick either SW (slowest!), vaapi (best for open source drivers), or gpu specific accessed via ffmpeg (nvenc, amf, mmal)
 				- for HW it might be a good idea to write gpu kernels for rgb -> yuv
-				since that's what most HW decode engines like. for vaapi we can do opencl,
+				since that's what most HW encode engines like. for vaapi we can do opencl,
 				for nvenc it might be wise to just use cuda. for videocore mmal uhh Good Luck
 
 	- does IPC with letsplayd (local UDS for now, can be expanded later)

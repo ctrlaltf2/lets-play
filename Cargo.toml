@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	# TODO: it might be nice to split this.
 	"crates/*"
 ]
 
