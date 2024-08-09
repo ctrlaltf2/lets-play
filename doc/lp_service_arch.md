@@ -24,5 +24,5 @@
 	- video can be local UDS for now, maybe later on once remote runners exist
 		we can do internal MoQ or something???
 
-- `letsplay_retro_runner` - libretro runner (default)
+- `letsplay_runner_retro` - libretro runner (default)
 	- uses retro_frontend to run cores

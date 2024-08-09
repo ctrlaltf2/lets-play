@@ -383,6 +383,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "letsplay_runner_core"
+version = "0.1.0"
+
+[[package]]
+name = "letsplay_runner_retro"
+version = "0.1.0"
+dependencies = [
+ "letsplay_runner_core",
+]
+
+[[package]]
 name = "letsplayd"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,8 @@
+[package]
+name = "letsplay_runner_retro"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+letsplay_runner_core = { path = "../letsplay_runner_core" }
