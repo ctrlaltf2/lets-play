@@ -8,9 +8,11 @@
 	- Also exports local ipc for runners
 
 - `letsplay_runner_core` - library crate for implementing runners, holds most of the core logic
+	- handles graceful shutdown
 	- runs multithreaded, where:
 		- main thread is a singlethread tokio runtime (for io/events)
 			- spawns other threads
+			- listens on UDS (local runners) for protobuf messages
 
 		- runner thread (runs runner code as sync, pulls out messages)
 

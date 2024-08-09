@@ -1,0 +1,77 @@
+syntax = "proto3";
+option optimize_for = SPEED;
+
+// This .proto contains definitions that are used for IPC between
+// letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
+// TODO: This should be in a `letsplay_runner_proto` crate. Or something.
+
+// The type of an input device.
+enum InputDeviceType {
+	// A joypad (probably the default).
+	JOYPAD = 1;
+
+	// Keyboard and mouse. Not implemented
+	KB_MOUSE = 2;
+}
+
+// joystick inputs
+message JoystickButtons {
+	message Stick {
+		float x = 1;
+		float y = 2;
+	}
+
+	fixed32 buttons = 1;
+	repeated Stick sticks = 2;
+}
+
+// A request made by letsplayd
+message RunnerRequest {
+	// Shut down the runner.
+	message Shutdown {}
+
+	// Reset the game 
+	message Reset {}
+
+	// Controls the runner's suspend flag.
+	//
+	// Setting this flag to true tells the runner to (temporarily) inhibit the
+	// runner thread from executing, thereby "suspending" emulation. (Additionally, 
+	// while suspended, we should disable certain other routine tasks, and re-enable them
+	// when leaving suspend. )
+	// 
+	// Likewise, false turns off the suspend flag, and allows the runner thread to run.
+	//
+	// Ideally this could be done if the emulator node the runner is for is empty after
+	// a certain period of time.
+	message SetSuspend {
+		bool suspend = 1;
+	}
+
+	// Inserts a input device. This typically occurs only at the start of a game
+	// (for the amount of players configured).
+	message InsertInputDevice {
+		int32 index = 1;
+		InputControllerType type = 2;
+	}
+
+	message Inputs {
+		int32 index = 1;
+
+		// Joystick buttons. Only sent for joystick inputs.
+		JoystickButtons joy_buttons = 2;
+	}
+
+	// "Unplugs" (removes) an input device. 
+	message UnplugInputDevice {
+		int32 index = 1;
+	}
+
+}
+
+// A response sent to letsplayd from a runner
+// (this only holds for a few of the requests, because a lot of them
+// don't really need a fail or success notification, and can simply be fire-and-forget)
+message RunnerResponse {
+
+}

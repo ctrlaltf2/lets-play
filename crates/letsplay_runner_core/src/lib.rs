@@ -1,14 +1,24 @@
-pub fn add(left: u64, right: u64) -> u64 {
-	left + right
+enum GameThreadMessage {
+	/// Shut down the game thread.
+	Shutdown,
+	
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
 
-	#[test]
-	fn it_works() {
-		let result = add(2, 2);
-		assert_eq!(result, 4);
-	}
+/// The core of all Let's Play runners.
+pub struct Runner {
+	
+}
+
+
+// Builder pattern to provide all info?
+// 
+
+impl Runner {
+
+	// run on the main thread
+	// spawns all other threads and handles shutdown
+	//
+	// async fn run() -> Result<()>
+
 }
