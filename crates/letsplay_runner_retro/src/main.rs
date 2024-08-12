@@ -12,7 +12,7 @@ impl runner::Game for RetroGame {
 	fn init(&self) {
 		tracing::info!("Init game");
 	}
-	
+
 	fn reset(&self) {}
 
 	fn set_property(&mut self, key: &str, value: &str) {
@@ -35,12 +35,13 @@ impl runner::Game for RetroGame {
 async fn main() -> anyhow::Result<()> {
 	let subscriber = FmtSubscriber::builder()
 		.with_max_level(Level::INFO)
+		.with_thread_names(true)
 		.finish();
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-	// there is probably a better way do do this, but we guarantee in this loop,
-	// (that should IMO be provided elsewhere?) that we won't touch the game on this thread
+	// there is probably a better way do do this, but we guarantee in this loop
+	// (that should IMO be provided in runner_core and made generic) that we won't touch the game on this thread
 	// All interaction will be with the runner which uses the correct way to interact with the game
 	let game = Box::new(RetroGame {});
 	let box_leaked = Box::leak(game);

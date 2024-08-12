@@ -2,10 +2,7 @@ use std::{thread, time::Duration};
 
 // This is used by async code, so we have to use
 // Tokio's channels.
-use tokio::{
-	sync::mpsc::{self, error::TryRecvError},
-	task::spawn_blocking,
-};
+use tokio::sync::mpsc::{self, error::TryRecvError};
 
 // We do use the standard library portions for communicating with the video thread,
 // which is *not* async, however.
@@ -33,6 +30,10 @@ pub trait Game {
 	fn init(&self);
 
 	fn reset(&self);
+	
+	// Shutdown (clean up all resources)
+	// Not needed per se since we will just exit after shutdown,
+	// but cleaning up after ourselves isn't bad programming practice
 
 	fn set_property(&mut self, key: &str, value: &str);
 
@@ -47,6 +48,8 @@ fn game_thread_main<'a>(
 ) {
 	// true if the loop is suspended
 	let mut suspended = false;
+
+	// Spawn video thread here, probably
 
 	// Call the init function
 	game.init();
@@ -86,13 +89,17 @@ fn game_thread_main<'a>(
 		} else {
 			// Call the loop. It is expected that the loop can pace itself.
 			game.run_one();
+
+			// TODO: Submit frame to video thread
 		}
 	}
+
+	// Cancel and join video thread
 }
 
 /// Handle to a spawned game thread
 pub struct GameThread {
-	tx: mpsc::UnboundedSender<GameThreadMessage>
+	tx: mpsc::UnboundedSender<GameThreadMessage>,
 }
 
 impl GameThread {

@@ -43,8 +43,10 @@ impl Runner {
 	//
 	pub async fn run(&self) -> Result<(), RunnerError> {
 
-		// just spin forever for now,
-		// well have some logic to dick with everything here
+		// just spin forever for now
+		//
+		// TODO: implement uds client (letsplayd will provide us a path to socket it opens,
+		// so that we can read from it)
 
 		loop {
 			time::sleep(Duration::from_secs(1)).await;
