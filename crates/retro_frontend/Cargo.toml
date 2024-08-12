@@ -11,7 +11,7 @@ libloading = "0.8.3"
 libretro-sys = "0.1.1"
 rgb565 = "0.1.3"
 serde = { version = "1.0.204", features = ["derive"] }
-thiserror = "1.0.61"
+thiserror = { workspace = true }
 toml = "0.8.19"
 
 tracing = "0.1.40"

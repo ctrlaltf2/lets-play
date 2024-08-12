@@ -385,12 +385,22 @@ dependencies = [
 [[package]]
 name = "letsplay_runner_core"
 version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "letsplay_runner_retro"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "letsplay_runner_core",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

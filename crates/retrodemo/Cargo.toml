@@ -13,4 +13,4 @@ retro_frontend = { path = "../retro_frontend" }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 gl = "0.14.0"
-anyhow = "1.0.86"
+anyhow = { workspace = true }
