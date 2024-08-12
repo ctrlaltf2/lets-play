@@ -3,15 +3,18 @@ option optimize_for = SPEED;
 
 // This .proto contains definitions that are used for IPC between
 // letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
-// TODO: This should be in a `letsplay_runner_proto` crate. Or something.
+// These types will 
 
 // The type of an input device.
 enum InputDeviceType {
 	// A joypad (probably the default).
 	JOYPAD = 1;
 
+	// Analog joypad.
+	JOYPAD_ANALOG = 2;
+
 	// Keyboard and mouse. Not implemented
-	KB_MOUSE = 2;
+	KB_MOUSE = 3;
 }
 
 // joystick inputs
@@ -46,6 +49,17 @@ message RunnerRequest {
 	// a certain period of time.
 	message SetSuspend {
 		bool suspend = 1;
+	}
+
+	message SetProperty {
+		// The key to set. This is optionally namespaced per-runner type, with some generic ones provided.
+		// We could probably use google protobuf any type but /shrug
+		// Example K/V set:
+		// "gpu_device", "[index]"
+		// "libretro.core", "/path/to/core.so",
+		// "libretro.rom", "/path/to/rom"
+		string key = 1;
+		string value = 2;
 	}
 
 	// Inserts a input device. This typically occurs only at the start of a game

@@ -2,7 +2,10 @@ use std::{thread, time::Duration};
 
 // This is used by async code, so we have to use
 // Tokio's channels.
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::{
+	sync::mpsc::{self, error::TryRecvError},
+	task::spawn_blocking,
+};
 
 // We do use the standard library portions for communicating with the video thread,
 // which is *not* async, however.
@@ -15,12 +18,23 @@ pub enum GameThreadMessage {
 	Suspend {
 		suspend: bool,
 	},
+
+	Reset,
+
+	SetProperty {
+		key: String,
+		value: String,
+	},
 }
 
 /// A game running on the game thread.
 /// With game and game accesories.
 pub trait Game {
 	fn init(&self);
+
+	fn reset(&self);
+
+	fn set_property(&mut self, key: &str, value: &str);
 
 	// We'll need input + video frame stuff too
 
@@ -47,6 +61,14 @@ fn game_thread_main<'a>(
 					}
 				}
 
+				GameThreadMessage::Reset => {
+					game.reset();
+				}
+
+				GameThreadMessage::SetProperty { key, value } => {
+					game.set_property(&key, &value);
+				}
+
 				// NB: There will be more so I'm leaving this here
 				_ => {}
 			},
@@ -55,20 +77,22 @@ fn game_thread_main<'a>(
 			Err(TryRecvError::Disconnected) => break,
 		}
 
-		// If the runner is currently suspended, do not call the loop function,
-		// and instead just wait.
 		if suspended {
-			thread::sleep(Duration::from_millis(250));
+			// If the runner is currently suspended, do not call the loop function,
+			// and instead just wait. We will start running again when the higher level
+			// tells to leave suspension.
+
+			thread::sleep(Duration::from_millis(500));
 		} else {
-			// It is expected that the loop can pace itself.
+			// Call the loop. It is expected that the loop can pace itself.
 			game.run_one();
 		}
 	}
 }
 
+/// Handle to a spawned game thread
 pub struct GameThread {
-	tx: mpsc::UnboundedSender<GameThreadMessage>,
-	join: thread::JoinHandle<()>,
+	tx: mpsc::UnboundedSender<GameThreadMessage>
 }
 
 impl GameThread {
@@ -77,13 +101,31 @@ impl GameThread {
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		// Spawn the game thread
-		let join = thread::Builder::new()
+		let _ = thread::Builder::new()
 			.name("letsplay_runner_game".into())
 			.spawn(move || {
 				game_thread_main(rx, game);
 			})
 			.expect("Failed to spawn game thread");
 
-		GameThread { tx, join }
+		GameThread { tx }
+	}
+
+	pub async fn reset(&self) {
+		// TODO
+		let _ = self.tx.send(GameThreadMessage::Reset);
+	}
+
+	pub async fn set_property(&self, key: String, value: String) {
+		// TODO
+		let _ = self.tx.send(GameThreadMessage::SetProperty {
+			key: key.clone(),
+			value: value.clone(),
+		});
+	}
+
+	pub async fn shutdown(&self) {
+		let _ = self.tx.send(GameThreadMessage::Shutdown);
+		// TODO join thread
 	}
 }

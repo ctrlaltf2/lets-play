@@ -34,6 +34,10 @@ impl Runner {
 		}
 	}
 
+	pub async fn shutdown(&self) {
+		self.game_thread.shutdown().await;
+	}
+
 	// run on the main thread
 	// spawns all other threads and handles shutdown
 	//

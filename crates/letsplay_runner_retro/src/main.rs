@@ -12,6 +12,18 @@ impl runner::Game for RetroGame {
 	fn init(&self) {
 		tracing::info!("Init game");
 	}
+	
+	fn reset(&self) {}
+
+	fn set_property(&mut self, key: &str, value: &str) {
+		match key {
+			"libretro.core" => {
+				tracing::info!("Core is {value}");
+			}
+
+			_ => {}
+		}
+	}
 
 	fn run_one(&mut self) {
 		tracing::info!("Game run");
@@ -33,8 +45,8 @@ async fn main() -> anyhow::Result<()> {
 	let game = Box::new(RetroGame {});
 	let box_leaked = Box::leak(game);
 
+	// Start the runner
 	let runner = runner::Runner::new(box_leaked);
-
 	runner.run().await?;
 
 	Ok(())
