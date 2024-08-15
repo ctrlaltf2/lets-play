@@ -2,8 +2,6 @@ use super::window::*;
 
 use std::{path::Path, time::Duration};
 
-use std::ptr::{addr_of_mut, null};
-
 use anyhow::Result;
 
 use retro_frontend::{
@@ -14,10 +12,8 @@ use retro_frontend::{
 
 use minifb::Key;
 
-// Mostly for code portability, but also
-// because I can't be bothered to type the larger name
-use egl::helpers::DeviceContext;
-use letsplay_egl as egl;
+use letsplay_gpu as gpu;
+use gpu::egl_helpers::DeviceContext;
 
 /// Called by OpenGL. We use this to dump errors.
 extern "system" fn opengl_message_callback(
@@ -54,9 +50,7 @@ pub struct App {
 	egl_context: Option<DeviceContext>,
 
 	// OpenGL object IDs
-	texture_id: gl::types::GLuint,
-	renderbuffer_id: gl::types::GLuint,
-	fbo_id: gl::types::GLuint,
+	framebuffer: gpu::GlFramebuffer,
 
 	/// Cached readback buffer.
 	readback_buffer: Vec<u32>,
@@ -70,15 +64,13 @@ impl App {
 			pad: RetroPad::new(),
 
 			egl_context: None,
-			texture_id: 0,
-			renderbuffer_id: 0,
-			fbo_id: 0,
+			framebuffer: gpu::GlFramebuffer::new(),
 			readback_buffer: Vec::new(),
 		});
 
 		// SAFETY: The only way to touch the pointer involves the frontend library calling retro_run,
 		// and the core calling one of the given callbacks. Therefore this is gnarly, but "fine",
-		// since once the main loop ends, there never will be an opporturnity for said callbacks to be called again.
+		// since once the main loop ends, there won't be an opporturnity for said callbacks to be called again.
 		//
 		// I'm still not really sure how to tell the borrow checker that this is alright,
 		// short of Box::leak() (which I don't want to do, since ideally I'd like actual cleanup to occur).
@@ -135,92 +127,10 @@ impl App {
 	}
 
 	/// Destroys OpenGL resources and the EGL context.
-	fn hw_gl_exit(&mut self) {
+	fn hw_gl_destroy(&mut self) {
 		if self.egl_context.is_some() {
-			// Delete FBO
-			self.hw_gl_delete_fbo();
+			self.framebuffer.destroy();
 			self.egl_context.take().unwrap().destroy()
-		}
-	}
-
-	/// Deletes all OpenGL FBO resources (the FBO itself, the render texture, and the renderbuffer used for depth)
-	fn hw_gl_delete_fbo(&mut self) {
-		unsafe {
-			gl::DeleteFramebuffers(1, addr_of_mut!(self.fbo_id));
-			self.fbo_id = 0;
-
-			gl::DeleteTextures(1, addr_of_mut!(self.texture_id));
-			self.texture_id = 0;
-
-			gl::DeleteRenderbuffers(1, addr_of_mut!(self.renderbuffer_id));
-			self.renderbuffer_id = 0;
-		}
-	}
-
-	/// Creates the OpenGL FBO that the core renders to.
-	fn hw_gl_create_fbo(&mut self, width: u32, height: u32) {
-		unsafe {
-			if self.fbo_id != 0 {
-				self.hw_gl_delete_fbo();
-			}
-
-			gl::GenTextures(1, addr_of_mut!(self.texture_id));
-			gl::BindTexture(gl::TEXTURE_2D, self.texture_id);
-
-			gl::TexImage2D(
-				gl::TEXTURE_2D,
-				0,
-				gl::RGBA8 as i32,
-				width as i32,
-				height as i32,
-				0,
-				gl::RGBA,
-				gl::UNSIGNED_BYTE,
-				null(),
-			);
-
-			gl::BindTexture(gl::TEXTURE_2D, 0);
-
-			gl::GenRenderbuffers(1, addr_of_mut!(self.renderbuffer_id));
-			gl::BindRenderbuffer(gl::RENDERBUFFER, self.renderbuffer_id);
-
-			gl::RenderbufferStorage(
-				gl::RENDERBUFFER,
-				gl::DEPTH_COMPONENT,
-				width as i32,
-				height as i32,
-			);
-
-			gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
-
-			gl::GenFramebuffers(1, addr_of_mut!(self.fbo_id));
-			gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo_id);
-
-			gl::FramebufferTexture2D(
-				gl::FRAMEBUFFER,
-				gl::COLOR_ATTACHMENT0,
-				gl::TEXTURE_2D,
-				self.texture_id,
-				0,
-			);
-
-			gl::FramebufferRenderbuffer(
-				gl::FRAMEBUFFER,
-				gl::DEPTH_ATTACHMENT,
-				gl::RENDERBUFFER,
-				self.renderbuffer_id,
-			);
-
-			gl::Viewport(0, 0, width as i32, height as i32);
-
-			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-
-			// Notify the frontend layer about the new FBO
-			let id = self.fbo_id;
-			self.get_frontend().set_gl_fbo(id);
-
-			// Resize the readback buffer
-			self.readback_buffer.resize((width * height) as usize, 0);
 		}
 	}
 
@@ -243,9 +153,15 @@ impl FrontendInterface for App {
 	fn video_resize(&mut self, width: u32, height: u32) {
 		tracing::info!("Resized to {width}x{height}");
 
-		// Recreate the OpenGL FBO on resize.
 		if self.egl_context.is_some() {
-			self.hw_gl_create_fbo(width, height);
+			self.framebuffer.resize(width, height);
+			let raw = self.framebuffer.as_raw();
+
+			// Notify the frontend layer about the new FBO ID
+			self.get_frontend().set_gl_fbo(raw);
+
+			// Resize the readback buffer
+			self.readback_buffer.resize((width * height) as usize, 0);
 		}
 
 		self.window.resize(width as u16, height as u16);
@@ -258,23 +174,10 @@ impl FrontendInterface for App {
 	fn video_update_gl(&mut self) {
 		let dimensions = self.get_frontend().get_size();
 
-		// Read back the framebuffer with glReadPixels()
-		// I know it sucks but it works for this case.
-		// SAFETY: self.readback_buffer will always be allocated to the proper size before reaching here
-		unsafe {
-			gl::BindFramebuffer(gl::FRAMEBUFFER, self.fbo_id);
-
-			gl::ReadPixels(
-				0,
-				0,
-				dimensions.0 as i32,
-				dimensions.1 as i32,
-				gl::RGBA,
-				gl::UNSIGNED_BYTE,
-				self.readback_buffer.as_mut_ptr() as *mut std::ffi::c_void,
-			);
-
-			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+		// Read back the framebuffer
+		{
+			self.framebuffer
+				.read_pixels(&mut self.readback_buffer[..], dimensions.0, dimensions.1)
 		}
 
 		let slice = self.readback_buffer.as_slice();
@@ -367,7 +270,7 @@ impl FrontendInterface for App {
 			self.hw_gl_egl_init();
 
 			let context = self.egl_context.as_ref().unwrap();
-			let extensions = egl::helpers::get_extensions(context.get_display());
+			let extensions = gpu::egl_helpers::get_extensions(context.get_display());
 
 			tracing::debug!("Supported EGL extensions: {:?}", extensions);
 
@@ -382,21 +285,21 @@ impl FrontendInterface for App {
 				// Load OpenGL functions using the EGL loader.
 				gl::load_with(|s| {
 					let str = std::ffi::CString::new(s).expect("gl::load_with fail");
-					std::mem::transmute(egl::GetProcAddress(str.as_ptr()))
+					std::mem::transmute(gpu::egl::GetProcAddress(str.as_ptr()))
 				});
 
 				// set OpenGL debug message callback
 				gl::Enable(gl::DEBUG_OUTPUT);
-				gl::DebugMessageCallback(Some(opengl_message_callback), null());
+				gl::DebugMessageCallback(Some(opengl_message_callback), std::ptr::null());
 			}
 		}
 
 		// Create the initial FBO for the core to render to
 		let dimensions = self.get_frontend().get_size();
-		self.hw_gl_create_fbo(dimensions.0, dimensions.1);
+		self.framebuffer.resize(dimensions.0, dimensions.1);
 
 		return Some(HwGlInitData {
-			get_proc_address: egl::GetProcAddress as *mut std::ffi::c_void,
+			get_proc_address: gpu::egl::GetProcAddress as *mut std::ffi::c_void,
 		});
 	}
 }
@@ -404,6 +307,6 @@ impl FrontendInterface for App {
 impl Drop for App {
 	fn drop(&mut self) {
 		// Terminate EGL and GL resources if need be
-		self.hw_gl_exit();
+		self.hw_gl_destroy();
 	}
 }

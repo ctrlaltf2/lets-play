@@ -2,7 +2,7 @@
 
 #[allow(non_camel_case_types)]
 #[allow(unused_imports)]
-mod egl_impl {
+pub mod egl {
 	pub type khronos_utime_nanoseconds_t = khronos_uint64_t;
 	pub type khronos_uint64_t = u64;
 	pub type khronos_ssize_t = std::ffi::c_long;
@@ -23,8 +23,8 @@ mod egl_impl {
 }
 
 /// Helper code for making EGL easier to use.
-pub mod helpers {
-	use super::egl_impl as egl;
+pub mod egl_helpers {
+	use super::egl as egl;
 	use egl::*;
 
 	// TODO: Move these helpers to a new "helpers" module.
@@ -188,4 +188,6 @@ pub mod helpers {
 	// before the EGL device context is (and then tie that to an `impl Drop for T`.).
 }
 
-pub use egl_impl::*;
+pub mod gl_framebuffer;
+
+pub use gl_framebuffer::*;
