@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 clap = { workspace = true }
 minifb = "0.27.0"
-letsplay_egl = { path = "../letsplay_egl" }
+letsplay_gpu = { path = "../letsplay_gpu" }
 retro_frontend = { path = "../retro_frontend" }
 
 tracing = { workspace = true }
