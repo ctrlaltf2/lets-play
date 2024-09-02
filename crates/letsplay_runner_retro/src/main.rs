@@ -5,6 +5,12 @@ use letsplay_runner_core::*;
 /// Libretro game. very much TODO
 pub struct RetroGame {}
 
+impl RetroGame {
+	fn new() -> Self {
+		Self {}
+	}
+}
+
 impl client::Game for RetroGame {
 	fn init(&self) {
 		tracing::info!("Init game");

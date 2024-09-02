@@ -44,8 +44,7 @@ impl Runner {
 	async fn run(&self) -> Result<(), RunnerError> {
 		// just spin forever for now
 		//
-		// TODO: implement uds client (letsplayd will provide us a path to socket it opens,
-		// so that we can read from it)
+		// TODO: implement RPC client
 
 		loop {
 			time::sleep(Duration::from_secs(1)).await;

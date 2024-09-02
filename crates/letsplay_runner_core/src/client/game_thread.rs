@@ -22,6 +22,9 @@ pub enum GameThreadMessage {
 		key: String,
 		value: String,
 	},
+
+	/// Initalize the game.
+	Initialize,
 }
 
 /// A game running on the game thread.
@@ -30,7 +33,7 @@ pub trait Game {
 	fn init(&self);
 
 	fn reset(&self);
-	
+
 	// Shutdown (clean up all resources)
 	// Not needed per se since we will just exit after shutdown,
 	// but cleaning up after ourselves isn't bad programming practice
@@ -46,13 +49,11 @@ fn game_thread_main<'a>(
 	mut rx: mpsc::UnboundedReceiver<GameThreadMessage>,
 	game: &'a mut dyn Game,
 ) {
-	// true if the loop is suspended
-	let mut suspended = false;
+	// true if the loop is suspended.
+	// Games start suspended, and should be unsuspended when they are fully configured.
+	let mut suspended = true;
 
 	// Spawn video thread here, probably
-
-	// Call the init function
-	game.init();
 
 	loop {
 		match rx.try_recv() {
@@ -62,6 +63,10 @@ fn game_thread_main<'a>(
 					if suspended != suspend {
 						suspended = suspend
 					}
+				}
+
+				GameThreadMessage::Initialize => {
+					game.init();
 				}
 
 				GameThreadMessage::Reset => {
