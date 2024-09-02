@@ -3,38 +3,63 @@ option optimize_for = SPEED;
 
 // This .proto contains definitions that are used for IPC between
 // letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
-// These types will 
+// They allow letsplayd to communicate with a runner connected to it and vice versa. 
 
 // The type of an input device.
 enum InputDeviceType {
 	// A joypad (probably the default).
-	JOYPAD = 1;
+	JOYPAD = 0;
 
-	// Analog joypad.
-	JOYPAD_ANALOG = 2;
+	// Analog joypad This will provide stick messages.
+	JOYPAD_ANALOG = 1;
 
-	// Keyboard and mouse. Not implemented
-	KB_MOUSE = 3;
+	// Keyboard and mouse.
+	KB_MOUSE = 2;
 }
 
 // joystick inputs
-message JoystickButtons {
+message JoystickInput {
 	message Stick {
-		float x = 1;
-		float y = 2;
+		float x = 2;
+		float y = 3;
 	}
 
-	fixed32 buttons = 1;
-	repeated Stick sticks = 2;
+	// Buttons. It is assumed that 64-bit precision will be enough,
+	// but I am providing a gap in this message to put more fields if needed.
+	// Later on these should probably be defined somewhere or something.
+	fixed64 buttons = 1;
+
+	// Sticks are sent in order (and always for the correct count of joysticks)
+	repeated Stick sticks = 10;
+}
+
+message KbMouseInput {
+	message Keyboard {
+		message Key {
+			uint32 keysym = 1;
+			bool pressed = 2;
+		}	
+
+		repeated Key keys = 1;
+	}
+
+	message Mouse {
+		uint32 x = 1;
+		uint32 y = 2;
+		uint32 buttons = 3;
+	}
 }
 
 // A request made by letsplayd
-message RunnerRequest {
+message ServerMessage {
 	// Shut down the runner.
 	message Shutdown {}
 
 	// Reset the game 
 	message Reset {}
+
+	// initialize
+	message Initalize {}
 
 	// Controls the runner's suspend flag.
 	//
@@ -66,14 +91,18 @@ message RunnerRequest {
 	// (for the amount of players configured).
 	message InsertInputDevice {
 		int32 index = 1;
-		InputControllerType type = 2;
+		InputDeviceType type = 2;
 	}
 
-	message Inputs {
+	// Provides new inputs to use.
+	message Input {
+		// The device index to populate with new inputs.
 		int32 index = 1;
 
-		// Joystick buttons. Only sent for joystick inputs.
-		JoystickButtons joy_buttons = 2;
+		oneof Oneof {
+			JoystickInput joy_input = 2;
+			KbMouseInput kbm_input = 3;
+		}
 	}
 
 	// "Unplugs" (removes) an input device. 
@@ -83,9 +112,11 @@ message RunnerRequest {
 
 }
 
-// A response sent to letsplayd from a runner
-// (this only holds for a few of the requests, because a lot of them
-// don't really need a fail or success notification, and can simply be fire-and-forget)
-message RunnerResponse {
-
+// A message sent to letsplayd.
+message ClientMessage {
+	message Hello {
+		// Returns a standardized type id, like:
+		// 'letsplay.libretro'
+		string typeid = 1;
+	}
 }
