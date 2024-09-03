@@ -1,7 +1,6 @@
 use std::ffi;
 use std::ptr::{addr_of_mut, null};
 
-
 /// helper wrapper over a OpenGL Frame Buffer Object (FBO).
 pub struct GlFramebuffer {
 	// OpenGL object IDs
@@ -117,7 +116,7 @@ impl GlFramebuffer {
 	pub fn as_raw(&self) -> gl::types::GLuint {
 		self.fbo_id
 	}
-	
+
 	// TODO: accessors for the render texture
 
 	/// Binds this framebuffer in the current scope.
@@ -125,15 +124,19 @@ impl GlFramebuffer {
 		BindGuard::new(self.fbo_id)
 	}
 
+	/// Reads pixels to a CPU-side buffer. Uses glReadPixels so it probably sucks.
 	pub fn read_pixels(&self, buffer: &mut [u32], width: u32, height: u32) {
 		let _guard = self.bind();
 
 		assert_eq!(
 			buffer.len(),
 			(width * height) as usize,
-			"buffer size is inadequate"
+			"Provided buffer cannot hold the framebuffer"
 		);
 
+		// SAFETY: The above assertion prevents the following code from
+		// violating memory safety by appropiately asserting the invariant
+		// that we must have width * heigth pixels of space to write to.
 		unsafe {
 			gl::ReadPixels(
 				0,

@@ -1,3 +1,4 @@
+//! Code used for runner clients (that connect to letsplayd)
 mod game_thread;
 
 use std::time::Duration;
