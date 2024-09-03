@@ -8,6 +8,9 @@ pub enum Error {
 	#[error(transparent)]
 	IoError(#[from] std::io::Error),
 
+	#[error("a core has not provided AV info")]
+	NoAvInfo,
+
 	#[error("expected core API version {expected}, but core returned {got}")]
 	InvalidLibRetroAPI { expected: u32, got: u32 },
 
