@@ -47,7 +47,7 @@ pub trait Game {
 
 fn game_thread_main<'a>(
 	mut rx: mpsc::UnboundedReceiver<GameThreadMessage>,
-	game: &'a mut dyn Game,
+	mut game: Box<dyn Game>,
 ) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
@@ -117,7 +117,7 @@ pub struct GameThread {
 
 impl GameThread {
 	/// Spawns the game thread.
-	pub fn spawn<'a: 'static>(game: &'a mut (dyn Game + Send)) -> GameThread {
+	pub fn spawn<'a: 'static>(game: Box<dyn Game + Send>) -> GameThread {
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		// Spawn the game thread

@@ -29,7 +29,7 @@ struct Runner {
 }
 
 impl Runner {
-	fn new(game: &'static mut (dyn Game + Send)) -> Self {
+	fn new(game: Box<dyn Game + Send>) -> Self {
 		Self {
 			game_thread: GameThread::spawn(game),
 		}
@@ -51,6 +51,9 @@ impl Runner {
 			time::sleep(Duration::from_secs(1)).await;
 		}
 
+		// Once we exit the loop, we should shutdown the game thread
+		// and all our resources
+
 		Ok(())
 	}
 }
@@ -63,13 +66,7 @@ pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-	// There is probably a better way do do this, but we guarantee in this loop
-	// that we won't touch the game on this thread.
-	//
-	// All interaction will be with the runner which uses the correct way to interact with the game.
-	let box_leaked = Box::leak(game);
-
 	// Start the runner
-	let runner = Runner::new(box_leaked);
+	let runner = Runner::new(game);
 	runner.run().await
 }
