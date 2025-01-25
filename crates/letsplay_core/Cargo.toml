@@ -1,0 +1,11 @@
+[package]
+name = "letsplay_core"
+description = "Core library"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+
+
