@@ -6,7 +6,7 @@ use ffmpeg::error::EAGAIN;
 
 use ffmpeg::codec as lavc; // lavc
 
-use crate::types::Size;
+use letsplay_core::Size;
 
 /// this is required for libx264 to like. Work
 pub fn create_context_from_codec(codec: ffmpeg::Codec) -> Result<lavc::Context, ffmpeg::Error> {

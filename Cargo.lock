@@ -486,6 +486,7 @@ dependencies = [
  "cudarc",
  "ffmpeg-next",
  "gl",
+ "letsplay_core",
  "letsplay_gpu",
  "libloading",
  "tokio",

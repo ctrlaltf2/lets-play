@@ -16,6 +16,7 @@ use tokio::sync::mpsc::{self, error::TryRecvError};
 use crate::h264_encoder::H264Encoder;
 use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
 
+use letsplay_core::Size;
 
 use super::EncoderCommand;
 use super::EncoderThreadControl;
@@ -35,7 +36,7 @@ impl EncoderStateHW {
         }
     }
 
-    fn init(&mut self, device: &Arc<CudaDevice>, size: crate::types::Size) -> anyhow::Result<()> {
+    fn init(&mut self, device: &Arc<CudaDevice>, size: Size) -> anyhow::Result<()> {
         self.encoder = Some(H264Encoder::new_nvenc_hwframe(
             &device,
             size.clone(),

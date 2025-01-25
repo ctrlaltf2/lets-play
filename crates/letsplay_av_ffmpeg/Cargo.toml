@@ -9,6 +9,8 @@ edition.workspace = true
 anyhow.workspace = true
 tokio.workspace = true
 
+letsplay_core.path = "../letsplay_core"
+
 # GPU stuff
 letsplay_gpu.path = "../letsplay_gpu"
 gl.workspace = true

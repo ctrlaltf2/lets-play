@@ -7,8 +7,6 @@ pub use ffmpeg as ffmpeg;
 pub mod hwdevice;
 pub mod hwframe;
 
-pub mod types;
-
 #[allow(unused)] // FIXME
 pub mod encoder_thread;
 

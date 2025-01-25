@@ -8,9 +8,11 @@ pub mod hardware_frame;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
+use letsplay_core::Size;
+
 #[derive(Debug)]
 pub enum EncoderCommand {
-	Init { size: crate::types::Size },
+	Init { size: Size },
 	Shutdown,
 
 	ForceKeyframe,
