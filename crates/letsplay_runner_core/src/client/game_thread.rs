@@ -1,4 +1,7 @@
-use std::{thread, time::Duration};
+use std::{
+	thread,
+	time::{Duration, Instant},
+};
 
 // This is used by async code, so we have to use
 // Tokio's channels.
@@ -42,7 +45,11 @@ pub trait Game {
 
 	// We'll need input + video frame stuff too
 
-	fn run_one(&mut self);
+	/// Runs a single frame
+	fn run_frame(&mut self);
+
+	/// Wait for the next frame/emulation tick.
+	fn wait_for_next_frame(&mut self, start: Instant);
 }
 
 fn game_thread_main<'a>(
@@ -53,7 +60,7 @@ fn game_thread_main<'a>(
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
 	// better (and properly handle states or whatever) we should probably just like... Do so?
-	let mut suspended = true;
+	let mut suspended = false;
 
 	// Spawn the video thread here
 
@@ -87,24 +94,28 @@ fn game_thread_main<'a>(
 			Err(TryRecvError::Disconnected) => break,
 		}
 
+		// If the runner is currently suspended, do not call the run function,
+		// and instead just wait. We will start running again when the RPC layer
+		// tells us to leave suspension.
 		if suspended {
-			// If the runner is currently suspended, do not call the run function,
-			// and instead just wait. We will start running again when the RPC layer
-			// tells us to leave suspension.
-
-			thread::sleep(Duration::from_millis(500));
-		} else {
-			// Call the game's running function. It is expected that it will pace properly on its own.
-			game.run_one();
-
-			// FIXME: Submit rendered frame to video thread,
-			// unless a frame is duplicated. (this allows us to hold output/do
-			// dynamic fps for static/mostly static scenes, which will *heavily* decrease bandwidth consumption
-			// on both the server and player ends)
-			//
-			// Audio should always be submitted and output (Opus supports DTX which would give us similar wins to frame duplication,
-			// but I'm not sure if the latency trade off is that worth it for a few kpbs less bandwidth)
+			thread::sleep(Duration::from_millis(100));
+			continue;
 		}
+
+		let now = Instant::now();
+
+		game.run_frame();
+
+		// FIXME: Submit rendered frame to video thread,
+		// unless a frame is duplicated. (this allows us to hold output/do
+		// dynamic fps for static/mostly static scenes, which will *heavily* decrease bandwidth consumption
+		// on both the server and player ends)
+		//
+		// Audio should always be submitted and output (Opus supports DTX which would give us similar wins to frame duplication,
+		// but I'm not sure if the latency trade off is that worth it for a few kpbs less bandwidth)
+
+		// Let the game pace the game thread.
+		game.wait_for_next_frame(now);
 	}
 
 	// Cancel and join the video thread (the main thread will wait for us to send our end message before terminating)
@@ -117,7 +128,7 @@ pub struct GameThread {
 
 impl GameThread {
 	/// Spawns the game thread.
-	pub fn spawn<'a: 'static>(game: Box<dyn Game + Send>) -> GameThread {
+	pub fn spawn(game: Box<dyn Game + Send>) -> GameThread {
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		// Spawn the game thread

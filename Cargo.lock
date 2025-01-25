@@ -540,6 +540,7 @@ name = "letsplay_runner_retro"
 version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
+ "letsplay_core",
  "letsplay_runner_core",
  "tokio",
  "tracing",

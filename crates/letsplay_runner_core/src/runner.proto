@@ -10,7 +10,7 @@ enum InputDeviceType {
 	// A joypad (probably the default).
 	JOYPAD = 0;
 
-	// Analog joypad This will provide stick messages.
+	// Analog joypad. This will provide stick messages.
 	JOYPAD_ANALOG = 1;
 
 	// Keyboard and mouse.
@@ -24,7 +24,7 @@ message JoystickInput {
 		float y = 3;
 	}
 
-	// Buttons. It is assumed that 64-bit precision will be enough,
+	// Buttons. It is assumed that 64 bits of buttons will be enough,
 	// but I am providing a gap in this message to put more fields if needed.
 	// Later on these should probably be defined somewhere or something.
 	fixed64 buttons = 1;
@@ -109,7 +109,6 @@ message ServerMessage {
 	message UnplugInputDevice {
 		int32 index = 1;
 	}
-
 }
 
 // A message sent to letsplayd.
