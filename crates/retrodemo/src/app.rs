@@ -4,7 +4,7 @@ use std::{path::Path, time::Duration};
 
 use anyhow::Result;
 
-use retro_frontend::{
+use letsplay_retro_frontend::{
 	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::{InputDevice, RetroPad},
 	libretro_sys_new,

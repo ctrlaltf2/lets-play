@@ -8,7 +8,5 @@ edition.workspace = true
 tokio = { workspace = true }
 toml = "0.8.19"
 
-retro_frontend = { path = "../retro_frontend" }
-
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

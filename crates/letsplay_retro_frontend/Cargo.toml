@@ -1,5 +1,5 @@
 [package]
-name = "retro_frontend"
+name = "letsplay_retro_frontend"
 # For now; we could publish this but /shrug
 publish.workspace = true
 version.workspace = true

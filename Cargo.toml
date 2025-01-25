@@ -4,7 +4,7 @@ members = [
 	"crates/letsplay_gpu",
 	"crates/letsplay_av_ffmpeg",
 
-	"crates/retro_frontend",
+	"crates/letsplay_retro_frontend",
 	"crates/retrodemo",
 
 	"crates/letsplay_runner_core",

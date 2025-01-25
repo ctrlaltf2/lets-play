@@ -508,6 +508,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "letsplay_retro_frontend"
+version = "0.1.0-alpha0"
+dependencies = [
+ "anyhow",
+ "cc",
+ "letsplay_core",
+ "libc",
+ "libloading",
+ "libretro-sys",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "letsplay_runner_core"
 version = "0.1.0-alpha0"
 dependencies = [
@@ -532,7 +548,6 @@ dependencies = [
 name = "letsplayd"
 version = "0.1.0-alpha0"
 dependencies = [
- "retro_frontend",
  "tokio",
  "toml",
  "tracing",
@@ -853,22 +868,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "retro_frontend"
-version = "0.1.0-alpha0"
-dependencies = [
- "anyhow",
- "cc",
- "letsplay_core",
- "libc",
- "libloading",
- "libretro-sys",
- "serde",
- "thiserror",
- "toml",
- "tracing",
-]
-
-[[package]]
 name = "retrodemo"
 version = "0.1.0-alpha0"
 dependencies = [
@@ -876,8 +875,8 @@ dependencies = [
  "clap",
  "gl",
  "letsplay_gpu",
+ "letsplay_retro_frontend",
  "minifb",
- "retro_frontend",
  "tracing",
  "tracing-subscriber",
 ]
