@@ -489,6 +489,7 @@ dependencies = [
  "letsplay_gpu",
  "libloading",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

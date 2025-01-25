@@ -66,11 +66,8 @@ pub enum H264Encoder {
         encoder: ffmpeg::encoder::video::Encoder,
     },
 
-    /// Hardware encoding, with frames uploaded to the GPU by ffmpeg.
-	/// FIXME: Remove this, it's dubiously useful at best
-    NvencSWFrame {
-        encoder: ffmpeg::encoder::video::Encoder,
-    },
+	// FIXME: Rename this to `HardwareWithHwFrame`
+	// once we have multiple hardware encoding paths.
 
     /// Hardware encoding, with frames already on the GPU.
     NvencHWFrame {
@@ -121,46 +118,6 @@ impl H264Encoder {
             .with_context(|| "While opening x264 video codec")?;
 
         Ok(Self::Software { encoder: encoder })
-    }
-
-    /// Creates a new hardware (NVIDIA NVENC) encoder, which encodes
-    /// frames from software input. FFmpeg handles uploading frames to the GPU.
-    pub fn new_nvenc_swframe(
-        size: Size,
-        max_framerate: u32,
-        bitrate: usize,
-    ) -> anyhow::Result<Self> {
-        let (encoder, mut video_encoder_context) =
-            create_context_and_set_common_parameters("h264_nvenc", &size, max_framerate, bitrate)
-                .with_context(|| "while trying to create encoder")?;
-
-        video_encoder_context.set_format(ffmpeg::format::Pixel::ZRGB32);
-
-        video_encoder_context.set_qmin(37);
-        video_encoder_context.set_qmax(33);
-
-        // set h264_nvenc options
-        let mut dict = ffmpeg::Dictionary::new();
-
-        dict.set("tune", "ull");
-        dict.set("preset", "p1");
-
-        dict.set("profile", "main");
-
-        // TODO:
-        dict.set("rc", "vbr");
-        dict.set("qp", "35");
-
-        dict.set("forced-idr", "1");
-
-        dict.set("delay", "0");
-        dict.set("zerolatency", "1");
-
-        let encoder = video_encoder_context
-            .open_as_with(encoder, dict)
-            .with_context(|| "While opening h264_nvenc video codec")?;
-
-        Ok(Self::NvencSWFrame { encoder: encoder })
     }
 
     /// Creates a new hardware (NVIDIA NVENC) encoder, which encodes
@@ -234,7 +191,6 @@ impl H264Encoder {
     pub fn is_hardware(&mut self) -> bool {
         match self {
             Self::Software { .. } => false,
-            Self::NvencSWFrame { .. } => true,
             Self::NvencHWFrame { .. } => true,
         }
     }
@@ -248,7 +204,7 @@ impl H264Encoder {
 
     pub fn create_frame(&mut self) -> anyhow::Result<ffmpeg::frame::Video> {
         match self {
-            Self::Software { encoder } | Self::NvencSWFrame { encoder } => {
+            Self::Software { encoder } => {
                 return Ok(ffmpeg::frame::Video::new(
                     encoder.format(),
                     encoder.width(),
@@ -284,10 +240,6 @@ impl H264Encoder {
                 encoder.send_frame(frame).unwrap();
             }
 
-            Self::NvencSWFrame { encoder } => {
-                encoder.send_frame(frame).unwrap();
-            }
-
             Self::NvencHWFrame {
                 encoder,
                 hw_context: _,
@@ -303,12 +255,6 @@ impl H264Encoder {
                 encoder.send_eof().unwrap();
             }
 
-            Self::NvencSWFrame { encoder } => {
-                // Realistically this should be the same right?
-                encoder.send_eof().unwrap();
-                // todo!("Requires support.");
-            }
-
             Self::NvencHWFrame {
                 encoder,
                 hw_context: _,
@@ -321,7 +267,6 @@ impl H264Encoder {
     fn receive_packet_impl(&mut self, packet: &mut ffmpeg::Packet) -> Result<(), ffmpeg::Error> {
         return match self {
             Self::Software { encoder } => encoder.receive_packet(packet),
-            Self::NvencSWFrame { encoder } => encoder.receive_packet(packet),
             Self::NvencHWFrame {
                 encoder,
                 hw_context: _,
