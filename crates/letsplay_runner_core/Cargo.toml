@@ -1,11 +1,12 @@
 [package]
 name = "letsplay_runner_core"
-version = "0.1.0"
-edition = "2021"
-# For now. Once this is done we might actually want to
+# TODO: Once this is working, we might actually *want* to
 # release this as public so other people can write runners
 # without having them need to be in the Let's Play codebase.
-publish = false
+# For now, however, leaving it unpublished is a good move.
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 tokio.workspace = true

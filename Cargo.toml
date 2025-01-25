@@ -1,9 +1,26 @@
 [workspace]
 resolver = "2"
 members = [
-	# TODO: it might be nice to split this.
-	"crates/*"
+	"crates/letsplay_gpu",
+	"crates/letsplay_av_ffmpeg",
+
+	"crates/retro_frontend",
+	"crates/retrodemo",
+
+	"crates/letsplay_runner_core",
+	"crates/letsplay_runner_retro",
+
+	"crates/letsplayd"
 ]
+
+# Default package fields. We forbid publishing by default
+# since a lot of the crates we build here aren't really useful
+# outside of the Let's Play codebase, however some are.
+[workspace.package]
+publish = false
+version = "0.1.0-alpha0"
+edition = "2021"
+
 
 [workspace.dependencies]
 anyhow = "1.0.86"

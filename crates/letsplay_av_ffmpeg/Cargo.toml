@@ -1,8 +1,9 @@
 [package]
 name = "letsplay_av_ffmpeg"
 description = "FFmpeg abstraction for Let's Play"
-version = "0.1.0"
-edition = "2021"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true

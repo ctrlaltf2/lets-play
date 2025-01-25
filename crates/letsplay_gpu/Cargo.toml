@@ -1,9 +1,9 @@
 [package]
 name = "letsplay_gpu"
 description = "GPU helpers and bindings for Let's Play"
-version = "0.1.0"
-edition = "2021"
-publish = false
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 gl.workspace = true

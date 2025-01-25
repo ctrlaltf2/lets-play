@@ -404,9 +404,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 
 [[package]]
 name = "hashbrown"
@@ -450,9 +450,9 @@ checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
 name = "itertools"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -480,7 +480,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "letsplay_av_ffmpeg"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
  "cudarc",
@@ -493,8 +493,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "letsplay_core"
+version = "0.1.0-alpha0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "letsplay_gpu"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "gl",
  "gl_generator",
@@ -502,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "letsplay_runner_core"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "thiserror",
  "tokio",
@@ -512,7 +519,7 @@ dependencies = [
 
 [[package]]
 name = "letsplay_runner_retro"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
  "letsplay_runner_core",
@@ -523,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "letsplayd"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "retro_frontend",
  "tokio",
@@ -818,9 +825,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.11.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38200e5ee88914975b69f657f0801b6f6dccafd44fd9326302a4aaeecfacb1d8"
+checksum = "b544ef1b4eac5dc2db33ea63606ae9ffcfac26c1416a2806ae0bf5f56b201191"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -830,9 +837,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368758f23274712b504848e9d5a6f010445cc8b87a7cdb4d7cbee666c1288da3"
+checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -847,9 +854,10 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "retro_frontend"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "cc",
+ "letsplay_core",
  "libc",
  "libloading",
  "libretro-sys",
@@ -861,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "retrodemo"
-version = "0.1.0"
+version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
  "clap",

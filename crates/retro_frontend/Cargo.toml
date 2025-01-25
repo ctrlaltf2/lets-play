@@ -1,19 +1,23 @@
 [package]
 name = "retro_frontend"
-version = "0.1.0"
-edition = "2021"
-# Could be useful, and does build seperately, so...
-# publish = false
+# For now; we could publish this but /shrug
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 libc = "0.2.155"
 libloading = "0.8.3"
 libretro-sys = "0.1.1"
-serde = { version = "1.0.204", features = ["derive"] }
 thiserror.workspace = true
+
+letsplay_core.path = "../letsplay_core"
+
+# FIXME: Remove these and have frontend interface handle settings changes
+serde = { version = "1.0.204", features = ["derive"] }
 toml = "0.8.19"
 
-tracing = "0.1.40"
+tracing.workspace = true
 
 [build-dependencies]
 cc = "1.0.99"
