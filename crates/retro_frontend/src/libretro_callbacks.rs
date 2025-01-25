@@ -197,9 +197,14 @@ pub(crate) unsafe extern "C" fn environment_callback(
 				let key = std::ffi::CStr::from_ptr(var.key).to_str().unwrap();
 				let value = std::ffi::CStr::from_ptr(var.value).to_str().unwrap();
 
-				let parsed = libretro_core_variable::CoreVariable::parse(value);
-
-				(*FRONTEND).variables.insert(key.to_string(), parsed);
+				match libretro_core_variable::CoreVariable::parse(value) {
+					Ok(value) => {
+						(*FRONTEND).variables.insert(key.to_string(), value);
+					}
+					Err(error) => {
+						tracing::error!("Error parsing core variable {key}: {:?}", error);
+					}
+				}
 			}
 
 			// Load settings
@@ -253,8 +258,7 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 	} else {
 		let buffer = (*FRONTEND).converted_pixel_buffer.as_ref().unwrap();
 		if (pitch * height as usize) as usize != buffer.len() {
-			(*FRONTEND).converted_pixel_buffer =
-				Some(alloc_boxed_slice(pitch * height as usize));
+			(*FRONTEND).converted_pixel_buffer = Some(alloc_boxed_slice(pitch * height as usize));
 		}
 	}
 
@@ -286,7 +290,8 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 					// Finally save the pixel data in the result array as an XRGB8888 value
 					buffer[y * pitch as usize + x] = (255u32 << 24)
 						| ((comp.2 as u32) << 16)
-						| ((comp.1 as u32) << 8) | (comp.0 as u32);
+						| ((comp.1 as u32) << 8)
+						| (comp.0 as u32);
 				}
 			}
 		}
@@ -308,7 +313,8 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 
 					buffer[y * pitch as usize + x] = (255u32 << 24)
 						| ((comp.2 as u32) << 16)
-						| ((comp.1 as u32) << 8) | (comp.0 as u32);
+						| ((comp.1 as u32) << 8)
+						| (comp.0 as u32);
 				}
 			}
 		}
@@ -337,7 +343,8 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 
 					buffer[y * pitch as usize + x] = (255u32 << 24)
 						| ((comp.3 as u32) << 16)
-						| ((comp.2 as u32) << 8) | (comp.1 as u32);
+						| ((comp.2 as u32) << 8)
+						| (comp.1 as u32);
 				}
 			}
 		}

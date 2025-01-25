@@ -11,6 +11,8 @@ libloading = "0.8.3"
 libretro-sys = "0.1.1"
 thiserror.workspace = true
 
+anyhow.workspace = true
+
 letsplay_core.path = "../letsplay_core"
 
 # FIXME: Remove these and have frontend interface handle settings changes

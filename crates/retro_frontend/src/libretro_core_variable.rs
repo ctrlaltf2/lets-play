@@ -1,5 +1,6 @@
 //! Helpers for dealing with Libretro configuration values.
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 
@@ -21,29 +22,28 @@ pub struct CoreVariable {
 
 impl CoreVariable {
 	/// Parses this core variable.
-	pub fn parse(str: &str) -> Self {
+	pub fn parse(str: &str) -> anyhow::Result<Self> {
 		let string = str.to_string();
 
 		match string.find(';') {
 			Some(index) => {
 				let name = &string[0..index];
 
-				// FIXME: Instead of panicing, we should return a Result or the like
 				if string.chars().nth(index + 1).unwrap() != ' ' {
-					panic!("Improperly formatted core variable");
+					return Err(anyhow!("Core variable is improperly formatted"));
 				}
 
 				let raw_choices = string[index + 2..].to_string();
 				let choices = raw_choices.split('|').map(|s| s.to_string()).collect();
 
-				Self {
+				Ok(Self {
 					description: name.to_string(),
 					choices: choices,
 					value: None,
 					c_value: None,
-				}
+				})
 			}
-			None => panic!("??? Couldn't find"),
+			None => Err(anyhow!("Core variable doesn't have a seperator?")),
 		}
 	}
 
