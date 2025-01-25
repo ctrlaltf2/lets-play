@@ -1,9 +1,9 @@
-syntax = "proto3";
+edition = "2023";
 option optimize_for = SPEED;
 
-// This .proto contains definitions that are used for IPC between
+// This .proto contains definitions that are used for communication between
 // letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
-// They allow letsplayd to communicate with a runner connected to it and vice versa. 
+// They allow letsplayd to communicate with a runner connected to it and vice versa.
 
 // The type of an input device.
 enum InputDeviceType {

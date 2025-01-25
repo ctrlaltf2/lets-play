@@ -1,18 +1,19 @@
 # scratch
 
 - `letsplayd` - main server
-	- public QUIC endpoint (MoQ over webtransport, maybe MoQT too?)
+	- public HTTP/3 endpoint
 	- handles relaying video from the runners
 		- figure out something for CDN usage...
+	- handles control in emulators yada yada
 	- manages local runners (remote later!)
-	- Also exports a local QUIC channel for runners
 
 - `letsplay_runner_core` - library crate for implementing runners, holds most of the core logic
 	- handles graceful shutdown
 	- runs multithreaded, where:
 		- main thread is a singlethread tokio runtime (for io/events)
 			- spawns other threads
-			- connects to QUIC RPC
+			- connects to QUIC RPC (for external runners)
+			- speaks pipe rpc (for local runners)
 
 		- runner thread (runs the game code as sync. handles input and such)
 
@@ -22,8 +23,7 @@
 				since that's what most HW encode engines like. for vaapi we can do opencl,
 				for nvenc it can take rgba so we should be fine. for videocore mmal uhh Good Luck
 
-	- does IPC with letsplayd over QUIC
-		- Video can be done as internal MoQ or maybe a plain quic stream
+	- does IPC with letsplayd over QUIC for local
 
 - `letsplay_runner_retro` - libretro runner (default)
 	- uses retro_frontend to run cores
@@ -32,7 +32,8 @@
 # Runners
 
 - letsplayd is a runner server
-	- It will provide QUIC or such transport for runner clients to connect to
+	- It will provide QUIC transport for runner clients to connect to
+	- For local runners, letsplayd will create a pipe and pass it to the runner process
 
 - `letsplay_runner_*` are runner clients
 	- They connect to a runner server, and the runner server tells them what to do
