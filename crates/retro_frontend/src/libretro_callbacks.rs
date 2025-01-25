@@ -7,6 +7,8 @@ use std::ffi;
 
 use tracing::{debug, error};
 
+use letsplay_core::alloc::alloc_boxed_slice;
+
 /// This function is used with HW OpenGL cores to transfer the current FBO's ID.
 unsafe extern "C" fn hw_gl_get_framebuffer() -> usize {
 	(*FRONTEND).gl_fbo_id as usize
@@ -247,12 +249,12 @@ pub(crate) unsafe extern "C" fn video_refresh_callback(
 
 	// Resize or allocate the conversion buffer if we need to
 	if (*FRONTEND).converted_pixel_buffer.is_none() {
-		(*FRONTEND).converted_pixel_buffer = Some(util::alloc_boxed_slice(pitch * height as usize));
+		(*FRONTEND).converted_pixel_buffer = Some(alloc_boxed_slice(pitch * height as usize));
 	} else {
 		let buffer = (*FRONTEND).converted_pixel_buffer.as_ref().unwrap();
 		if (pitch * height as usize) as usize != buffer.len() {
 			(*FRONTEND).converted_pixel_buffer =
-				Some(util::alloc_boxed_slice(pitch * height as usize));
+				Some(alloc_boxed_slice(pitch * height as usize));
 		}
 	}
 

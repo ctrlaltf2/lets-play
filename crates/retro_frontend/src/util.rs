@@ -1,5 +1,4 @@
 use crate::libretro_sys_new::*;
-use std::alloc;
 
 pub fn bytes_per_pixel_from_libretro(pf: PixelFormat) -> u32 {
 	match pf {
@@ -41,30 +40,3 @@ pub fn terminated_array<'a, T>(ptr: *const T, end_fn: impl Fn(&T) -> bool) -> &'
 		std::slice::from_raw_parts(ptr, len)
 	}
 }
-
-/// Allocates a boxed slice.
-/// Unlike a [Vec<_>], this can't grow,
-/// but is just as safe to use, and slightly more predictable.
-pub fn alloc_boxed_slice<T: Sized>(len: usize) -> Box<[T]> {
-	assert_ne!(len, 0, "length cannot be 0");
-	let layout = alloc::Layout::array::<T>(len).expect("?");
-
-	let ptr = unsafe { alloc::alloc_zeroed(layout) as *mut T };
-
-	let slice = core::ptr::slice_from_raw_parts_mut(ptr, len);
-
-	unsafe { Box::from_raw(slice) }
-}
-
-/*
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __terminated_array {
-	($pex:ident, $lex:expr $(,)?) => {
-		$crate::util::__terminated_array_impl($pex, $lex)
-	};
-}
-
-#[doc(inline)]
-pub use __terminated_array as terminated_array;
-*/
