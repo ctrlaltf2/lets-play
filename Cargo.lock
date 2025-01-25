@@ -498,6 +498,7 @@ name = "letsplay_core"
 version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
+ "libc",
 ]
 
 [[package]]
@@ -875,6 +876,7 @@ dependencies = [
  "anyhow",
  "clap",
  "gl",
+ "letsplay_core",
  "letsplay_gpu",
  "letsplay_retro_frontend",
  "minifb",

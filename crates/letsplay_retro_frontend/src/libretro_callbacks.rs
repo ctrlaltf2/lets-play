@@ -40,10 +40,12 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			for desc in slice {
 				debug!("{:?}", desc);
 
-				for i in 0..desc.num_types as usize {
-					let p = desc.types.add(i).as_ref().unwrap();
+				let slice =
+					util::terminated_array(desc.types, |item| item.desc.is_null() && item.id == 0);
+
+				for p in slice {
 					debug!(
-						"type {i} = {:?} (name is {})",
+						"desc type: {:?} (name is {})",
 						p,
 						std::ffi::CStr::from_ptr(p.desc).to_str().unwrap()
 					);

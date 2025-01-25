@@ -1,10 +1,13 @@
 use super::window::*;
 
-use std::{path::Path, time::Duration};
+use std::{
+	path::Path,
+	time::{Duration, Instant},
+};
 
 use anyhow::Result;
 
-use letsplay_core::{Size, Surface};
+use letsplay_core::{sleep, Size, Surface};
 use letsplay_retro_frontend::{
 	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::{InputDevice, RetroPad},
@@ -140,12 +143,15 @@ impl App {
 	/// The main loop. Should probably be abstracted a bit better.
 	pub fn main_loop(&mut self) {
 		let av_info = self.get_frontend().get_av_info().expect("???");
-		let step_ms = (1.0 / av_info.timing.fps) * 1000.;
-		let step_duration = Duration::from_millis(step_ms as u64);
+		let step_duration = Duration::from_secs_f64(1.0 / av_info.timing.fps);
 
 		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+			let now = Instant::now();
+			let next = now.checked_add(step_duration).expect("?????");
 			self.get_frontend().run_frame();
-			std::thread::sleep(step_duration);
+
+			// Wait until the next emulation step
+			sleep::sleep_until(next);
 		}
 
 		self.window.close();

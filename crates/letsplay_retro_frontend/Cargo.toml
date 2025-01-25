@@ -6,7 +6,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-libc = "0.2.155"
+libc.workspace = true
 libloading = "0.8.3"
 libretro-sys = "0.1.1"
 thiserror.workspace = true
