@@ -8,6 +8,7 @@ edition.workspace = true
 clap.workspace = true
 minifb = "0.27.0"
 
+letsplay_core.path = "../letsplay_core"
 letsplay_gpu.path = "../letsplay_gpu"
 letsplay_retro_frontend.path = "../letsplay_retro_frontend"
 

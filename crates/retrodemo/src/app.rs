@@ -4,6 +4,7 @@ use std::{path::Path, time::Duration};
 
 use anyhow::Result;
 
+use letsplay_core::{Size, Surface};
 use letsplay_retro_frontend::{
 	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::{InputDevice, RetroPad},
@@ -12,8 +13,8 @@ use letsplay_retro_frontend::{
 
 use minifb::Key;
 
-use letsplay_gpu as gpu;
 use gpu::egl_helpers::DeviceContext;
+use letsplay_gpu as gpu;
 
 /// Called by OpenGL. We use this to dump errors.
 extern "system" fn opengl_message_callback(
@@ -53,7 +54,7 @@ pub struct App {
 	framebuffer: gpu::GlFramebuffer,
 
 	/// Cached readback buffer.
-	readback_buffer: Vec<u32>,
+	readback_buffer: Surface,
 }
 
 impl App {
@@ -65,7 +66,7 @@ impl App {
 
 			egl_context: None,
 			framebuffer: gpu::GlFramebuffer::new(),
-			readback_buffer: Vec::new(),
+			readback_buffer: Surface::new(),
 		});
 
 		// SAFETY: The only way to touch the pointer involves the frontend library calling retro_run,
@@ -138,11 +139,11 @@ impl App {
 
 	/// The main loop. Should probably be abstracted a bit better.
 	pub fn main_loop(&mut self) {
-		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
-			let av_info = self.get_frontend().get_av_info().expect("???");
-			let step_ms = (1.0 / av_info.timing.fps) * 1000.;
-			let step_duration = Duration::from_millis(step_ms as u64);
+		let av_info = self.get_frontend().get_av_info().expect("???");
+		let step_ms = (1.0 / av_info.timing.fps) * 1000.;
+		let step_duration = Duration::from_millis(step_ms as u64);
 
+		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
 			self.get_frontend().run_frame();
 			std::thread::sleep(step_duration);
 		}
@@ -163,7 +164,7 @@ impl FrontendInterface for App {
 			self.get_frontend().set_gl_fbo(raw);
 
 			// Resize the readback buffer
-			self.readback_buffer.resize((width * height) as usize, 0);
+			self.readback_buffer.resize(Size { width, height });
 		}
 
 		self.window.resize(width as u16, height as u16);
@@ -176,13 +177,14 @@ impl FrontendInterface for App {
 	fn video_update_gl(&mut self) {
 		let dimensions = self.get_frontend().get_size();
 
+		let slice = self.readback_buffer.get_buffer();
+
 		// Read back the framebuffer
 		{
 			self.framebuffer
-				.read_pixels(&mut self.readback_buffer[..], dimensions.0, dimensions.1)
+				.read_pixels(slice, dimensions.0, dimensions.1)
 		}
 
-		let slice = self.readback_buffer.as_slice();
 		self.window.update_buffer(slice, dimensions.0, true);
 	}
 

@@ -1,35 +1,31 @@
 use minifb::{Key, Window, WindowOptions};
 
+use letsplay_core::{Size, Surface};
+
 /// A wrapper over minifb
 pub struct AppWindow {
 	window: Option<Window>,
 
 	// sw framebuffer
-	width: u16,
-	height: u16,
-	framebuffer: Vec<u32>,
+	framebuffer: Surface,
 }
 
 impl AppWindow {
 	pub fn new() -> Self {
 		Self {
 			window: None,
-			width: 0,
-			height: 0,
-			framebuffer: Vec::new(),
+			framebuffer: Surface::new(),
 		}
 	}
 
 	pub fn resize(&mut self, width: u16, height: u16) {
-		let len = (width as usize) * (height as usize);
-
-		self.width = width as u16;
-		self.height = height as u16;
-
-		self.framebuffer.resize(len, 0);
+		self.framebuffer.resize(Size {
+			width: width as u32,
+			height: height as u32,
+		});
 
 		let window = Window::new(
-			"RetroDemo - retro_frontend demo (Press Esc to exit)",
+			"RetroDemo - letsplay_retro_frontend demo (Press Esc to exit)",
 			width as usize,
 			height as usize,
 			WindowOptions {
@@ -48,32 +44,34 @@ impl AppWindow {
 			return;
 		}
 
-		let has_disconnected_pitch = pitch != self.width as u32;
+		let size = self.framebuffer.size.clone();
+
+		let has_disconnected_pitch = pitch != size.width as u32;
 
 		// If this frame came from OpenGL we need to flip the image around
 		// so it is right side up (from our perspective).
 		if from_opengl {
-			let mut scanlines: Vec<&[u32]> = Vec::with_capacity(self.height as usize);
+			let mut scanlines: Vec<&[u32]> = Vec::with_capacity(size.height as usize);
 
 			// Push scanline slices in reverse order (which will actually flip them to the right orientation)
-			for y in (0..self.height).rev() {
-				let src_line_off = (y as u32 * pitch) as usize;
-				let src_slice = &slice[src_line_off..src_line_off + self.width as usize];
+			for y in (0..size.height).rev() {
+				let src_line_off: usize = (y as u32 * pitch) as usize;
+				let src_slice = &slice[src_line_off..src_line_off + size.width as usize];
 				scanlines.push(src_slice);
 			}
 
 			// Draw them
-			for y in 0..self.height {
+			for y in 0..size.height {
 				let src_line_off = (y as u32 * pitch) as usize;
 				let mut dest_line_off = src_line_off;
 
 				// copy only
 				if has_disconnected_pitch {
-					dest_line_off = (y * self.width) as usize;
+					dest_line_off = (y * size.width) as usize;
 				}
 
-				let dest_slice =
-					&mut self.framebuffer[dest_line_off..dest_line_off + self.width as usize];
+				let dest_slice = &mut self.framebuffer.get_buffer()
+					[dest_line_off..dest_line_off + size.width as usize];
 
 				dest_slice.copy_from_slice(scanlines[y as usize]);
 
@@ -88,28 +86,28 @@ impl AppWindow {
 				}
 			}
 		} else {
-			for y in 0..self.height {
+			for y in 0..size.height {
 				let src_line_off = (y as u32 * pitch) as usize;
 				let mut dest_line_off = src_line_off;
 
 				// copy only
 				if has_disconnected_pitch {
-					dest_line_off = (y * self.width) as usize;
+					dest_line_off = (y * size.width) as usize;
 				}
 
 				// Create slices repressenting each part
-				let src_slice = &slice[src_line_off..src_line_off + self.width as usize];
-				let dest_slice =
-					&mut self.framebuffer[dest_line_off..dest_line_off + self.width as usize];
+				let src_slice = &slice[src_line_off..src_line_off + size.width as usize];
+				let dest_slice = &mut self.framebuffer.get_buffer()
+					[dest_line_off..dest_line_off + size.width as usize];
 
 				dest_slice.copy_from_slice(src_slice);
 			}
 		}
 
 		let _ = self.window.as_mut().unwrap().update_with_buffer(
-			&self.framebuffer,
-			self.width as usize,
-			self.height as usize,
+			&self.framebuffer.get_buffer(),
+			size.width as usize,
+			size.height as usize,
 		);
 	}
 
