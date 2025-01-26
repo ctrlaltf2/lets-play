@@ -1,12 +1,17 @@
 [workspace]
 resolver = "2"
 members = [
+	# "Foundation" libraries. These basically are used
+	# by the rest of the letsplay repo to do certain things.
+	"crates/letsplay_core",
 	"crates/letsplay_gpu",
 	"crates/letsplay_av_ffmpeg",
 
+	# Libretro frontend library
 	"crates/letsplay_retro_frontend",
 	"crates/retrodemo",
 
+	# Runner libraries
 	"crates/letsplay_runner_core",
 	"crates/letsplay_runner_retro",
 

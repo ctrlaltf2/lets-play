@@ -1,6 +1,8 @@
 [package]
 name = "letsplay_core"
-description = "Core library"
+description = "Core library for Let's Play"
+# NOTE: If we choose to publish letsplay_runner_core,
+# we will probably end up needing to publish this (and letsplay_av_ffmpeg, letsplay_gpu) too.
 publish.workspace = true
 version.workspace = true
 edition.workspace = true
