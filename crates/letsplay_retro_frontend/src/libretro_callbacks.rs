@@ -361,21 +361,22 @@ pub(crate) unsafe extern "C" fn input_poll_callback() {
 
 pub(crate) unsafe extern "C" fn input_state_callback(
 	port: ffi::c_uint,
-	device: ffi::c_uint,
+	device_type: ffi::c_uint,
 	index: ffi::c_uint, // not used?
 	button_id: ffi::c_uint,
 ) -> ffi::c_short {
-	if (*FRONTEND).input_devices.contains_key(&port) {
-		let joypad: &dyn InputDevice = &*(*(*FRONTEND).input_devices.get(&port).expect(
-			"How do we get here when contains_key() returns true but the key doen't exist",
-		));
+	match (*FRONTEND).input_devices.get(&port) {
+		Some(input_device) => {
+			let d = input_device.as_mut().unwrap();
+			if d.device_type_compatible(device_type) {
+				return d.get_index(index, button_id);
+			}
 
-		if joypad.device_type_compatible(device) {
-			return (*joypad).get_index(index, button_id);
+			0
 		}
-	}
 
-	0
+		None => 0,
+	}
 }
 
 pub(crate) unsafe extern "C" fn audio_sample_callback(_left: i16, _right: i16) {
