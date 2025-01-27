@@ -4,17 +4,18 @@ use super::ffmpeg;
 
 use ffmpeg::format::Pixel;
 
-use super::{check_ret, hwdevice::CudaDeviceContext};
+use super::{check_ret, hwdevice::DeviceContext};
 
+/// A context that can allocate hardware frames.
 pub struct HwFrameContext {
-    _cuda_device_context: CudaDeviceContext,
+    _cuda_device_context: DeviceContext,
     buffer: *mut ffmpeg::sys::AVBufferRef,
 }
 
 impl HwFrameContext {
-    fn new(cuda_device_context: CudaDeviceContext, buffer: *mut ffmpeg::sys::AVBufferRef) -> Self {
+    fn new(device_context: DeviceContext, buffer: *mut ffmpeg::sys::AVBufferRef) -> Self {
         Self {
-            _cuda_device_context: cuda_device_context,
+            _cuda_device_context: device_context,
             buffer,
         }
     }
@@ -65,27 +66,28 @@ impl Drop for HwFrameContext {
     }
 }
 
+/// A builder for [HwFrameContext]s.
 pub struct HwFrameContextBuilder {
-    cuda_device_context: CudaDeviceContext,
+    device_context: DeviceContext,
     buffer: *mut ffmpeg::sys::AVBufferRef,
 }
 
 impl HwFrameContextBuilder {
-    pub fn new(mut cuda_device_context: CudaDeviceContext) -> anyhow::Result<Self> {
-        let buffer = unsafe { ffmpeg::sys::av_hwframe_ctx_alloc(cuda_device_context.as_raw_mut()) };
+    pub fn new(mut device_context: DeviceContext) -> anyhow::Result<Self> {
+        let buffer = unsafe { ffmpeg::sys::av_hwframe_ctx_alloc(device_context.as_raw_mut()) };
         if buffer.is_null() {
             return Err(anyhow::anyhow!("Could not allocate a hwframe context"));
         }
 
         Ok(Self {
-            cuda_device_context,
+            device_context,
             buffer,
         })
     }
 
     pub fn build(mut self) -> Result<HwFrameContext, ffmpeg::Error> {
         check_ret(unsafe { ffmpeg::sys::av_hwframe_ctx_init(self.buffer) })?;
-        let result = Ok(HwFrameContext::new(self.cuda_device_context, self.buffer));
+        let result = Ok(HwFrameContext::new(self.device_context, self.buffer));
         self.buffer = null_mut();
 
         result

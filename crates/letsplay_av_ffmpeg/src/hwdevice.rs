@@ -4,11 +4,11 @@ use super::check_ret;
 
 use super::ffmpeg;
 
-pub struct CudaDeviceContext {
+pub struct DeviceContext {
 	buffer: *mut ffmpeg::sys::AVBufferRef,
 }
 
-impl CudaDeviceContext {
+impl DeviceContext {
 	fn new(buffer: *mut ffmpeg::sys::AVBufferRef) -> Self {
 		Self { buffer }
 	}
@@ -30,7 +30,7 @@ impl CudaDeviceContext {
 	// }
 }
 
-impl Drop for CudaDeviceContext {
+impl Drop for DeviceContext {
 	fn drop(&mut self) {
 		unsafe {
 			if !self.buffer.is_null() {
@@ -40,31 +40,41 @@ impl Drop for CudaDeviceContext {
 	}
 }
 
-pub struct CudaDeviceContextBuilder {
+pub struct DeviceContextBuilder {
 	buffer: *mut ffmpeg::sys::AVBufferRef,
+	context_type: ffmpeg::sys::AVHWDeviceType,
 }
 
-impl CudaDeviceContextBuilder {
-	pub fn new() -> anyhow::Result<Self> {
-		let buffer = unsafe { ffmpeg::sys::av_hwdevice_ctx_alloc(ffmpeg::sys::AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA) };
+impl DeviceContextBuilder {
+	pub fn new(context_type: ffmpeg::sys::AVHWDeviceType) -> anyhow::Result<Self> {
+		let buffer = unsafe { ffmpeg::sys::av_hwdevice_ctx_alloc(context_type) };
 		if buffer.is_null() {
-			return Err(anyhow::anyhow!("Could not allocate a hwdevice context".to_string()));
+			return Err(anyhow::anyhow!(
+				"Could not allocate a hwdevice context".to_string()
+			));
 		}
 
-		Ok(Self { buffer })
+		Ok(Self {
+			buffer,
+			context_type,
+		})
 	}
 
-	pub fn build(mut self) -> Result<CudaDeviceContext, ffmpeg::Error> {
+	pub fn build(mut self) -> Result<DeviceContext, ffmpeg::Error> {
 		check_ret(unsafe { ffmpeg::sys::av_hwdevice_ctx_init(self.buffer) })?;
-		let result = Ok(CudaDeviceContext::new(self.buffer));
+		let result = Ok(DeviceContext::new(self.buffer));
 		self.buffer = null_mut();
 
 		result
 	}
 
 	pub fn set_cuda_context(mut self, context: ffmpeg::sys::CUcontext) -> Self {
-		unsafe {
-			(*(self.as_device_mut().hwctx as *mut ffmpeg::sys::AVCUDADeviceContext)).cuda_ctx = context;
+		// Ignore if we aren't trying to create a CUDA context
+		if self.context_type == ffmpeg::sys::AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA {
+			unsafe {
+				(*(self.as_device_mut().hwctx as *mut ffmpeg::sys::AVCUDADeviceContext)).cuda_ctx =
+					context;
+			}
 		}
 
 		self
