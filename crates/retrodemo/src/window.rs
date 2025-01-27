@@ -51,29 +51,24 @@ impl AppWindow {
 		// If this frame came from OpenGL we need to flip the image around
 		// so it is right side up (from our perspective).
 		if from_opengl {
-			let mut scanlines: Vec<&[u32]> = Vec::with_capacity(size.height as usize);
-
-			// Push scanline slices in reverse order (which will actually flip them to the right orientation)
-			for y in (0..size.height).rev() {
-				let src_line_off: usize = (y as u32 * pitch) as usize;
-				let src_slice = &slice[src_line_off..src_line_off + size.width as usize];
-				scanlines.push(src_slice);
-			}
-
 			// Draw them
-			for y in 0..size.height {
-				let src_line_off = (y as u32 * pitch) as usize;
-				let mut dest_line_off = src_line_off;
+			for source_y in 0..size.height {
+				let flipped_y = (size.height - 1) - source_y;
+
+				let src_line_off = (source_y as u32 * pitch) as usize;
+				let mut dest_line_off = (flipped_y as u32 * pitch) as usize;
 
 				// copy only
 				if has_disconnected_pitch {
-					dest_line_off = (y * size.width) as usize;
+					dest_line_off = (flipped_y * size.width) as usize;
 				}
+
+				let src_slice = &slice[src_line_off..src_line_off + size.width as usize];
 
 				let dest_slice = &mut self.framebuffer.get_buffer()
 					[dest_line_off..dest_line_off + size.width as usize];
 
-				dest_slice.copy_from_slice(scanlines[y as usize]);
+				dest_slice.copy_from_slice(src_slice);
 
 				// swap the scanline pixels to BGRA order to make minifb happy
 				// not the fastest code but this should do for an example

@@ -45,14 +45,15 @@ pub trait Game {
 
 	// We'll need input + video frame stuff too
 
-	/// Runs a single frame
+	/// Runs a single frame. Should not sleep, [Game::wait_for_next_frame]
+	/// will sleep until the next frame (if required).
 	fn run_frame(&mut self);
 
 	/// Wait for the next frame/emulation tick.
 	fn wait_for_next_frame(&mut self, start: Instant);
 }
 
-fn game_thread_main<'a>(
+fn main(
 	mut rx: mpsc::UnboundedReceiver<GameThreadMessage>,
 	mut game: Box<dyn Game>,
 ) {
@@ -135,7 +136,7 @@ impl GameThread {
 		let _ = thread::Builder::new()
 			.name("letsplay_runner_game".into())
 			.spawn(move || {
-				game_thread_main(rx, game);
+				main(rx, game);
 			})
 			.expect("Failed to spawn game thread");
 
