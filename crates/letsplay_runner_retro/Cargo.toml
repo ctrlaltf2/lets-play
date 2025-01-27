@@ -5,11 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+# Let's Play-specific dependencies
 letsplay_core.path = "../letsplay_core"
 letsplay_runner_core.path = "../letsplay_runner_core"
-tokio.workspace = true
 
+# Stuff we want
 tracing.workspace = true
-tracing-subscriber.workspace = true
-
 anyhow.workspace = true

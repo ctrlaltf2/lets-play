@@ -43,6 +43,9 @@ thiserror = "2.0.11"
 gl = "0.14.0"
 gl_generator = "0.14.0"
 
+# NVIDIA
+cudarc = { version = "0.13.3", features = [ "cuda-11050" ] }
+
 [patch.crates-io]
 ffmpeg = { version = "7.1.0", package = "ffmpeg-next", git = "https://github.com/hgaiser/rust-ffmpeg", branch = "codec-context-settable" }
 ffmpeg-sys-next = { version = "7.1.0", git = "https://github.com/hgaiser/rust-ffmpeg-sys", branch = "cuda" }

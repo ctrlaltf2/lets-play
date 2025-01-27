@@ -7,10 +7,6 @@ use std::{
 // Tokio's channels.
 use tokio::sync::mpsc::{self, error::TryRecvError};
 
-// We do use the standard library portions for communicating with the video thread,
-// which is *not* async, however.
-use std::sync::mpsc as sync_mpsc;
-
 pub enum GameThreadMessage {
 	/// Shut down the game thread.
 	Shutdown,

@@ -558,6 +558,11 @@ dependencies = [
 name = "letsplay_runner_core"
 version = "0.1.0-alpha0"
 dependencies = [
+ "cudarc",
+ "gl",
+ "letsplay_av_ffmpeg",
+ "letsplay_core",
+ "letsplay_gpu",
  "thiserror",
  "tokio",
  "tracing",
@@ -571,9 +576,7 @@ dependencies = [
  "anyhow",
  "letsplay_core",
  "letsplay_runner_core",
- "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

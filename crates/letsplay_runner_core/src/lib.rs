@@ -1,5 +1,7 @@
 pub mod client;
 
+pub use tokio as tokio;
+
 #[macro_export]
 /// Creates the boilerplate main() used for runner clients.
 /// # Notes
@@ -9,7 +11,7 @@ pub mod client;
 /// main thread, since it won't be overloaded probably ever.
 macro_rules! client_main {
 	($($impl_type:tt)*) => {
-		#[tokio::main(flavor = "current_thread")]
+		#[$crate::tokio::main(flavor = "current_thread")]
 		async fn main() -> anyhow::Result<()> {
 			let game = Box::new($($impl_type)*::new());
 			Ok(client::main(game).await?)

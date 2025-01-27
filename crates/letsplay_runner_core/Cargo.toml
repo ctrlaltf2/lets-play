@@ -13,3 +13,19 @@ tokio.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+# GPU
+letsplay_core.path = "../letsplay_core"
+letsplay_gpu.path = "../letsplay_gpu"
+gl.workspace = true
+
+# AV stuff
+letsplay_av_ffmpeg = { path = "../letsplay_av_ffmpeg", default-features = false }
+cudarc = { workspace = true, optional = true }
+
+[features]
+# Default to compiling in all possible HW support
+default = [ "av-nvidia" ]
+
+# Enable NVIDIA support 
+av-nvidia = [ "letsplay_av_ffmpeg/nvidia", "dep:cudarc" ]
