@@ -1,23 +1,20 @@
-edition = "2023";
-option optimize_for = SPEED;
-
 // This .proto contains definitions that are used for communication between
 // letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
-// They allow letsplayd to communicate with a runner connected to it and vice versa.
+edition = "2023";
 
 // The type of an input device.
 enum InputDeviceType {
 	// A joypad (probably the default).
 	JOYPAD = 0;
 
-	// Analog joypad. This will provide stick messages.
+	// Analog joypad.
 	JOYPAD_ANALOG = 1;
 
 	// Keyboard and mouse.
 	KB_MOUSE = 2;
 }
 
-// joystick inputs
+// Joystick input.
 message JoystickInput {
 	message Stick {
 		float x = 2;
@@ -29,7 +26,9 @@ message JoystickInput {
 	// Later on these should probably be defined somewhere or something.
 	fixed64 buttons = 1;
 
-	// Sticks are sent in order (and always for the correct count of joysticks)
+	// Sticks are sent in order (and always for the correct count of joysticks).
+	// If the current input device is not JOYPAD_ANALOG, then sticks will be ignored
+	// even if they are sent by the server to us.
 	repeated Stick sticks = 10;
 }
 
@@ -38,7 +37,7 @@ message KbMouseInput {
 		message Key {
 			uint32 keysym = 1;
 			bool pressed = 2;
-		}	
+		}
 
 		repeated Key keys = 1;
 	}
@@ -48,17 +47,78 @@ message KbMouseInput {
 		uint32 y = 2;
 		uint32 buttons = 3;
 	}
+
+	// Present if keyboard input changed
+	Keyboard kb = 1;
+
+	// Present if mouse input changed.
+	Mouse mouse = 2;
+}
+
+// A message sent to letsplayd.
+message ClientMessage {
+	message Hello {
+		// Returns a standardized type id, like:
+		// 'letsplay.libretro'
+		string typeid = 1;
+
+		// Returns the runner API version.
+		// This is incremented on any incompatible bump to
+		// letsplay_runner_core's protobufs.
+		fixed32 version = 2;
+	}
+
+	// Sent when the game has been fully configured.
+	message GameReady {
+	}
+
+	// Provides a new video frame for a runner server 
+	// to broadcast to its connected clients.
+	message VideoFrame {
+		// The type.
+		enum FrameType {
+			// A key frame.
+			KEY = 0;
+
+			// A intra frame. Requires a previous KEY frame and (any) previous
+			// INTRA frames to have been decoded beforehand.
+			INTRA = 1;
+		}
+
+		// The type of this frame
+		FrameType frame_type = 1;
+
+		// A H.264 NAL Unit packet for the video frame.
+		bytes data = 2;
+	}
+
+
+	// Provides a new audio frame for a runner server 
+	// to broadcast to its connected clients.
+	message AudioFrame {
+		// Opus encoded audio packet.
+		bytes data = 1;
+	}
+	
+
+	oneof Oneof {
+		Hello hello = 1;
+		GameReady game_ready = 2;
+
+		VideoFrame video_frame = 5;
+		AudioFrame audio_frame = 6;
+	}
 }
 
 // A request made by letsplayd
 message ServerMessage {
-	// Shut down the runner.
+	// Shut down the runner's game.
 	message Shutdown {}
 
-	// Reset the game 
+	// Reset the currently running game game 
 	message Reset {}
 
-	// initialize
+	// Initialize the game
 	message Initalize {}
 
 	// Controls the runner's suspend flag.
@@ -80,42 +140,57 @@ message ServerMessage {
 		// The key to set. This is optionally namespaced per-runner type, with some generic ones provided.
 		// We could probably use google protobuf any type but /shrug
 		// Example K/V set:
-		// "gpu_device", "[index]"
-		// "libretro.core", "/path/to/core.so",
-		// "libretro.rom", "/path/to/rom"
+		// "letsplay.gpu_device", "[index]"
+		// "letsplay.libretro.core", "/path/to/core.so",
+		// "letsplay.libretro.rom", "/path/to/rom"
 		string key = 1;
 		string value = 2;
 	}
 
-	// Inserts a input device. This typically occurs only at the start of a game
+	// Inserts (plugs in) a input device. This typically occurs only at the start of a game
 	// (for the amount of players configured).
-	message InsertInputDevice {
+	message PlugInputDevice {
 		int32 index = 1;
 		InputDeviceType type = 2;
-	}
-
-	// Provides new inputs to use.
-	message Input {
-		// The device index to populate with new inputs.
-		int32 index = 1;
-
-		oneof Oneof {
-			JoystickInput joy_input = 2;
-			KbMouseInput kbm_input = 3;
-		}
 	}
 
 	// "Unplugs" (removes) an input device. 
 	message UnplugInputDevice {
 		int32 index = 1;
 	}
-}
 
-// A message sent to letsplayd.
-message ClientMessage {
-	message Hello {
-		// Returns a standardized type id, like:
-		// 'letsplay.libretro'
-		string typeid = 1;
+	// Provides new inputs for an input device.
+	message UpdateInputDevice {
+		// The device index to update with new inputs.
+		int32 index = 1;
+
+		// The input to update. A invalid input type will be silently ignored.
+		oneof InputKind {
+			JoystickInput joy_input = 2;
+			KbMouseInput kbm_input = 3;
+		}
+	}
+
+	
+	// Requests a new video keyframe.
+	message VideoRequestKeyFrame {}
+
+	oneof Oneof {
+		// Control
+		Shutdown shutdown = 1;
+		Reset reset = 2;
+		Initalize initalize = 3;
+
+		// Configuration
+		SetSuspend set_suspend = 4;
+		SetProperty set_property = 5;
+
+		// Input
+		PlugInputDevice plug_input_device = 6;
+		UnplugInputDevice unplug_input_device = 7;
+		UpdateInputDevice update_input_device = 8;
+
+		// A/V
+		VideoRequestKeyFrame video_request_key_frame = 9;
 	}
 }
