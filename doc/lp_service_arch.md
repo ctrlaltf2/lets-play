@@ -2,7 +2,7 @@
 
 ## `letsplayd` - main server
 
--   public HTTP/3 endpoint
+-   public HTTP/3 endpoint for the web client
 -   handles relaying video from emulators to users
     -   figure out something for CDN usage...
 -   handles control in emulators yada yada
@@ -35,31 +35,34 @@
 
     -   a/v threads (encodes a/v from runner thread)
 
-        -   can pick either SW (slowest!), vaapi (best for open source drivers), or gpu specific accessed via ffmpeg (nvenc, amf, mmal)
-            -   for HW it might be a good idea to write gpu kernels for rgb -> yuv
-                since that's what most HW encode engines like. for vaapi we can do opencl,
-                for nvenc it can take rgba so we should be fine. for videocore mmal uhh Good Luck
+        -   can pick either SW (slowest!), ffmpeg vaapi (best for open source drivers), or gpu specific accessed via ffmpeg (nvenc)
+            -   for non-nvenc HW it might be a good idea to write gpu kernels for rgb -> yuv
+                since that's what most HW encode engines like. for vaapi we can do opencl.
+                -   nvenc it can take rgba directly, so we don't need any conversion for that.
 
 ### IPC type
 
-#### Local
-
-Local IPC just uses a unix pipe between letsplayd and the runner process.
-
-We can just wrap a protobuf message in a header like this
+IPC messages are just sent like so:
 
 ```c
-struct msghdr {
+struct MessageHeader {
+	// Size of message.
 	u64 size;
-	u8 buffer[size];
+
+	// Protobuf message, either ClientMessage or ServerMessage
+	// root.
+	//u8 buffer[size];
 };
 ```
 
-Simple, yet effective
+Is it bleh? Probably. However, IPC messages _won't_ be directly controlled by users, so this should be "okay" enough. It might suck, but it's not bad.
+
+#### Local
+
+Local IPC just uses a Unix stream socketpair between letsplayd and the runner process (either as fd 3 or if that is "bad" we can allocate a fd number and pass it with like `--local-pairfd=[FD]` I guess).
+
+Simple, yet effective.
 
 #### Remote
 
 Remote IPC should be quic or something.
-
--   `letsplay_runner_retro` - libretro runner (default)
-    -   uses retro_frontend to run cores
