@@ -59,15 +59,16 @@ fn create_context_and_set_common_parameters(
     Ok((encoder, video_encoder_context))
 }
 
-/// A simple H.264 encoder. Currently software only, however
-/// pieces are being put in place to eventually allow HW encoding.
-pub enum H264Encoder {
+/// A simple abstraction/interface over ffmpeg.
+pub enum VideoEncoder {
     Software {
         encoder: ffmpeg::encoder::video::Encoder,
     },
 
 	// FIXME: Rename this to `HardwareWithHwFrame`
-	// once we have multiple hardware encoding paths.
+	// once we have multiple hardware encoding paths,
+	// and have sufficiently expanded them to support
+	// non-NVENC stuff.
 
     /// Hardware encoding, with frames already on the GPU.
     NvencHWFrame {
@@ -76,19 +77,21 @@ pub enum H264Encoder {
     },
 }
 
-impl H264Encoder {
-    /// Creates a new software encoder.
-    pub fn new_software(size: Size, max_framerate: u32, bitrate: usize) -> anyhow::Result<Self> {
+impl VideoEncoder {
+    /// Creates a new software H.264 encoder.
+    pub fn new_h264_software(size: Size, max_framerate: u32, bitrate: usize) -> anyhow::Result<Self> {
         // Create the libx264 context
         let (encoder, mut video_encoder_context) =
             create_context_and_set_common_parameters("libx264", &size, max_framerate, bitrate)?;
 
         video_encoder_context.set_format(ffmpeg::format::Pixel::YUV420P);
 
+		// FIXME: Allow the client to specify how many threads it wants in a Option<usize>
+		// If they do not specify one go to this formula
         let threads = std::thread::available_parallelism().expect("ggg").get() / 8;
 
         // FIXME: tracing please.
-        println!("H264Encoder::new_software(): Using {threads} threads to encode");
+        tracing::info!("VideoEncoder::new_h264_software(): Using {threads} worker threads to encode");
 
         // Frame-level threading causes [N] frames of latency
         // so we use slice-level threading to reduce the latency
@@ -120,10 +123,10 @@ impl H264Encoder {
         Ok(Self::Software { encoder: encoder })
     }
 
-    /// Creates a new hardware (NVIDIA NVENC) encoder, which encodes
-    /// frames from GPU memory, via CUDA.
+    /// Creates a new NVIDIA NVENC H.264 encoder,
+    ///  which encodes frames from GPU memory, via CUDA.
     /// You are expected to handle uploading or otherwise working with a frame on the GPU.
-    pub fn new_nvenc_hwframe(
+    pub fn new_h264_nvenc_hwframe(
         cuda_device: &CudaDevice,
         size: Size,
         max_framerate: u32,
@@ -218,6 +221,8 @@ impl H264Encoder {
             } => {
                 let mut frame = ffmpeg::frame::Video::empty();
 
+				// FIXME: This should be a method on the frame context
+				// so we don't need to do this constantly.
                 unsafe {
                     (*frame.as_mut_ptr()).format = ffmpeg::format::Pixel::CUDA as i32;
                     (*frame.as_mut_ptr()).width = encoder.width() as i32;

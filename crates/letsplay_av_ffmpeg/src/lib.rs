@@ -1,4 +1,4 @@
-pub mod h264_encoder;
+pub mod video_encoder;
 //pub mod lc_muxer;
 
 /// Re-export of `ffmpeg` crate.

@@ -6,7 +6,7 @@ CUDA provides graphics interopability (which allows CUDA to alter PBO, textures,
 
 While `cudarc` generates sys bindings for the generic subset of APIs defined in the CUDA Driver API, we need the OpenGL-specific APIs, which it does *not* generate.
 
-As far as I know the subset of API's this provides go down from CUDA 11.5 - 12.1. So it should be relatively stable and not need a re-bindgen. One can be perodically done anyways using the `./bindgen.sh` script if desired.
+As far as I know the subset of API's this provides go down from CUDA 11.5 - 12.1. So it should be relatively stable and not need a re-bindgen for any new cuda version. One can be perodically done anyways using the `./bindgen.sh` script if desired.
 
 ## Why would we need that?
 

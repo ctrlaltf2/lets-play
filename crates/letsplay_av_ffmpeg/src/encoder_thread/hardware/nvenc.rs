@@ -13,16 +13,21 @@ use std::{
 };
 use tokio::sync::mpsc::{self, error::TryRecvError};
 
-use crate::h264_encoder::H264Encoder;
+use crate::video_encoder::VideoEncoder;
 use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
 
 use letsplay_core::Size;
 
-use super::EncoderCommand;
-use super::EncoderThreadControl;
+use crate::encoder_thread::EncoderCommand;
+use crate::encoder_thread::EncoderThreadControl;
+
+// FIXME: This could probably be shared for all implementations, we 
+// should just have to have init_xxx
+// say init_vaapi,
+// init_software, you can figure it out
 
 struct EncoderStateHW {
-    encoder: Option<H264Encoder>,
+    encoder: Option<VideoEncoder>,
     frame: ffmpeg::frame::Video,
     packet: ffmpeg::Packet,
 }
@@ -37,7 +42,7 @@ impl EncoderStateHW {
     }
 
     fn init(&mut self, device: &Arc<CudaDevice>, size: Size) -> anyhow::Result<()> {
-        self.encoder = Some(H264Encoder::new_nvenc_hwframe(
+        self.encoder = Some(VideoEncoder::new_h264_nvenc_hwframe(
             &device,
             size.clone(),
             60,
@@ -139,7 +144,7 @@ extern \"C\" __global__ void flip_opengl(
     }
 }";
 
-fn encoder_thread_hwframe_main(
+fn main(
     input_msg_notify: Arc<Condvar>,
     input_msg: Arc<Mutex<EncoderCommand>>,
 
@@ -374,10 +379,28 @@ fn encoder_thread_hwframe_main(
 // - The cuda resource and gl context are shared, therefore
 // 	 you have to make sure they are locked and unmapped from whatever
 //	 other thread is using them *BEFORE* asking the encoder thread to do something.
+//
+// Also: we should make the [rgba_to_bgra_kernel] param in spawn()
+// a enum with the following matches:
+// - NoKernel (don't even need cuda kernel here, so we can just ignore it)
+// - Flip (flip, same as current behavior with [rgba_to_bgra_kernel] = false)
+// - ChannelSwap (don't flip but channel swap)
+// - FlipChannelSwap (flip and channel swap, same as current behavior with [rgba_to_bgra_kernel] = true)
+//
+// This will help with software rendered libretro cores.
 
 /// Creates a thread that will encode a OpenGL framebuffer
-/// using ffmpeg hardware-assisted encoding.
-pub fn encoder_thread_spawn_hwframe(
+/// using ffmpeg NVENC-assisted encoding.
+/// 
+/// Additionally, a CUDA kernel will flip the OpenGL framebuffer
+/// right side-up into a temporary backbuffer (only re-allocated
+/// on resize; don't worry, I'm not *that* dumb.). It's *fast*,
+/// with encodes even with that being on average 1-3ms.
+/// 
+/// [rgba_to_bgra_kernel] allows both flipping OpenGL framebuffer 
+/// the right side up and channel swapping. Only set to true if you need this
+/// (in most cases, you shouldn't.)
+pub fn spawn(
     cuda_device: &Arc<CudaDevice>,
     cuda_resource: &Arc<Mutex<GraphicsResource>>,
     gl_context: &Arc<Mutex<DeviceContext>>,
@@ -410,7 +433,7 @@ pub fn encoder_thread_spawn_hwframe(
     let gl_clone = Arc::clone(gl_context);
 
     std::thread::spawn(move || {
-        match encoder_thread_hwframe_main(
+        match main(
             input_updated_clone,
             input_clone,
             processed_cv_clone,

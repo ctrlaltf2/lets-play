@@ -1,4 +1,5 @@
-pub mod hardware_frame;
+pub mod hardware;
+
 // FIXME: (Re-)implement software sad path, as well as
 // CUDA-less hardware encoding. (Maybe use OpenCL? Oh god)
 // For CUDA-less hardware encoding I think we can use
