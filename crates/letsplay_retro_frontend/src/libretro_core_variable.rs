@@ -55,6 +55,8 @@ impl CoreVariable {
 			&self.choices[0]
 		};
 
+		// TODO: Instead of panicing here we should probably make this function
+		// failiable
 		if self.c_value.is_none() {
 			self.c_value = Some(CString::new(rust_value.as_bytes()).expect("aaa"));
 		}

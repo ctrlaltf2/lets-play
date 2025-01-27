@@ -162,15 +162,18 @@ pub(crate) unsafe extern "C" fn environment_callback(
 
 			match ffi::CStr::from_ptr(libretro_variable.key).to_str() {
 				Ok(key) => {
-					if (*FRONTEND).variables.contains_key(key) {
-						let value = (*FRONTEND).variables.get_mut(key).unwrap();
-						let value_str = value.get_value();
-						libretro_variable.value = value_str.as_ptr() as *const i8;
-						return true;
-					} else {
-						// value doesn't exist, tell the core that
-						libretro_variable.value = std::ptr::null();
-						return false;
+					match (*FRONTEND).variables.get_mut(key) {
+						Some(value) => {
+							let value_str = value.get_value();
+							libretro_variable.value = value_str.as_ptr() as *const i8;
+							return true;
+						}
+
+						None => {
+							// value doesn't exist, tell the core that
+							libretro_variable.value = std::ptr::null();
+							return false;
+						}
 					}
 				}
 				Err(err) => {
