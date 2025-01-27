@@ -10,6 +10,7 @@ pub mod hwframe;
 #[allow(unused)] // FIXME
 pub mod encoder_thread;
 
+#[cfg(feature = "nvidia")]
 pub mod cuda_gl;
 
 // from hgaiser/moonshine

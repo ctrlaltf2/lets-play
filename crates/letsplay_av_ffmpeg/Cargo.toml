@@ -15,11 +15,14 @@ letsplay_core.path = "../letsplay_core"
 letsplay_gpu.path = "../letsplay_gpu"
 gl.workspace = true
 
-cudarc = { version = "0.13.3", features = [ "cuda-11050" ] }
+cudarc = { version = "0.13.3", features = [ "cuda-11050" ], optional = true }
 ffmpeg = { version = "7.1.0", package = "ffmpeg-next" }
 libloading = "0.8.5"
 
 tracing.workspace = true
 
-# FIXME: Features or such so we can abstract given HW implementations.
+[features]
+default = [ "nvidia" ]
 
+# Nvidia hardware-specific support
+nvidia = [ "dep:cudarc" ]

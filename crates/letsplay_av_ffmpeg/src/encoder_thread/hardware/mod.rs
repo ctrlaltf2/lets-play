@@ -1,4 +1,6 @@
 //! Hardware encoding encoder thread implementations.
+
+#[cfg(feature = "nvidia")]
 pub mod nvenc;
 
 // FIXME: Provide a VA-API based "libre" implementation
