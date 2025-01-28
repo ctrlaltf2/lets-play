@@ -1,21 +1,20 @@
 use std::{
 	collections::BTreeMap,
-	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
 
 use anyhow::Context;
 use client::GraphicsContexts;
 use letsplay_core::sleep;
-use letsplay_gpu::{self as gpu, egl_helpers::DeviceContext, GlFramebuffer};
+use letsplay_gpu::{self as gpu, GlFramebuffer};
 use letsplay_retro_frontend::{
 	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::AnyDevice,
 };
 use letsplay_runner_core::*;
 
-use letsplay_av_ffmpeg::encoder_thread::EncoderCommand;
 use letsplay_av_ffmpeg::encoder_thread::Control;
+use letsplay_av_ffmpeg::encoder_thread::EncoderCommand;
 
 /// Libretro game. very much TODO
 pub struct RetroGame {
@@ -63,15 +62,15 @@ impl RetroGame {
 }
 
 impl client::Game for RetroGame {
-	fn init(
-		&mut self,
-		graphics_contexts: &client::GraphicsContexts,
-		encoder_control: &Control,
-	) {
-		// HACK: Make the context current when we reach init() because
-		// libretro assumes you keep the context current when loading the game
+	fn init(&mut self, graphics_contexts: &client::GraphicsContexts, encoder_control: &Control) {
+		// HACK: Make the EGL context current when we reach init().
+		//
+		// This fun little hack is (unsuprisingly, because of libretro) because libretro assumes that
+		// a hardware context has been made current when retro_load_game() is called
+		// (and the core calls the environment callback to get a hardware context).
+		//
 		// Once unsuspended (and we're actually context sharing) we will
-		// make current and release properly as we should
+		// do the right thing, and all will be right with the world. Probably.
 		{
 			let lk = graphics_contexts.egl_device_context.lock().expect("???");
 			lk.make_current();
