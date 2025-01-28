@@ -248,7 +248,10 @@ fn main(
 
 				EncoderCommand::SendFrame => {
 					// benchmarking
+					#[cfg(feature = "benchmark")]
 					use std::time::Instant;
+
+					#[cfg(feature = "benchmark")]
 					let start = Instant::now();
 
 					// copy gl frame *ON THE GPU* to ffmpeg frame
@@ -363,6 +366,7 @@ fn main(
 						force_keyframe = false;
 					}
 
+					#[cfg(feature = "benchmark")]
 					if frame_number % 64 == 0 {
 						tracing::info!("encoding frame {frame_number} took {:2?}", start.elapsed());
 					}

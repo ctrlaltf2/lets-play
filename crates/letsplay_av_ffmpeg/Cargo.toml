@@ -27,3 +27,6 @@ tracing.workspace = true
 [features]
 # Nvidia hardware-specific support
 nvidia = [ "dep:cudarc", "dep:libloading" ]
+
+# Benchmarking.
+benchmark = []
