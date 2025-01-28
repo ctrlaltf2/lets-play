@@ -20,6 +20,9 @@ pub enum EncoderCommand {
 	SendFrame,
 }
 
+// TODO: Split EncoderThreadControl and the packet mechanism so that
+// it is two different structs.
+
 /// Shared control for the encoder thread
 #[derive(Clone)]
 pub struct EncoderThreadControl {
