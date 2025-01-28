@@ -1,6 +1,5 @@
 use std::{
 	io::Write,
-	sync::{Arc, Mutex},
 	thread::{self, JoinHandle},
 	time::{Duration, Instant},
 };
@@ -76,7 +75,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	}
 
 	tracing::info!("all clients accepted - unblocking and completing intialization");
-	
+
 	// Helper thread
 	std::thread::spawn(move || loop {
 		let frame = packet_waiter.wait_for_packet();

@@ -1,5 +1,4 @@
 //! Callbacks for libretro
-use crate::input_devices::InputDevice;
 use crate::{frontend::*, libretro_log, util};
 use crate::{libretro_core_variable, libretro_sys_new::*};
 
