@@ -1,4 +1,5 @@
-//! CUDA OpenGL interop
+//! Bindings to CUDA OpenGL interopability functionality,
+//! since cudarc doesn't provide it at all.
 
 #[allow(non_snake_case)]
 pub mod sys;

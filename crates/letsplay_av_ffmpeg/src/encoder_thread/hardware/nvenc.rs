@@ -267,7 +267,7 @@ fn main(
 
 						let frame = encoder.frame();
 
-						// setup the cuMemcpy2D operation to copy to the temporary buffer
+						// Set up the cuMemcpy2D operation to copy to the temporary buffer
 						// (we should probably abstract source and provide a way to elide this,
 						// and instead feed ffmpeg directly. for now it's *just* used with gl so /shrug)
 						{
@@ -334,8 +334,9 @@ fn main(
 							}
 						}
 
-						// FIXME: ideally this would work on-drop but it doesn't.
-						mapped.unmap().expect("fuck you asshole");
+						// FIXME: ideally this would work with RAII behaviour,
+						// but it doesn't. Oh well.
+						mapped.unmap().expect("Failed to unmap CUDA graphics resource");
 						gl_ctx.release();
 					}
 
@@ -364,9 +365,9 @@ fn main(
 				}
 			}
 
-			// processed message
+			// We got here, so we processed the message.
+			// Tell callers that
 			{
-				//println!("gggggg?");
 				{
 					let mut process_lock = processed.lock().expect("gggg");
 					*process_lock = true;
@@ -390,24 +391,26 @@ fn main(
 // 	 you have to make sure they are locked and unmapped from whatever
 //	 other thread is using them *BEFORE* asking the encoder thread to do something.
 //
-// Also: we should make the [rgba_to_bgra_kernel] param in spawn()
-// a enum with the following matches:
-// - NoKernel (don't even need cuda kernel here, so we can just ignore it)
+// Also: we should make the rgba_to_bgra_kernel param in spawn()
+// instead a enum with the following matches:
+// - NoKernel (the caller doesn't even need to flip or channel swap)
 // - Flip (flip, same as current behavior with [rgba_to_bgra_kernel] = false)
 // - ChannelSwap (don't flip but channel swap)
 // - FlipChannelSwap (flip and channel swap, same as current behavior with [rgba_to_bgra_kernel] = true)
 //
 // This will help with software rendered libretro cores.
 
-/// Creates a thread that will encode a OpenGL framebuffer
-/// using ffmpeg NVENC-assisted encoding.
+/// Creates a thread that can encode a OpenGL framebuffer
+/// using ffmpeg NVENC-assisted encoding and CUDA OpenGL 
+/// interopability functions.
 ///
-/// Additionally, a CUDA kernel will flip the OpenGL framebuffer
+/// Internally, a CUDA kernel will flip the OpenGL framebuffer
 /// right side-up into a temporary backbuffer (only re-allocated
-/// on resize; don't worry, I'm not *that* dumb.). It's *fast*,
-/// with encodes even with that being on average 1-3ms.
+/// on resize; don't worry, I'm not *that* dumb.). 
+/// 
+/// It's *fast*, with encodes being on average 900ns to 3ms.
 ///
-/// [rgba_to_bgra_kernel] allows both flipping OpenGL framebuffer
+/// The rgba_to_bgra_kernel parameter allows both flipping OpenGL framebuffer
 /// the right side up and channel swapping. Only set to true if you need this
 /// (in most cases, you shouldn't.)
 pub fn spawn(

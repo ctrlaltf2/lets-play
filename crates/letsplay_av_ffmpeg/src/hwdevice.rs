@@ -1,3 +1,5 @@
+//! Bindings to ffmpeg hardware context APIs.
+
 use std::ptr::null_mut;
 
 use super::check_ret;

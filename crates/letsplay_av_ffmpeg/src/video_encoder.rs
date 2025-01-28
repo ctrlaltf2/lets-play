@@ -194,6 +194,8 @@ impl VideoEncoder {
 
 	// NOTE: It's a bit pointless to have this have a mut borrow,
 	// but you'll probably have a mutable borrow on this already..
+
+	/// Queries if the current encoder is a hardware encoder.
 	pub fn is_hardware(&mut self) -> bool {
 		match self {
 			Self::Software { .. } => false,
@@ -208,6 +210,7 @@ impl VideoEncoder {
 	//    }
 	//}
 
+	/// Creates a single frame for the current encoder.
 	pub fn create_frame(&mut self) -> anyhow::Result<ffmpeg::frame::Video> {
 		match self {
 			Self::Software { encoder } => {
@@ -242,6 +245,7 @@ impl VideoEncoder {
 		}
 	}
 
+	/// Send a frame to the encoder.
 	pub fn send_frame(&mut self, frame: &ffmpeg::Frame) {
 		match self {
 			Self::Software { encoder } => {
@@ -257,6 +261,7 @@ impl VideoEncoder {
 		}
 	}
 
+	/// Send a EOF to the encoder.
 	pub fn send_eof(&mut self) {
 		match self {
 			Self::Software { encoder } => {
@@ -282,7 +287,8 @@ impl VideoEncoder {
 		};
 	}
 
-	// Shuold this return a Result<ControlFlow> so we can make it easier to know when to continue?
+	// FIXME: Should this return a Result<ControlFlow> so we can make it easier to know when to continue?
+	/// Recieve a packet from the encoder.
 	pub fn receive_packet(&mut self, packet: &mut ffmpeg::Packet) -> anyhow::Result<()> {
 		loop {
 			match self.receive_packet_impl(packet) {
@@ -292,7 +298,7 @@ impl VideoEncoder {
 						return Err(ffmpeg::Error::Other { errno: errno }.into());
 					} else {
 						// EAGAIN is not fatal, and simply means
-						// we should just try again
+						// we should just try again at a later time
 						break;
 					}
 				}

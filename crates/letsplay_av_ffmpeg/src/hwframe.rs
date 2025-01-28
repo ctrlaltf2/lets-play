@@ -1,3 +1,7 @@
+//! Bindings to ffmpeg hardware frame contexts.
+//! These are basically used with a device context
+//! so that we can create frames to process on a 
+//! hardware device.
 use std::ptr::null_mut;
 
 use super::ffmpeg;
@@ -8,14 +12,14 @@ use super::{check_ret, hwdevice::DeviceContext};
 
 /// A context that can allocate hardware frames.
 pub struct HwFrameContext {
-    _cuda_device_context: DeviceContext,
+    _device_context: DeviceContext,
     buffer: *mut ffmpeg::sys::AVBufferRef,
 }
 
 impl HwFrameContext {
     fn new(device_context: DeviceContext, buffer: *mut ffmpeg::sys::AVBufferRef) -> Self {
         Self {
-            _cuda_device_context: device_context,
+            _device_context: device_context,
             buffer,
         }
     }
@@ -33,7 +37,7 @@ impl HwFrameContext {
     }
 
     pub fn as_device_context_mut(&mut self) -> &mut ffmpeg::sys::AVBufferRef {
-        self._cuda_device_context.as_raw_mut()
+        self._device_context.as_raw_mut()
     }
 
     /// call once to allocate frame

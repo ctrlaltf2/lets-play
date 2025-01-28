@@ -1,3 +1,4 @@
+//! Encoder thread implementations.
 pub mod hardware;
 
 // FIXME: (Re-)implement software sad path, as well as
