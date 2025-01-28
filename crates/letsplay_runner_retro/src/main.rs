@@ -4,6 +4,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
+use anyhow::Context;
 use client::GraphicsContexts;
 use letsplay_core::sleep;
 use letsplay_gpu::{self as gpu, egl_helpers::DeviceContext, GlFramebuffer};
@@ -85,26 +86,35 @@ impl client::Game for RetroGame {
 		self.get_frontend().reset();
 	}
 
-	fn set_property(&mut self, key: &str, value: &str) {
+	fn set_property(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
 		match key {
 			"libretro.core" => {
-				tracing::info!("Core is {value}");
 				// TODO: Failure should be logged, not panic worthy
 				self.get_frontend()
 					.load_core(value)
-					.expect("Failed to load core");
+					.with_context(|| format!("While trying to load core {}", value))?;
+
+				tracing::info!("Loaded core \"{}\"", value);
 
 				let av_info = self.get_frontend().get_av_info().expect("???");
 				self.frame_duration = Duration::from_secs_f64(1.0 / av_info.timing.fps);
+
+				Ok(())
 			}
 
 			"libretro.rom" => {
 				self.get_frontend()
 					.load_game(value)
-					.expect("Failed to load ROM/game");
+					.with_context(|| format!("While trying to load game {}", value))?;
+
+
+				tracing::info!("Loaded game \"{}\"", value);
+				Ok(())
 			}
 
-			_ => {}
+			_ => Err(anyhow::anyhow!(
+				"No such key \"{key}\" is known (value \"{value}\""
+			)),
 		}
 	}
 

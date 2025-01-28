@@ -15,8 +15,8 @@ pub trait Game {
 	// Not needed per se since we will just exit after shutdown,
 	// but cleaning up after ourselves isn't bad programming practice
 
-	/// Set a named property.
-	fn set_property(&mut self, key: &str, value: &str);
+	/// Set a named property. Failable.
+	fn set_property(&mut self, key: &str, value: &str) -> anyhow::Result<()>;
 
 	// We'll need input + video frame stuff too
 

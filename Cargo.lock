@@ -558,6 +558,7 @@ dependencies = [
 name = "letsplay_runner_core"
 version = "0.1.0-alpha0"
 dependencies = [
+ "anyhow",
  "cudarc",
  "gl",
  "letsplay_av_ffmpeg",

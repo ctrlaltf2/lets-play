@@ -1,10 +1,16 @@
 use std::{
-	io::Write, sync::{Arc, Mutex}, thread::{self, JoinHandle}, time::{Duration, Instant}
+	io::Write,
+	sync::{Arc, Mutex},
+	thread::{self, JoinHandle},
+	time::{Duration, Instant},
 };
 
 // This is used by async code, so we have to use
 // Tokio's channels.
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use tokio::sync::{
+	mpsc::{self, error::TryRecvError},
+	oneshot,
+};
 
 use super::{Game, GraphicsContexts};
 
@@ -16,13 +22,18 @@ enum GameThreadMessage {
 
 	Suspend {
 		suspend: bool,
+		tx: oneshot::Sender<()>,
 	},
 
-	Reset,
+	Reset {
+		tx: oneshot::Sender<()>,
+	},
 
 	SetProperty {
 		key: String,
 		value: String,
+
+		tx: oneshot::Sender<()>,
 	},
 }
 
@@ -59,21 +70,18 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
 	let mut clients = Vec::new();
 
-	while clients.len() != 2 {
+	while clients.len() != 1 {
 		let client = server.accept().expect("baned");
 		clients.push(client.0);
 	}
 
 	tracing::info!("all clients accepted - unblocking and completing intialization");
 
-
 	let clone = video_encoder_control.clone();
-	std::thread::spawn(move || {
-		loop {
-			let frame = clone.wait_for_packet();
-			for client in &mut clients {
-				let _ = client.write_all(frame.data().unwrap());
-			}
+	std::thread::spawn(move || loop {
+		let frame = clone.wait_for_packet();
+		for client in &mut clients {
+			let _ = client.write_all(frame.data().unwrap());
 		}
 	});
 
@@ -81,22 +89,29 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 		match rx.try_recv() {
 			Ok(message) => match message {
 				GameThreadMessage::Shutdown => break,
-				GameThreadMessage::Suspend { suspend } => {
+				GameThreadMessage::Suspend { suspend, tx } => {
 					if suspended != suspend {
 						suspended = suspend
 					}
+
+					let _ = tx.send(());
 				}
 
-				GameThreadMessage::Reset => {
+				GameThreadMessage::Reset { tx } => {
 					game.reset();
+					let _ = tx.send(());
 				}
 
-				GameThreadMessage::SetProperty { key, value } => {
-					game.set_property(&key, &value);
+				GameThreadMessage::SetProperty { key, value, tx } => {
+					// TODO: set_property should be failable
+					match game.set_property(&key, &value) {
+						Ok(_) => {}
+						Err(err) => {
+							tracing::error!("Error setting property {key} to {value}: {}", err);
+						}
+					};
+					let _ = tx.send(());
 				}
-
-				// NB: There will be more so I'm leaving this here
-				_ => {}
 			},
 
 			Err(TryRecvError::Empty) => {}
@@ -162,21 +177,29 @@ impl GameThread {
 
 	pub async fn reset(&self) {
 		// TODO
-		let _ = self.tx.send(GameThreadMessage::Reset);
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.send(GameThreadMessage::Reset { tx });
+		let _ = rx.await;
 	}
 
 	pub async fn set_property(&self, key: String, value: String) {
 		// TODO
+		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.send(GameThreadMessage::SetProperty {
 			key: key.clone(),
 			value: value.clone(),
+			tx,
 		});
+		let _ = rx.await;
 	}
 
 	pub async fn set_suspend(&self, suspend: bool) {
-		let _ = self
-			.tx
-			.send(GameThreadMessage::Suspend { suspend: suspend });
+		let (tx, rx) = oneshot::channel();
+		let _ = self.tx.send(GameThreadMessage::Suspend {
+			suspend: suspend,
+			tx,
+		});
+		let _ = rx.await;
 	}
 
 	/// Shuts down the game thread.

@@ -20,12 +20,6 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum RunnerError {}
 
-// enum VideoFrame
-//	- leased framebuffer (SW)
-//	- opengl texture (or EGLImage? that is apparently easier to share between threads)
-// probably could be accomplished by guarding accesses to the framebuffer, although i guess
-// for more throughput the framebuffer state *could* be cloned. i don't really want to do that though
-
 /// The core of all Let's Play runners.
 struct Runner {
 	game_thread: GameThread,
