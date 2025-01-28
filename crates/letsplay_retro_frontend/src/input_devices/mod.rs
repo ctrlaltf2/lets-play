@@ -8,6 +8,9 @@ pub use mouse::*;
 pub mod analog_retropad;
 pub use analog_retropad::*;
 
+mod any_device;
+pub use any_device::*;
+
 /// Trait/abstraction for implementing Libretro input devices.
 pub trait InputDevice {
 	/// Gets the device type. This should never EVER change, and simply return a constant.
