@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 # Let's Play-specific dependencies
 letsplay_core.path = "../letsplay_core"
+letsplay_gpu.path = "../letsplay_gpu"
 letsplay_runner_core.path = "../letsplay_runner_core"
 
 # The important part (libretro frontend goodness)
@@ -15,3 +16,12 @@ letsplay_retro_frontend.path = "../letsplay_retro_frontend"
 # Stuff we want
 tracing.workspace = true
 anyhow.workspace = true
+
+gl.workspace = true
+
+# NVIDIA speicfic
+cudarc = { workspace = true, optional = true }
+
+[features]
+default = [ "av-nvidia" ]
+av-nvidia = [ "letsplay_runner_core/av-nvidia", "dep:cudarc" ]

@@ -574,7 +574,10 @@ name = "letsplay_runner_retro"
 version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
+ "cudarc",
+ "gl",
  "letsplay_core",
+ "letsplay_gpu",
  "letsplay_retro_frontend",
  "letsplay_runner_core",
  "tracing",

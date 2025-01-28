@@ -14,6 +14,8 @@ use thiserror::Error;
 
 pub use game_thread::Game;
 
+pub use game_thread::GraphicsContexts;
+
 #[derive(Error, Debug)]
 pub enum RunnerError {}
 

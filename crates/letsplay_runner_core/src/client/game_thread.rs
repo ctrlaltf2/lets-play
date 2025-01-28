@@ -1,8 +1,13 @@
 use std::{
+	sync::{Arc, Mutex},
 	thread,
 	time::{Duration, Instant},
 };
 
+#[cfg(feature = "av-nvidia")]
+use cudarc::driver::CudaDevice;
+
+use letsplay_gpu::egl_helpers::DeviceContext;
 // This is used by async code, so we have to use
 // Tokio's channels.
 use tokio::sync::mpsc::{self, error::TryRecvError};
@@ -23,12 +28,23 @@ pub enum GameThreadMessage {
 	},
 }
 
+#[cfg(feature = "av-nvidia")]
+pub struct GraphicsContexts {
+	pub egl_device_context: Arc<Mutex<DeviceContext>>,
+	pub cuda_context: Arc<CudaDevice>,
+}
+
+#[cfg(not(feature = "av-nvidia"))]
+pub struct GraphicsContexts {
+	pub egl_device_context: Arc<Mutex<DeviceContext>>,
+}
+
 /// A game running on the game thread.
 /// With game and game accesories.
 pub trait Game {
-	fn init(&self);
+	fn init(&mut self, graphics_contexts: &GraphicsContexts);
 
-	fn reset(&self);
+	fn reset(&mut self);
 
 	// Shutdown (clean up all resources)
 	// Not needed per se since we will just exit after shutdown,
@@ -55,7 +71,24 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 
 	// bring up EGL/CUDA/whatever
 
-	game.init();
+	let contexts = {
+		#[cfg(feature = "av-nvidia")]
+		{
+			GraphicsContexts {
+				cuda_context: CudaDevice::new(0).expect("???"),
+				egl_device_context: Arc::new(Mutex::new(DeviceContext::new(0))),
+			}
+		}
+
+		#[cfg(not(feature = "av-nvidia"))]
+		{
+			GraphicsContexts {
+				egl_device_context: Arc::new(Mutex::new(DeviceContext::new(0))),
+			}
+		}
+	};
+
+	game.init(&contexts);
 
 	// Spawn the video thread here
 
@@ -98,8 +131,14 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 		}
 
 		let now = Instant::now();
+		{
+			let lk = contexts.egl_device_context.lock().expect("???");
+			lk.make_current();
 
-		game.run_frame();
+			game.run_frame();
+
+			lk.release();
+		}
 
 		// FIXME: Submit rendered frame to video thread,
 		// unless a frame is duplicated. (this allows us to hold output/do
