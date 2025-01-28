@@ -8,8 +8,7 @@ use ffmpeg::codec as lavc; // lavc
 
 use letsplay_core::Size;
 
-/// this is required for libx264 to like. Work
-pub fn create_context_from_codec(codec: ffmpeg::Codec) -> Result<lavc::Context, ffmpeg::Error> {
+fn create_context_from_codec(codec: ffmpeg::Codec) -> Result<lavc::Context, ffmpeg::Error> {
 	unsafe {
 		let context = ffmpeg::sys::avcodec_alloc_context3(codec.as_ptr());
 		if context.is_null() {
