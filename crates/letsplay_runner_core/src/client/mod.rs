@@ -1,20 +1,21 @@
 //! Code used for runner clients (that connect to letsplayd)
+
+mod game;
+mod graphics_contexts;
 mod game_thread;
+
+pub use graphics_contexts::*;
+pub use game::*;
 
 use std::time::Duration;
 
 use game_thread::GameThread;
-use tokio::sync::mpsc;
 use tokio::time;
 
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 use thiserror::Error;
-
-pub use game_thread::Game;
-
-pub use game_thread::GraphicsContexts;
 
 #[derive(Error, Debug)]
 pub enum RunnerError {}

@@ -1,18 +1,16 @@
 use std::{
 	sync::{Arc, Mutex},
-	thread,
+	thread::{self, JoinHandle},
 	time::{Duration, Instant},
 };
 
-#[cfg(feature = "av-nvidia")]
-use cudarc::driver::CudaDevice;
-
-use letsplay_gpu::egl_helpers::DeviceContext;
 // This is used by async code, so we have to use
 // Tokio's channels.
 use tokio::sync::mpsc::{self, error::TryRecvError};
 
-pub enum GameThreadMessage {
+use super::{Game, GraphicsContexts};
+
+enum GameThreadMessage {
 	/// Shut down the game thread.
 	Shutdown,
 
@@ -28,40 +26,6 @@ pub enum GameThreadMessage {
 	},
 }
 
-#[cfg(feature = "av-nvidia")]
-pub struct GraphicsContexts {
-	pub egl_device_context: Arc<Mutex<DeviceContext>>,
-	pub cuda_context: Arc<CudaDevice>,
-}
-
-#[cfg(not(feature = "av-nvidia"))]
-pub struct GraphicsContexts {
-	pub egl_device_context: Arc<Mutex<DeviceContext>>,
-}
-
-/// A game running on the game thread.
-/// With game and game accesories.
-pub trait Game {
-	fn init(&mut self, graphics_contexts: &GraphicsContexts);
-
-	fn reset(&mut self);
-
-	// Shutdown (clean up all resources)
-	// Not needed per se since we will just exit after shutdown,
-	// but cleaning up after ourselves isn't bad programming practice
-
-	fn set_property(&mut self, key: &str, value: &str);
-
-	// We'll need input + video frame stuff too
-
-	/// Runs a single frame. Should not sleep, [Game::wait_for_next_frame]
-	/// will sleep until the next frame (if required).
-	fn run_frame(&mut self);
-
-	/// Wait for the next frame/emulation tick.
-	fn wait_for_next_frame(&mut self, start: Instant);
-}
-
 fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
@@ -71,22 +35,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 
 	// bring up EGL/CUDA/whatever
 
-	let contexts = {
-		#[cfg(feature = "av-nvidia")]
-		{
-			GraphicsContexts {
-				cuda_context: CudaDevice::new(0).expect("???"),
-				egl_device_context: Arc::new(Mutex::new(DeviceContext::new(0))),
-			}
-		}
-
-		#[cfg(not(feature = "av-nvidia"))]
-		{
-			GraphicsContexts {
-				egl_device_context: Arc::new(Mutex::new(DeviceContext::new(0))),
-			}
-		}
-	};
+	let contexts = GraphicsContexts::create(0);
 
 	game.init(&contexts);
 
@@ -131,6 +80,9 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 		}
 
 		let now = Instant::now();
+
+		// Do a game frame, temporairly locking the EGL context and making it current.
+		// We do this so that the context can be leased to another thread (the encoder thread!).
 		{
 			let lk = contexts.egl_device_context.lock().expect("???");
 			lk.make_current();
@@ -158,6 +110,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 /// Handle to a spawned game thread
 pub struct GameThread {
 	tx: mpsc::UnboundedSender<GameThreadMessage>,
+	join_handle: JoinHandle<()>,
 }
 
 impl GameThread {
@@ -166,14 +119,14 @@ impl GameThread {
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		// Spawn the game thread
-		let _ = thread::Builder::new()
+		let join_handle = thread::Builder::new()
 			.name("letsplay_runner_game".into())
 			.spawn(move || {
 				main(rx, game);
 			})
 			.expect("Failed to spawn game thread");
 
-		GameThread { tx }
+		GameThread { tx, join_handle }
 	}
 
 	pub async fn reset(&self) {
@@ -189,8 +142,9 @@ impl GameThread {
 		});
 	}
 
+	/// Shuts down the game thread.
 	pub async fn shutdown(&self) {
 		let _ = self.tx.send(GameThreadMessage::Shutdown);
-		// TODO join thread
+		// TODO: join thread (or make it easier for this to be consuming)
 	}
 }
