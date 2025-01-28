@@ -46,7 +46,7 @@ impl Runner {
 
 		// TEMP: Just for testing libretro runner bringup
 		self.game_thread.set_property("libretro.core".into(), "cores/swanstation_libretro.so".into()).await;
-		self.game_thread.set_property("libretro.rom".into(), "roms/nmv1_us.cue".into()).await;
+		self.game_thread.set_property("libretro.rom".into(), "roms/merged/nmv2/ja/nmv2ja.cue".into()).await;
 
 		self.game_thread.set_suspend(false).await;
 
