@@ -42,8 +42,9 @@ fn create_context_and_set_common_parameters(
 	video_encoder_context.set_max_bit_rate(bitrate);
 
 	// qp TODO:
-	//video_encoder_context.set_qmax(30);
-	//video_encoder_context.set_qmin(35);
+	video_encoder_context.set_qmin(30);
+	video_encoder_context.set_qmax(28);
+
 
 	video_encoder_context.set_time_base(ffmpeg::Rational(1, max_framerate as i32).invert());
 	video_encoder_context.set_format(ffmpeg::format::Pixel::YUV420P);
@@ -67,12 +68,8 @@ pub enum VideoEncoder {
 		encoder: ffmpeg::encoder::video::Encoder,
 	},
 
-	// FIXME: Rename this to `HardwareWithHwFrame`
-	// once we have multiple hardware encoding paths,
-	// and have sufficiently expanded them to support
-	// non-NVENC stuff.
-	/// Hardware encoding, with frames already on the GPU.
-	NvencHWFrame {
+	/// Hardware encoding, with frames already on or uploaded to the GPU.
+	HardwareWithHardwareFrame {
 		encoder: ffmpeg::encoder::video::Encoder,
 		hw_context: HwFrameContext,
 	},
@@ -160,9 +157,6 @@ impl VideoEncoder {
 
 		video_encoder_context.set_format(ffmpeg::format::Pixel::CUDA);
 
-		video_encoder_context.set_qmin(35);
-		video_encoder_context.set_qmax(38);
-
 		unsafe {
 			// FIXME: this currently breaks the avbufferref system a bit
 			(*video_encoder_context.as_mut_ptr()).hw_frames_ctx =
@@ -192,7 +186,7 @@ impl VideoEncoder {
 			.open_as_with(encoder, dict)
 			.with_context(|| "While opening h264_nvenc video codec")?;
 
-		Ok(Self::NvencHWFrame {
+		Ok(Self::HardwareWithHardwareFrame {
 			encoder: encoder,
 			hw_context: hw_frame_context,
 		})
@@ -203,7 +197,7 @@ impl VideoEncoder {
 	pub fn is_hardware(&mut self) -> bool {
 		match self {
 			Self::Software { .. } => false,
-			Self::NvencHWFrame { .. } => true,
+			Self::HardwareWithHardwareFrame { .. } => true,
 		}
 	}
 
@@ -224,7 +218,7 @@ impl VideoEncoder {
 				));
 			}
 
-			Self::NvencHWFrame {
+			Self::HardwareWithHardwareFrame {
 				encoder,
 				hw_context,
 			} => {
@@ -254,7 +248,7 @@ impl VideoEncoder {
 				encoder.send_frame(frame).unwrap();
 			}
 
-			Self::NvencHWFrame {
+			Self::HardwareWithHardwareFrame {
 				encoder,
 				hw_context: _,
 			} => {
@@ -269,7 +263,7 @@ impl VideoEncoder {
 				encoder.send_eof().unwrap();
 			}
 
-			Self::NvencHWFrame {
+			Self::HardwareWithHardwareFrame {
 				encoder,
 				hw_context: _,
 			} => {
@@ -281,7 +275,7 @@ impl VideoEncoder {
 	fn receive_packet_impl(&mut self, packet: &mut ffmpeg::Packet) -> Result<(), ffmpeg::Error> {
 		return match self {
 			Self::Software { encoder } => encoder.receive_packet(packet),
-			Self::NvencHWFrame {
+			Self::HardwareWithHardwareFrame {
 				encoder,
 				hw_context: _,
 			} => encoder.receive_packet(packet),

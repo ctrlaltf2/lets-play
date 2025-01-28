@@ -576,6 +576,7 @@ dependencies = [
  "anyhow",
  "cudarc",
  "gl",
+ "letsplay_av_ffmpeg",
  "letsplay_core",
  "letsplay_gpu",
  "letsplay_retro_frontend",

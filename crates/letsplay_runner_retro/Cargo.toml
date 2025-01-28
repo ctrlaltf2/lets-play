@@ -10,6 +10,8 @@ letsplay_core.path = "../letsplay_core"
 letsplay_gpu.path = "../letsplay_gpu"
 letsplay_runner_core.path = "../letsplay_runner_core"
 
+letsplay_av_ffmpeg.path = "../letsplay_av_ffmpeg"
+
 # The important part (libretro frontend goodness)
 letsplay_retro_frontend.path = "../letsplay_retro_frontend"
 

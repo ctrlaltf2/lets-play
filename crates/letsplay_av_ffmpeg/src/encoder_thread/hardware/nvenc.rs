@@ -204,6 +204,8 @@ fn main(
     // allocated.
     let mut temp_buffer: CudaSlice<u32> = cuda_device.alloc_zeros::<u32>(48).expect("over");
 
+	tracing::info!("Encoder thread ready for service!");
+
     loop {
         // wait for a message
         {

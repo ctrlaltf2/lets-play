@@ -1,7 +1,5 @@
 use std::{
-	sync::{Arc, Mutex},
-	thread::{self, JoinHandle},
-	time::{Duration, Instant},
+	io::Write, sync::{Arc, Mutex}, thread::{self, JoinHandle}, time::{Duration, Instant}
 };
 
 // This is used by async code, so we have to use
@@ -9,6 +7,8 @@ use std::{
 use tokio::sync::mpsc::{self, error::TryRecvError};
 
 use super::{Game, GraphicsContexts};
+
+use letsplay_av_ffmpeg::encoder_thread;
 
 enum GameThreadMessage {
 	/// Shut down the game thread.
@@ -37,9 +37,45 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 
 	let contexts = GraphicsContexts::create(0);
 
-	game.init(&contexts);
-
 	// Spawn the video thread here
+
+	let video_encoder_control = {
+		#[cfg(feature = "av-nvidia")]
+		{
+			encoder_thread::hardware::nvenc::spawn(
+				&contexts.cuda_context.clone(),
+				&contexts.cuda_interop_context.clone(),
+				&contexts.egl_device_context.clone(),
+				false,
+			)
+		}
+	};
+
+	game.init(&contexts, &video_encoder_control);
+
+	// TEMP CODE: This accepts a single tcp connection and broadcasts packets to it
+	// this is temporary as all hell
+	// yes I know sync io but its running on another thread anyways so its fine.
+	let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
+	let mut clients = Vec::new();
+
+	while clients.len() != 2 {
+		let client = server.accept().expect("baned");
+		clients.push(client.0);
+	}
+
+	tracing::info!("all clients accepted - unblocking and completing intialization");
+
+
+	let clone = video_encoder_control.clone();
+	std::thread::spawn(move || {
+		loop {
+			let frame = clone.wait_for_packet();
+			for client in &mut clients {
+				let _ = client.write_all(frame.data().unwrap());
+			}
+		}
+	});
 
 	loop {
 		match rx.try_recv() {
@@ -88,11 +124,10 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 			lk.release();
 		}
 
-		// FIXME: Submit rendered frame to video thread,
-		// unless a frame is duplicated. (this allows us to hold output/do
-		// dynamic fps for static/mostly static scenes, which will *heavily* decrease bandwidth consumption
-		// on both the server and player ends)
-		//
+		// Tell the encoder thread to encode the frame we just ran
+		video_encoder_control.send_command(encoder_thread::EncoderCommand::SendFrame);
+
+		// FIXME: Output audio
 		// Audio should always be submitted and output (Opus supports DTX which would give us similar wins to frame duplication,
 		// but I'm not sure if the latency trade off is that worth it for a few kpbs less bandwidth)
 

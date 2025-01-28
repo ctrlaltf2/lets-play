@@ -1,3 +1,5 @@
+use letsplay_av_ffmpeg::encoder_thread::EncoderThreadControl;
+
 use super::GraphicsContexts;
 use std::time::Instant;
 
@@ -5,7 +7,7 @@ use std::time::Instant;
 /// A runner implementation implements this trait.
 pub trait Game {
 	/// Do any initalization tasks. Graphics contexts are provided
-	fn init(&mut self, graphics_contexts: &GraphicsContexts);
+	fn init(&mut self, graphics_contexts: &GraphicsContexts, encoder_control: &EncoderThreadControl);
 
 	fn reset(&mut self);
 
