@@ -530,3 +530,6 @@ impl Drop for Frontend {
 		}
 	}
 }
+
+// NOTE: Only one thread should run the frontend.
+unsafe impl Send for Frontend {}
