@@ -89,7 +89,6 @@ impl client::Game for RetroGame {
 	fn set_property(&mut self, key: &str, value: &str) -> anyhow::Result<()> {
 		match key {
 			"libretro.core" => {
-				// TODO: Failure should be logged, not panic worthy
 				self.get_frontend()
 					.load_core(value)
 					.with_context(|| format!("While trying to load core {}", value))?;
@@ -106,7 +105,6 @@ impl client::Game for RetroGame {
 				self.get_frontend()
 					.load_game(value)
 					.with_context(|| format!("While trying to load game {}", value))?;
-
 
 				tracing::info!("Loaded game \"{}\"", value);
 				Ok(())

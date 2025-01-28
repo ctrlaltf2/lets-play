@@ -4,6 +4,7 @@ use super::check_ret;
 
 use super::ffmpeg;
 
+/// A built hardware device context.
 pub struct DeviceContext {
 	buffer: *mut ffmpeg::sys::AVBufferRef,
 }
@@ -40,6 +41,7 @@ impl Drop for DeviceContext {
 	}
 }
 
+/// Builder for hardware context types.
 pub struct DeviceContextBuilder {
 	buffer: *mut ffmpeg::sys::AVBufferRef,
 	context_type: ffmpeg::sys::AVHWDeviceType,

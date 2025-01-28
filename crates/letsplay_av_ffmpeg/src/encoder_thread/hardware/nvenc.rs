@@ -1,3 +1,11 @@
+//! NVIDIA NVENC specific encoder thread implementation.
+//! 
+//! # Notes
+//! This currently requires a GPU that can utilize both NVENC
+//! and CUDA (not just run kernels, but nvrtc).
+//! Pascal generation GPUs are probably the minimum
+//! since CUDA 11 deprecated and removed compile support
+//! for earlier GPUs.
 use anyhow::Context;
 use cudarc::{
 	driver::{

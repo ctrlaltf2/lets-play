@@ -11,16 +11,24 @@ use std::time::Duration;
 
 use letsplay_core::Size;
 
+/// A command for the encoder thread.
 #[derive(Debug)]
 pub enum EncoderCommand {
+	/// (Re)-initalize encoding for the given resolution
 	Init { size: Size },
+
+	/// Shut down the encoder thread.
 	Shutdown,
 
+	/// Force the next frame, output via a [EncoderCommand::SendFrame]
+	/// command, to be a key frame (IDR frame).
 	ForceKeyframe,
+
+	/// Encode a frame.
 	SendFrame,
 }
 
-/// Shared control for the encoder thread
+/// Shared control for the encoder thread.
 #[derive(Clone)]
 pub struct Control {
 	// input
@@ -32,17 +40,19 @@ pub struct Control {
 	processed_cv: Arc<Condvar>,
 }
 
+/// Allows waiting for the video encoder thread
+/// to produce packets.
 #[derive(Clone)]
 pub struct PacketWaiter {
 	packet_updated_cv: Arc<Condvar>,
 	packet: Arc<Mutex<ffmpeg::Packet>>,
 }
 
-
 // FIXME for these impls:
 // DO NOT .expect(). PLEASE.
 
 impl PacketWaiter {
+	/// Wait for a packet without timeout.
 	pub fn wait_for_packet(&self) -> MutexGuard<'_, ffmpeg::Packet> {
 		let mut lk = self.packet.lock().expect("failed to lock packet");
 		let mut waited_lk = self
@@ -52,6 +62,7 @@ impl PacketWaiter {
 		waited_lk
 	}
 
+	/// Wait for a packet with timeout.
 	pub fn wait_for_packet_timeout(
 		&self,
 		timeout: Duration,
@@ -70,8 +81,8 @@ impl PacketWaiter {
 	}
 }
 
-
 impl Control {
+	/// Sends a command to the encoder thread.
 	pub fn send_command(&self, cmd: EncoderCommand) {
 		{
 			let mut lk = self.input.lock().expect("failed to lock input");
