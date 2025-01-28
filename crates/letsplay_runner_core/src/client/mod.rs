@@ -50,6 +50,12 @@ impl Runner {
 		//
 		// TODO: implement RPC client
 
+		// TEMP: Just for testing libretro runner bringup
+		self.game_thread.set_property("libretro.core".into(), "cores/swanstation_libretro.so".into()).await;
+		self.game_thread.set_property("libretro.rom".into(), "roms/nmv1_us.cue".into()).await;
+
+		self.game_thread.set_suspend(false).await;
+
 		loop {
 			time::sleep(Duration::from_secs(1)).await;
 		}

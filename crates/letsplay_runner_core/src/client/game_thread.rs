@@ -31,7 +31,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
 	// better (and properly handle states or whatever) we should probably just like... Do so?
-	let mut suspended = false;
+	let mut suspended = true;
 
 	// bring up EGL/CUDA/whatever
 
@@ -40,10 +40,6 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	game.init(&contexts);
 
 	// Spawn the video thread here
-
-	// HACK to try out libretro
-	game.set_property("libretro.core", "cores/swanstation_libretro.so");
-	game.set_property("libretro.rom", "roms/nmv1_us.cue");
 
 	loop {
 		match rx.try_recv() {
@@ -140,6 +136,12 @@ impl GameThread {
 			key: key.clone(),
 			value: value.clone(),
 		});
+	}
+
+	pub async fn set_suspend(&self, suspend: bool) {
+		let _ = self
+			.tx
+			.send(GameThreadMessage::Suspend { suspend: suspend });
 	}
 
 	/// Shuts down the game thread.
