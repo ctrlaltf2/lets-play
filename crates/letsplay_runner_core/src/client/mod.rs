@@ -1,11 +1,11 @@
 //! Code used for runner clients (that connect to letsplayd)
 
 mod game;
-mod graphics_contexts;
 mod game_thread;
+mod graphics_contexts;
 
-pub use graphics_contexts::*;
 pub use game::*;
+pub use graphics_contexts::*;
 
 use std::time::Duration;
 
@@ -20,47 +20,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum RunnerError {}
 
-/// The core of all Let's Play runners.
-struct Runner {
-	game_thread: GameThread,
-}
-
-impl Runner {
-	fn new(game: Box<dyn Game + Send>) -> Self {
-		Self {
-			game_thread: GameThread::spawn(game),
-		}
-	}
-
-	async fn shutdown(&self) {
-		self.game_thread.shutdown().await;
-	}
-
-	// run on the main thread
-	// spawns all other threads and handles shutdown
-	//
-	async fn run(&self) -> Result<(), RunnerError> {
-		// just spin forever for now
-		//
-		// TODO: implement RPC client
-
-		// TEMP: Just for testing libretro runner bringup
-		self.game_thread.set_property("libretro.core".into(), "cores/swanstation_libretro.so".into()).await;
-		self.game_thread.set_property("libretro.rom".into(), "roms/merged/nmv2/ja/nmv2ja.cue".into()).await;
-
-		self.game_thread.set_suspend(false).await;
-
-		loop {
-			time::sleep(Duration::from_secs(1)).await;
-		}
-
-		// Once we exit the loop, we should shutdown the game thread
-		// and all our resources
-
-		Ok(())
-	}
-}
-
+/// The main Let's Play runners using the letsplay_runner_core crate utilize.
 pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
 	let subscriber = FmtSubscriber::builder()
 		.with_max_level(Level::INFO)
@@ -69,7 +29,34 @@ pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-	// Start the runner
-	let runner = Runner::new(game);
-	runner.run().await
+	let game_thread = GameThread::spawn(game);
+
+	// just spin forever for now
+	//
+	// TODO: implement RPC client
+
+	// TEMP: Just for testing libretro runner bringup
+	game_thread
+		.set_property(
+			"libretro.core".into(),
+			"cores/swanstation_libretro.so".into(),
+		)
+		.await;
+	game_thread
+		.set_property(
+			"libretro.rom".into(),
+			"roms/merged/nmv2/ja/nmv2ja.cue".into(),
+		)
+		.await;
+
+	game_thread.set_suspend(false).await;
+
+	loop {
+		time::sleep(Duration::from_secs(1)).await;
+	}
+
+	// Once we exit the loop, we should shutdown the game thread
+	// and all our resources
+
+	Ok(())
 }
