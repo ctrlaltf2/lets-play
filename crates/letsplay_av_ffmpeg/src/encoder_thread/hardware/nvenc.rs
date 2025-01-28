@@ -20,6 +20,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
 use crate::{encoder_thread::PacketWaiter, VideoEncoder};
 
+use letsplay_core::si_unit::Mb;
 use letsplay_core::Size;
 
 use crate::encoder_thread::Control;
@@ -50,7 +51,8 @@ impl EncoderStateHW {
 			&device,
 			size.clone(),
 			60,
-			2 * (1024 * 1024),
+			// FIXME: Make this configurable. PLEASE.
+			Mb::new(2).in_bytes(),
 		)?);
 
 		// replace packet
@@ -230,7 +232,11 @@ fn main(
 						.init(cuda_device, resolution.clone())
 						.expect("Encoder initalization failed");
 
-					tracing::info!("Encoder initalized for {}x{}", resolution.width, resolution.height);
+					tracing::info!(
+						"Encoder initalized for {}x{}",
+						resolution.width,
+						resolution.height
+					);
 				}
 
 				// Simply shutdown.

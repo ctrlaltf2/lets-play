@@ -36,7 +36,8 @@ pub(crate) fn create_context_and_set_common_parameters(
 	video_encoder_context.set_frame_rate(Some(ffmpeg::Rational(1, max_framerate as i32)));
 
 	// This probably would be a good idea to keep configurable.
-	video_encoder_context.set_bit_rate(bitrate / 2);
+	//video_encoder_context.set_bit_rate(bitrate / 2);
+	video_encoder_context.set_bit_rate(0);
 	video_encoder_context.set_max_bit_rate(bitrate);
 
 	// qp TODO:
