@@ -2,9 +2,8 @@
 
 use std::ptr::null_mut;
 
-use super::check_ret;
-
 use super::ffmpeg;
+use crate::helpers::result_from_ffmpeg_return;
 
 /// A built hardware device context.
 pub struct DeviceContext {
@@ -65,7 +64,7 @@ impl DeviceContextBuilder {
 	}
 
 	pub fn build(mut self) -> Result<DeviceContext, ffmpeg::Error> {
-		check_ret(unsafe { ffmpeg::sys::av_hwdevice_ctx_init(self.buffer) })?;
+		result_from_ffmpeg_return(unsafe { ffmpeg::sys::av_hwdevice_ctx_init(self.buffer) })?;
 		let result = Ok(DeviceContext::new(self.buffer));
 		self.buffer = null_mut();
 

@@ -4,62 +4,9 @@ use anyhow::Context;
 use cudarc::driver::CudaDevice;
 use ffmpeg::error::EAGAIN;
 
-use ffmpeg::codec as lavc; // lavc
-
 use letsplay_core::Size;
 
-fn create_context_from_codec(codec: ffmpeg::Codec) -> Result<lavc::Context, ffmpeg::Error> {
-	unsafe {
-		let context = ffmpeg::sys::avcodec_alloc_context3(codec.as_ptr());
-		if context.is_null() {
-			return Err(ffmpeg::Error::Unknown);
-		}
-
-		let context = lavc::Context::wrap(context, None);
-		Ok(context)
-	}
-}
-
-fn create_context_and_set_common_parameters(
-	codec: &str,
-	size: &Size,
-	max_framerate: u32,
-	bitrate: usize,
-) -> anyhow::Result<(ffmpeg::Codec, ffmpeg::encoder::video::Video)> {
-	let encoder = match ffmpeg::encoder::find_by_name(codec) {
-		Some(c) => c,
-		None => return Err(anyhow::anyhow!("could not find the codec \"{codec}\"")),
-	};
-
-	let mut video_encoder_context = create_context_from_codec(encoder)?.encoder().video()?;
-
-	video_encoder_context.set_width(size.width);
-	video_encoder_context.set_height(size.height);
-	video_encoder_context.set_frame_rate(Some(ffmpeg::Rational(1, max_framerate as i32)));
-
-	video_encoder_context.set_bit_rate(bitrate / 4);
-	video_encoder_context.set_max_bit_rate(bitrate);
-
-	// qp TODO:
-	video_encoder_context.set_qmin(30);
-	video_encoder_context.set_qmax(28);
-
-
-	video_encoder_context.set_time_base(ffmpeg::Rational(1, max_framerate as i32).invert());
-	video_encoder_context.set_format(ffmpeg::format::Pixel::YUV420P);
-
-	// The GOP here is setup to balance keyframe retransmission with bandwidth.
-	//video_encoder_context.set_gop((max_framerate * 4) as u32);
-	video_encoder_context.set_gop(i32::MAX as u32);
-	video_encoder_context.set_max_b_frames(0);
-
-	unsafe {
-		(*video_encoder_context.as_mut_ptr()).delay = 0;
-		(*video_encoder_context.as_mut_ptr()).refs = 0;
-	}
-
-	Ok((encoder, video_encoder_context))
-}
+use crate::helpers::*;
 
 /// A simple abstraction/interface over ffmpeg.
 pub enum VideoEncoder {

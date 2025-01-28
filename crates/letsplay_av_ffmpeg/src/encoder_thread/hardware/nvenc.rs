@@ -1,5 +1,5 @@
 //! NVIDIA NVENC specific encoder thread implementation.
-//! 
+//!
 //! # Notes
 //! This currently requires a GPU that can utilize both NVENC
 //! and CUDA (not just run kernels, but nvrtc).
@@ -15,19 +15,15 @@ use cudarc::{
 	nvrtc::CompileOptions,
 };
 use letsplay_gpu::egl_helpers::DeviceContext;
-use std::{
-	sync::{Arc, Condvar, Mutex, MutexGuard},
-	time::Duration,
-};
-use tokio::sync::mpsc::{self, error::TryRecvError};
+use std::sync::{Arc, Condvar, Mutex};
 
 use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
-use crate::{encoder_thread::PacketWaiter, video_encoder::VideoEncoder};
+use crate::{encoder_thread::PacketWaiter, VideoEncoder};
 
 use letsplay_core::Size;
 
-use crate::encoder_thread::EncoderCommand;
 use crate::encoder_thread::Control;
+use crate::encoder_thread::EncoderCommand;
 
 // FIXME: This could probably be shared for all implementations, we
 // should just have to have init_xxx
@@ -336,7 +332,9 @@ fn main(
 
 						// FIXME: ideally this would work with RAII behaviour,
 						// but it doesn't. Oh well.
-						mapped.unmap().expect("Failed to unmap CUDA graphics resource");
+						mapped
+							.unmap()
+							.expect("Failed to unmap CUDA graphics resource");
 						gl_ctx.release();
 					}
 
@@ -401,13 +399,13 @@ fn main(
 // This will help with software rendered libretro cores.
 
 /// Creates a thread that can encode a OpenGL framebuffer
-/// using ffmpeg NVENC-assisted encoding and CUDA OpenGL 
+/// using ffmpeg NVENC-assisted encoding and CUDA OpenGL
 /// interopability functions.
 ///
 /// Internally, a CUDA kernel will flip the OpenGL framebuffer
 /// right side-up into a temporary backbuffer (only re-allocated
-/// on resize; don't worry, I'm not *that* dumb.). 
-/// 
+/// on resize; don't worry, I'm not *that* dumb.).
+///
 /// It's *fast*, with encodes being on average 900ns to 3ms.
 ///
 /// The rgba_to_bgra_kernel parameter allows both flipping OpenGL framebuffer
@@ -445,7 +443,7 @@ pub fn spawn(
 	let rsrc_clone = Arc::clone(cuda_resource);
 	let gl_clone = Arc::clone(gl_context);
 
-	std::thread::Builder::new()
+	let _ = std::thread::Builder::new()
 		.name("letsplay_av_nvenc".into())
 		.spawn(move || {
 			match main(
