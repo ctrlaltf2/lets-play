@@ -50,7 +50,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 
 	// Spawn the video thread here
 
-	let video_encoder_control = {
+	let (video_encoder_control, packet_waiter) = {
 		#[cfg(feature = "av-nvidia")]
 		{
 			encoder_thread::hardware::nvenc::spawn(
@@ -76,10 +76,10 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	}
 
 	tracing::info!("all clients accepted - unblocking and completing intialization");
-
-	let clone = video_encoder_control.clone();
+	
+	// Helper thread
 	std::thread::spawn(move || loop {
-		let frame = clone.wait_for_packet();
+		let frame = packet_waiter.wait_for_packet();
 		for client in &mut clients {
 			let _ = client.write_all(frame.data().unwrap());
 		}

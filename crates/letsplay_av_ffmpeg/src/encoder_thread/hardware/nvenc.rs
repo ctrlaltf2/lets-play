@@ -13,13 +13,13 @@ use std::{
 };
 use tokio::sync::mpsc::{self, error::TryRecvError};
 
-use crate::video_encoder::VideoEncoder;
 use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
+use crate::{encoder_thread::PacketWaiter, video_encoder::VideoEncoder};
 
 use letsplay_core::Size;
 
 use crate::encoder_thread::EncoderCommand;
-use crate::encoder_thread::EncoderThreadControl;
+use crate::encoder_thread::Control;
 
 // FIXME: This could probably be shared for all implementations, we
 // should just have to have init_xxx
@@ -408,14 +408,14 @@ pub fn spawn(
 	gl_context: &Arc<Mutex<DeviceContext>>,
 
 	rgba_to_bgra_kernel: bool,
-) -> EncoderThreadControl {
+) -> (Control, PacketWaiter) {
 	let processed = Arc::new(Mutex::new(false));
 	let processed_cv = Arc::new(Condvar::new());
 
 	let input_updated = Arc::new(Condvar::new());
 	let input = Arc::new(Mutex::new(EncoderCommand::ForceKeyframe)); // something dummy
 
-	// packet
+	// packetwaiter
 	let pkt_update_cv = Arc::new(Condvar::new());
 	let pkt = Arc::new(Mutex::new(ffmpeg::Packet::empty()));
 
@@ -456,12 +456,17 @@ pub fn spawn(
 			}
 		});
 
-	EncoderThreadControl {
+	let control = Control {
 		input_updated_cv: input_updated.clone(),
 		input: input.clone(),
 		processed: processed.clone(),
 		processed_cv: processed_cv.clone(),
+	};
+
+	let waiter = PacketWaiter {
 		packet_updated_cv: pkt_update_cv.clone(),
 		packet: pkt.clone(),
-	}
+	};
+
+	(control, waiter)
 }

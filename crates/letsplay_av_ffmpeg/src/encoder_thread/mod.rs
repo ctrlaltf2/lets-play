@@ -20,12 +20,9 @@ pub enum EncoderCommand {
 	SendFrame,
 }
 
-// TODO: Split EncoderThreadControl and the packet mechanism so that
-// it is two different structs.
-
 /// Shared control for the encoder thread
 #[derive(Clone)]
-pub struct EncoderThreadControl {
+pub struct Control {
 	// input
 	/// NOTE: Only signal. Do not wait
 	input_updated_cv: Arc<Condvar>,
@@ -33,16 +30,48 @@ pub struct EncoderThreadControl {
 
 	processed: Arc<Mutex<bool>>,
 	processed_cv: Arc<Condvar>,
+}
 
-	/// Only wait: do not signal, or I will be a very sad foxgirl.
+#[derive(Clone)]
+pub struct PacketWaiter {
 	packet_updated_cv: Arc<Condvar>,
 	packet: Arc<Mutex<ffmpeg::Packet>>,
 }
 
-// FIXME for these helpers:
+
+// FIXME for these impls:
 // DO NOT .expect(). PLEASE.
 
-impl EncoderThreadControl {
+impl PacketWaiter {
+	pub fn wait_for_packet(&self) -> MutexGuard<'_, ffmpeg::Packet> {
+		let mut lk = self.packet.lock().expect("failed to lock packet");
+		let mut waited_lk = self
+			.packet_updated_cv
+			.wait(lk)
+			.expect("failed to wait for encoder thread to update packet");
+		waited_lk
+	}
+
+	pub fn wait_for_packet_timeout(
+		&self,
+		timeout: Duration,
+	) -> Option<MutexGuard<'_, ffmpeg::Packet>> {
+		let mut lk = self.packet.lock().expect("failed to lock packet");
+		let mut wait_result = self
+			.packet_updated_cv
+			.wait_timeout(lk, timeout)
+			.expect("failed to wait");
+
+		if wait_result.1.timed_out() {
+			None
+		} else {
+			Some(wait_result.0)
+		}
+	}
+}
+
+
+impl Control {
 	pub fn send_command(&self, cmd: EncoderCommand) {
 		{
 			let mut lk = self.input.lock().expect("failed to lock input");
@@ -71,31 +100,5 @@ impl EncoderThreadControl {
 	/// Shorthand to shutdown the encoder
 	pub fn shutdown(&self) {
 		self.send_command(EncoderCommand::Shutdown);
-	}
-
-	pub fn wait_for_packet(&self) -> MutexGuard<'_, ffmpeg::Packet> {
-		let mut lk = self.packet.lock().expect("failed to lock packet");
-		let mut waited_lk = self
-			.packet_updated_cv
-			.wait(lk)
-			.expect("failed to wait for encoder thread to update packet");
-		waited_lk
-	}
-
-	pub fn wait_for_packet_timeout(
-		&self,
-		timeout: Duration,
-	) -> Option<MutexGuard<'_, ffmpeg::Packet>> {
-		let mut lk = self.packet.lock().expect("failed to lock packet");
-		let mut wait_result = self
-			.packet_updated_cv
-			.wait_timeout(lk, timeout)
-			.expect("failed to wait");
-
-		if wait_result.1.timed_out() {
-			None
-		} else {
-			Some(wait_result.0)
-		}
 	}
 }

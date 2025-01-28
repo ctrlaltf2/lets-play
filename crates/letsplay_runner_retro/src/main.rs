@@ -15,12 +15,12 @@ use letsplay_retro_frontend::{
 use letsplay_runner_core::*;
 
 use letsplay_av_ffmpeg::encoder_thread::EncoderCommand;
-use letsplay_av_ffmpeg::encoder_thread::EncoderThreadControl;
+use letsplay_av_ffmpeg::encoder_thread::Control;
 
 /// Libretro game. very much TODO
 pub struct RetroGame {
 	graphics_contexts: Option<GraphicsContexts>,
-	encoder_control: Option<EncoderThreadControl>,
+	encoder_control: Option<Control>,
 
 	input_devices: BTreeMap<i32, AnyDevice>,
 
@@ -66,7 +66,7 @@ impl client::Game for RetroGame {
 	fn init(
 		&mut self,
 		graphics_contexts: &client::GraphicsContexts,
-		encoder_control: &EncoderThreadControl,
+		encoder_control: &Control,
 	) {
 		// HACK: Make the context current when we reach init() because
 		// libretro assumes you keep the context current when loading the game
