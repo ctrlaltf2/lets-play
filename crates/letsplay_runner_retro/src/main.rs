@@ -4,6 +4,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
+use client::GraphicsContexts;
 use letsplay_core::sleep;
 use letsplay_gpu::{self as gpu, egl_helpers::DeviceContext};
 use letsplay_retro_frontend::{
@@ -14,6 +15,8 @@ use letsplay_runner_core::*;
 
 /// Libretro game. very much TODO
 pub struct RetroGame {
+	graphics_contexts: Option<GraphicsContexts>,
+
 	devices: BTreeMap<i32, AnyDevice>,
 
 	frontend: Option<Box<Frontend>>,
@@ -25,6 +28,7 @@ pub struct RetroGame {
 impl RetroGame {
 	fn new() -> Box<Self> {
 		let mut s = Box::new(Self {
+			graphics_contexts: None,
 			devices: BTreeMap::new(),
 			frontend: None,
 			frame_duration: Duration::new(0, 0),
@@ -57,6 +61,9 @@ impl client::Game for RetroGame {
 			let lk = graphics_contexts.egl_device_context.lock().expect("???");
 			lk.make_current();
 		}
+
+		// Scary but these are all Arc<> pointers anyways so its not a big deal
+		self.graphics_contexts = Some(graphics_contexts.clone());
 	}
 
 	fn reset(&mut self) {

@@ -11,6 +11,7 @@ use letsplay_gpu::egl_helpers::DeviceContext;
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "av-nvidia")]
+#[derive(Clone)]
 pub struct GraphicsContexts {
 	pub egl_device_context: Arc<Mutex<DeviceContext>>,
 	pub cuda_context: Arc<CudaDevice>,
@@ -18,6 +19,7 @@ pub struct GraphicsContexts {
 }
 
 #[cfg(not(feature = "av-nvidia"))]
+#[derive(Clone)]
 pub struct GraphicsContexts {
 	pub egl_device_context: Arc<Mutex<DeviceContext>>,
 }
