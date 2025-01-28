@@ -40,7 +40,7 @@ pub trait InputDevice {
 	/// Clears the state of all buttons/axes.
 	fn reset(&mut self);
 
-	/// Presses a button. [pressure] is permitted to be ignored.
+	/// Presses a button. The input pressure is permitted to be ignored.
 	fn press_button(&mut self, id: u32, pressure: Option<i16>);
 
 	/// Presses a joystick axis.

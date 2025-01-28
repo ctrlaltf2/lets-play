@@ -24,6 +24,8 @@ pub trait Game {
 	/// will sleep until the next frame (if required).
 	fn run_frame(&mut self);
 
-	/// Wait for the next frame/emulation tick, relative to [start].
+	/// Wait for the next frame/emulation tick. The start must
+	/// be a Instant provided that was initalized before the game
+	/// was ran for the frame.
 	fn wait_for_next_frame(&mut self, start: Instant);
 }

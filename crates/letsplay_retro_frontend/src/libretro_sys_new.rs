@@ -3,7 +3,7 @@
 pub use libretro_sys::*;
 use std::ffi;
 
-/// Represents a bitmask that describes the state of all [DEVICE_ID_JOYPAD] button constants,
+/// This "button" represents a bitmask that describes the state of all [DEVICE_JOYPAD] button constants,
 /// rather than the state of a single button.
 pub const DEVICE_ID_JOYPAD_MASK: libc::c_uint = 256;
 
