@@ -217,20 +217,20 @@ fn main(
 			let waited_lk = input_msg_notify.wait(lk).expect("you bone");
 
 			match &*waited_lk {
-				EncoderCommand::Init { size } => {
+				EncoderCommand::Init { resolution } => {
 					frame_number = 0;
 					force_keyframe = true;
 
 					// Allocate the flip buffer
 					temp_buffer = cuda_device
-						.alloc_zeros::<u32>((size.width * size.height) as usize)
-						.expect("oh youre screwed anyways");
+						.alloc_zeros::<u32>((resolution.width * resolution.height) as usize)
+						.expect("Failed to allocate flip backbuffer");
 
 					encoder
-						.init(cuda_device, size.clone())
-						.expect("encoder init failed");
+						.init(cuda_device, resolution.clone())
+						.expect("Encoder initalization failed");
 
-					tracing::info!("Encoder initalized for {}x{}", size.width, size.height);
+					tracing::info!("Encoder initalized for {}x{}", resolution.width, resolution.height);
 				}
 
 				// Simply shutdown.

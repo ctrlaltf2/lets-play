@@ -16,7 +16,7 @@ use letsplay_core::Size;
 #[derive(Debug)]
 pub enum EncoderCommand {
 	/// (Re)-initalize encoding for the given resolution
-	Init { size: Size },
+	Init { resolution: Size },
 
 	/// Shut down the encoder thread.
 	Shutdown,
@@ -55,8 +55,8 @@ pub struct PacketWaiter {
 impl PacketWaiter {
 	/// Wait for a packet without timeout.
 	pub fn wait_for_packet(&self) -> MutexGuard<'_, ffmpeg::Packet> {
-		let mut lk = self.packet.lock().expect("failed to lock packet");
-		let mut waited_lk = self
+		let lk = self.packet.lock().expect("failed to lock packet");
+		let waited_lk = self
 			.packet_updated_cv
 			.wait(lk)
 			.expect("failed to wait for encoder thread to update packet");
@@ -68,8 +68,8 @@ impl PacketWaiter {
 		&self,
 		timeout: Duration,
 	) -> Option<MutexGuard<'_, ffmpeg::Packet>> {
-		let mut lk = self.packet.lock().expect("failed to lock packet");
-		let mut wait_result = self
+		let lk = self.packet.lock().expect("failed to lock packet");
+		let wait_result = self
 			.packet_updated_cv
 			.wait_timeout(lk, timeout)
 			.expect("failed to wait");

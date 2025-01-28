@@ -161,7 +161,7 @@ impl FrontendInterface for RetroGame {
 			.as_ref()
 			.unwrap()
 			.send_command(EncoderCommand::Init {
-				size: letsplay_core::Size { width, height },
+				resolution: letsplay_core::Size { width, height },
 			});
 	}
 
