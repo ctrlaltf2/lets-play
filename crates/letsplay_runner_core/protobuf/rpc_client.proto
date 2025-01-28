@@ -1,5 +1,7 @@
 // This .proto contains definitions that are used for communication between
-// letsplayd and a runner process implemented using the letsplay_runner_core Rust crate.
+// letsplayd and a runner process.
+//
+// These are relevant protos for implementing a RPC client (like a game).
 edition = "2023";
 
 // The type of an input device.
@@ -55,63 +57,10 @@ message KbMouseInput {
 	Mouse mouse = 2;
 }
 
-// A message sent to letsplayd.
-message ClientMessage {
-	message Hello {
-		// Returns a standardized type id, like:
-		// 'letsplay.libretro'
-		string typeid = 1;
-
-		// Returns the runner API version.
-		// This is incremented on any incompatible bump to
-		// letsplay_runner_core's protobufs.
-		fixed32 version = 2;
-	}
-
-	// Sent when the game has been fully configured.
-	message GameReady {
-	}
-
-	// Provides a new video frame for a runner server 
-	// to broadcast to its connected clients.
-	message VideoFrame {
-		// The type.
-		enum FrameType {
-			// A key frame.
-			KEY = 0;
-
-			// A intra frame. Requires a previous KEY frame and (any) previous
-			// INTRA frames to have been decoded beforehand.
-			INTRA = 1;
-		}
-
-		// The type of this frame
-		FrameType frame_type = 1;
-
-		// A H.264 NAL Unit packet for the video frame.
-		bytes data = 2;
-	}
-
-
-	// Provides a new audio frame for a runner server 
-	// to broadcast to its connected clients.
-	message AudioFrame {
-		// Opus encoded audio packet.
-		bytes data = 1;
-	}
-	
-
-	oneof Oneof {
-		Hello hello = 1;
-		GameReady game_ready = 2;
-
-		VideoFrame video_frame = 5;
-		AudioFrame audio_frame = 6;
-	}
-}
 
 // A request made by letsplayd
 message ServerMessage {
+
 	// Shut down the runner's game.
 	message Shutdown {}
 
@@ -137,12 +86,7 @@ message ServerMessage {
 	}
 
 	message SetProperty {
-		// The key to set. This is optionally namespaced per-runner type, with some generic ones provided.
-		// We could probably use google protobuf any type but /shrug
-		// Example K/V set:
-		// "letsplay.gpu_device", "[index]"
-		// "letsplay.libretro.core", "/path/to/core.so",
-		// "letsplay.libretro.rom", "/path/to/rom"
+		// The key to set. This is optionally namespaced per-runner type.
 		string key = 1;
 		string value = 2;
 	}
@@ -170,7 +114,6 @@ message ServerMessage {
 			KbMouseInput kbm_input = 3;
 		}
 	}
-
 	
 	// Requests a new video keyframe.
 	message VideoRequestKeyFrame {}

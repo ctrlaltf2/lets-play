@@ -16,3 +16,9 @@ target/
 
 # misc test data
 testdata/
+
+# test rpc server
+test_rpc_server/
+test_rpc_server/node_modules
+test_rpc_server/.yarn
+test_rpc_server/src/gen
