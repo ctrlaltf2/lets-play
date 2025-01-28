@@ -21,9 +21,6 @@ pub enum GameThreadMessage {
 		key: String,
 		value: String,
 	},
-
-	/// Initalize the game.
-	Initialize,
 }
 
 /// A game running on the game thread.
@@ -49,17 +46,22 @@ pub trait Game {
 	fn wait_for_next_frame(&mut self, start: Instant);
 }
 
-fn main(
-	mut rx: mpsc::UnboundedReceiver<GameThreadMessage>,
-	mut game: Box<dyn Game>,
-) {
+fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
 	// better (and properly handle states or whatever) we should probably just like... Do so?
 	let mut suspended = false;
 
+	// bring up EGL/CUDA/whatever
+
+	game.init();
+
 	// Spawn the video thread here
+
+	// HACK to try out libretro
+	game.set_property("libretro.core", "cores/swanstation_libretro.so");
+	game.set_property("libretro.rom", "roms/nmv1_us.cue");
 
 	loop {
 		match rx.try_recv() {
@@ -69,10 +71,6 @@ fn main(
 					if suspended != suspend {
 						suspended = suspend
 					}
-				}
-
-				GameThreadMessage::Initialize => {
-					game.init();
 				}
 
 				GameThreadMessage::Reset => {

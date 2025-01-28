@@ -9,6 +9,9 @@ edition.workspace = true
 letsplay_core.path = "../letsplay_core"
 letsplay_runner_core.path = "../letsplay_runner_core"
 
+# The important part (libretro frontend goodness)
+letsplay_retro_frontend.path = "../letsplay_retro_frontend"
+
 # Stuff we want
 tracing.workspace = true
 anyhow.workspace = true

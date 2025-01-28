@@ -575,6 +575,7 @@ version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
  "letsplay_core",
+ "letsplay_retro_frontend",
  "letsplay_runner_core",
  "tracing",
 ]
