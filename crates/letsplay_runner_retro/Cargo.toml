@@ -25,5 +25,5 @@ gl.workspace = true
 cudarc = { workspace = true, optional = true }
 
 [features]
-default = [ "av-nvidia" ]
+default = [ "letsplay_runner_core/client", "av-nvidia" ]
 av-nvidia = [ "letsplay_runner_core/av-nvidia", "dep:cudarc" ]

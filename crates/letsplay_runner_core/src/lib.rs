@@ -1,3 +1,4 @@
+#[cfg(feature = "client")]
 pub mod client;
 
 pub mod shared;
@@ -5,6 +6,7 @@ pub mod shared;
 pub use tokio as tokio;
 
 #[macro_export]
+#[cfg(feature = "client")]
 /// Creates the boilerplate main() used for runner clients.
 /// # Notes
 /// We force a `current_thread` runtime because Tokio will not be forced

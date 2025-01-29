@@ -35,3 +35,9 @@ default = [ "av-nvidia" ]
 
 # Enable NVIDIA support 
 av-nvidia = [ "letsplay_av_ffmpeg/nvidia", "dep:cudarc" ]
+
+# Build runner client code. 
+client = [ ]
+
+# Build runner server code
+server = [ ]
