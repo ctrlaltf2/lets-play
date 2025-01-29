@@ -5,8 +5,8 @@
 pub mod input_devices;
 mod util;
 
-pub mod frontend;
-pub mod result;
+mod frontend;
+mod result;
 
 // re-export some of our useful interface
 pub use frontend::*;
