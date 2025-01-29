@@ -43,11 +43,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	// better (and properly handle states or whatever) we should probably just like... Do so?
 	let mut suspended = true;
 
-	// bring up EGL/CUDA/whatever
-
 	let contexts = GraphicsContexts::create(0);
-
-	// Spawn the video thread here
 
 	let (video_encoder_control, packet_waiter) = {
 		#[cfg(feature = "av-nvidia")]
@@ -102,7 +98,8 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 				}
 
 				GameThreadMessage::SetProperty { key, value, tx } => {
-					// TODO: set_property should be failable
+					// TODO: we should send the error result to the given tx
+					// so that we can propegate errors to the main thread
 					match game.set_property(&key, &value) {
 						Ok(_) => {}
 						Err(err) => {
@@ -175,14 +172,13 @@ impl GameThread {
 	}
 
 	pub async fn reset(&self) {
-		// TODO
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.send(GameThreadMessage::Reset { tx });
 		let _ = rx.await;
 	}
 
 	pub async fn set_property(&self, key: String, value: String) {
-		// TODO
+		// TODO: This should be failable
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.send(GameThreadMessage::SetProperty {
 			key: key.clone(),
@@ -202,8 +198,8 @@ impl GameThread {
 	}
 
 	/// Shuts down the game thread.
-	pub async fn shutdown(&self) {
+	pub async fn shutdown(self) {
 		let _ = self.tx.send(GameThreadMessage::Shutdown);
-		// TODO: join thread (or make it easier for this to be consuming)
+		self.join_handle.join().expect("Failed to join game thread");
 	}
 }
