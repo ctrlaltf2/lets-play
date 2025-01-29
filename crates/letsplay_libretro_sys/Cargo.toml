@@ -1,0 +1,12 @@
+[package]
+name = "letsplay_libretro_sys"
+description = "Selective updates on top of the libretro-sys crate (which was last updated 2016)"
+publish.workspace = true
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+libretro-sys = "0.1.1"
+
+[build-dependencies]
+cc = "1.0.99"

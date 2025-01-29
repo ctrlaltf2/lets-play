@@ -1,6 +1,6 @@
 //! RetroPad
 use super::InputDevice;
-use crate::libretro_sys_new;
+use letsplay_libretro_sys;
 
 /// Implementation of the [InputDevice] trait for the Libretro
 /// RetroPad; which is essentially a standard PS1 controller,
@@ -45,7 +45,7 @@ impl RetroPad {
 
 impl InputDevice for RetroPad {
 	fn device_type(&self) -> u32 {
-		libretro_sys_new::DEVICE_JOYPAD
+		letsplay_libretro_sys::DEVICE_JOYPAD
 	}
 
 	fn device_type_compatible(&self, id: u32) -> bool {
@@ -55,7 +55,7 @@ impl InputDevice for RetroPad {
 	fn get_index(&self, index: u32, id: u32) -> i16 {
 		return match index {
 			0 => {
-				if id == libretro_sys_new::DEVICE_ID_JOYPAD_MASK {
+				if id == letsplay_libretro_sys::DEVICE_ID_JOYPAD_MASK {
 					return self.button_mask();
 				}
 

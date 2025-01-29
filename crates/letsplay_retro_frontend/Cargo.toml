@@ -8,7 +8,7 @@ edition.workspace = true
 [dependencies]
 libc.workspace = true
 libloading.workspace = true
-libretro-sys = "0.1.1"
+letsplay_libretro_sys.path = "../letsplay_libretro_sys"
 thiserror.workspace = true
 
 anyhow.workspace = true

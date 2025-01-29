@@ -1,4 +1,4 @@
-use crate::libretro_sys_new::*;
+use letsplay_libretro_sys::*;
 use std::ffi;
 use tracing::*;
 

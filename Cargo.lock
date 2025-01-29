@@ -539,15 +539,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "letsplay_libretro_sys"
+version = "0.1.0-alpha0"
+dependencies = [
+ "cc",
+ "libretro-sys",
+]
+
+[[package]]
 name = "letsplay_retro_frontend"
 version = "0.1.0-alpha0"
 dependencies = [
  "anyhow",
  "cc",
  "letsplay_core",
+ "letsplay_libretro_sys",
  "libc",
  "libloading",
- "libretro-sys",
  "serde",
  "thiserror",
  "toml",

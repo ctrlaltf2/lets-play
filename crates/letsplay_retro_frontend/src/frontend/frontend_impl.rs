@@ -1,6 +1,6 @@
 use super::CoreVariable;
 use crate::input_devices::InputDevice;
-use crate::libretro_sys_new::*;
+use letsplay_libretro_sys::*;
 use crate::result::{Error, Result};
 use ffi::CString;
 use libloading::Library;
@@ -272,13 +272,13 @@ impl Frontend {
 			// Let's sanity check the libretro API version against bindings to make sure we can actually use this core.
 			// If we can't, then fail the load.
 			let api_version = (core_api.retro_api_version)();
-			if api_version != libretro_sys::API_VERSION {
+			if api_version != letsplay_libretro_sys::API_VERSION {
 				error!(
 					"Core {} has invalid API version {api_version}; refusing to continue loading",
 					path.as_ref().display()
 				);
 				return Err(Error::InvalidLibRetroAPI {
-					expected: libretro_sys::API_VERSION,
+					expected: letsplay_libretro_sys::API_VERSION,
 					got: api_version,
 				});
 			}

@@ -1,11 +1,14 @@
 //! Selective additional (2019+) updates on top of the existing libretro_sys crate.
+//! This was created since newer cores do use this stuff; it's annoying, but meh.
+//! Maybe later on we can rid ourselves of a 2016 crate and just bindgen off libretro
+//! directly; for now, this is fine enough.
 
 pub use libretro_sys::*;
 use std::ffi;
 
 /// This "button" represents a bitmask that describes the state of all [DEVICE_JOYPAD] button constants,
 /// rather than the state of a single button.
-pub const DEVICE_ID_JOYPAD_MASK: libc::c_uint = 256;
+pub const DEVICE_ID_JOYPAD_MASK: ffi::c_uint = 256;
 
 /// Defines overrides which modify frontend handling of specific content file types.
 /// An array of [SystemContentInfoOverride] is passed to [RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE]

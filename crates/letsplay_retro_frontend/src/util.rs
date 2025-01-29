@@ -1,4 +1,4 @@
-use crate::libretro_sys_new::*;
+use letsplay_libretro_sys::*;
 
 pub fn bytes_per_pixel_from_libretro(pf: PixelFormat) -> u32 {
 	match pf {

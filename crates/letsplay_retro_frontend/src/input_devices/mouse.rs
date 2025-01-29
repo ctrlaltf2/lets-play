@@ -1,6 +1,5 @@
 //! Mouse
 use super::InputDevice;
-use crate::libretro_sys_new;
 
 /// Implementation of the [InputDevice] trait for the Libretro mouse.
 pub struct Mouse {
@@ -21,7 +20,7 @@ impl Mouse {
 
 impl InputDevice for Mouse {
 	fn device_type(&self) -> u32 {
-		libretro_sys_new::DEVICE_MOUSE
+		letsplay_libretro_sys::DEVICE_MOUSE
 	}
 
 	fn device_type_compatible(&self, id: u32) -> bool {

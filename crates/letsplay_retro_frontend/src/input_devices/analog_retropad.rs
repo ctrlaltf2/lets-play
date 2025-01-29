@@ -1,5 +1,3 @@
-use crate::libretro_sys_new;
-
 use super::{InputDevice, RetroPad};
 
 // private helper type for packaging up the stick data
@@ -45,7 +43,7 @@ impl AnalogRetroPad {
 
 impl InputDevice for AnalogRetroPad {
 	fn device_type(&self) -> u32 {
-		libretro_sys_new::DEVICE_ANALOG
+		letsplay_libretro_sys::DEVICE_ANALOG
 	}
 
 	fn device_type_compatible(&self, id: u32) -> bool {
@@ -54,7 +52,7 @@ impl InputDevice for AnalogRetroPad {
 			true
 		} else {
 			// Check for the analog type
-			id == libretro_sys_new::DEVICE_ANALOG
+			id == letsplay_libretro_sys::DEVICE_ANALOG
 		}
 	}
 
@@ -68,14 +66,14 @@ impl InputDevice for AnalogRetroPad {
 		// Nasty but you can blame libretro.
 		let fallback = self.pad.get_index(0, id);
 		return match index {
-			libretro_sys_new::DEVICE_INDEX_ANALOG_LEFT => match id {
-				libretro_sys_new::DEVICE_ID_ANALOG_X => self.left_stick.x,
-				libretro_sys_new::DEVICE_ID_ANALOG_Y => self.left_stick.y,
+			letsplay_libretro_sys::DEVICE_INDEX_ANALOG_LEFT => match id {
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_X => self.left_stick.x,
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_Y => self.left_stick.y,
 				_ => fallback,
 			},
-			libretro_sys_new::DEVICE_INDEX_ANALOG_RIGHT => match id {
-				libretro_sys_new::DEVICE_ID_ANALOG_X => self.right_stick.x,
-				libretro_sys_new::DEVICE_ID_ANALOG_Y => self.right_stick.y,
+			letsplay_libretro_sys::DEVICE_INDEX_ANALOG_RIGHT => match id {
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_X => self.right_stick.x,
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_Y => self.right_stick.y,
 				_ => fallback,
 			},
 
@@ -97,15 +95,15 @@ impl InputDevice for AnalogRetroPad {
 		};
 
 		match index {
-			libretro_sys_new::DEVICE_INDEX_ANALOG_LEFT => match id {
-				libretro_sys_new::DEVICE_ID_ANALOG_X => self.left_stick.x = pressure,
-				libretro_sys_new::DEVICE_ID_ANALOG_Y => self.left_stick.y = pressure,
+			letsplay_libretro_sys::DEVICE_INDEX_ANALOG_LEFT => match id {
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_X => self.left_stick.x = pressure,
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_Y => self.left_stick.y = pressure,
 				_ => {}
 			},
 
-			libretro_sys_new::DEVICE_INDEX_ANALOG_RIGHT => match id {
-				libretro_sys_new::DEVICE_ID_ANALOG_X => self.right_stick.x = pressure,
-				libretro_sys_new::DEVICE_ID_ANALOG_Y => self.right_stick.y = pressure,
+			letsplay_libretro_sys::DEVICE_INDEX_ANALOG_RIGHT => match id {
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_X => self.right_stick.x = pressure,
+				letsplay_libretro_sys::DEVICE_ID_ANALOG_Y => self.right_stick.y = pressure,
 				_ => {}
 			},
 

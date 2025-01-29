@@ -8,6 +8,7 @@ members = [
 	"crates/letsplay_av_ffmpeg",
 
 	# Libretro frontend library
+	"crates/letsplay_libretro_sys",
 	"crates/letsplay_retro_frontend",
 	"crates/retrodemo",
 

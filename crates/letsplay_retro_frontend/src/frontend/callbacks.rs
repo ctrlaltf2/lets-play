@@ -1,5 +1,5 @@
 //! Callbacks for libretro
-use crate::libretro_sys_new::*;
+use letsplay_libretro_sys::*;
 use crate::{frontend::*, libretro_log, util};
 
 use std::ffi;
