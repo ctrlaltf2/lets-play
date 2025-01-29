@@ -11,7 +11,7 @@ use letsplay_core::{sleep, Size, Surface};
 use letsplay_retro_frontend::{
 	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::{InputDevice, RetroPad},
-	libretro_sys_new,
+	sys,
 };
 
 use minifb::Key;
@@ -203,68 +203,54 @@ impl FrontendInterface for App {
 			for key in &keys {
 				match key {
 					Key::Backslash => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_SELECT, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_SELECT, None);
 					}
 					Key::Enter => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_START, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_START, None);
 					}
 					Key::Up => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_UP, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_UP, None);
 					}
 					Key::Down => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_DOWN, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_DOWN, None);
 					}
 					Key::Left => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_LEFT, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_LEFT, None);
 					}
 					Key::Right => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_RIGHT, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_RIGHT, None);
 					}
 
 					Key::S => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_B, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_B, None);
 					}
 
 					Key::A => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_A, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_A, None);
 					}
 
 					Key::Q => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_X, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_X, None);
 					}
 
 					Key::W => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_Y, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_Y, None);
 					}
 
 					Key::LeftCtrl => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_L, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_L, None);
 					}
 
 					Key::LeftShift => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_L2, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_L2, None);
 					}
 
 					Key::LeftAlt => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_R, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_R, None);
 					}
 
 					Key::Z => {
-						self.pad
-							.press_button(libretro_sys_new::DEVICE_ID_JOYPAD_R2, None);
+						self.pad.press_button(sys::DEVICE_ID_JOYPAD_R2, None);
 					}
 
 					_ => {}

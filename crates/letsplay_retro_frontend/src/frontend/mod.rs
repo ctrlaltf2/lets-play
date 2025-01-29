@@ -8,3 +8,4 @@ mod core_variable;
 pub use core_variable::*;
 
 mod callbacks;
+mod log;

@@ -7,6 +7,6 @@ fn main() {
 		.emit_rerun_if_env_changed(true)
 		.cpp(true)
 		.std("c++20")
-		.file("src/libretro_log_helper.cpp")
-		.compile("retro_log_helper");
+		.file("src/frontend/log_helper.cpp")
+		.compile("letsplay_retro_frontend_cxx");
 }

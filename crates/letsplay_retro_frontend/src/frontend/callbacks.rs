@@ -1,6 +1,6 @@
 //! Callbacks for libretro
+use crate::{frontend::*, util};
 use letsplay_libretro_sys::*;
-use crate::{frontend::*, libretro_log, util};
 
 use std::ffi;
 
@@ -26,7 +26,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 ) -> bool {
 	match environment_command {
 		ENVIRONMENT_GET_LOG_INTERFACE => {
-			*(data as *mut LogCallback) = libretro_log::LOG_INTERFACE.clone();
+			*(data as *mut LogCallback) = super::log::LOG_INTERFACE.clone();
 			return true;
 		}
 
