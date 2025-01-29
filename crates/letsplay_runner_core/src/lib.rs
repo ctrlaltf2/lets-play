@@ -1,5 +1,7 @@
 pub mod client;
 
+pub mod shared;
+
 pub use tokio as tokio;
 
 #[macro_export]

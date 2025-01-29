@@ -7,14 +7,24 @@ edition = "2023";
 // A message sent to letsplayd.
 message ClientMessage {
 	message Hello {
-		// Returns a standardized type id, like:
+		// A standardized type id, like:
 		// 'letsplay.libretro'
+		//
+		// Note that only runners part of the Let's Play repository should
+		// use 'letsplay.' IDs. External ones should use an alternate one.
 		string typeid = 1;
 
 		// Returns the runner API version.
 		// This is incremented on any incompatible bump to
 		// letsplay_runner_core's protobufs.
+		//
+		// The current one is '0'.
+		// Previously: (past version, date it was discontinued, reason why)
 		fixed32 version = 2;
+
+		// The emulator ID this runner is for.
+		// Duplicate IDs are not allowed.
+		string emu_id = 3;
 	}
 
 	// Sent when the game has been fully configured.

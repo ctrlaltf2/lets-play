@@ -43,6 +43,10 @@ thiserror = "2.0.11"
 gl = "0.14.0"
 gl_generator = "0.14.0"
 
+# protobuf
+protobuf = { version = "4.30.0-beta1" }
+protobuf-codegen = { version = "4.30.0-beta1" }
+
 # NVIDIA
 cudarc = { version = "0.13.3", features = [ "cuda-11050" ] }
 

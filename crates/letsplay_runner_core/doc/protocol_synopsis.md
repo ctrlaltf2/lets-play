@@ -5,7 +5,7 @@ The letsplay runners use a protocol on top of protocol buffers for communicating
 It is transport independent, with the following specific transports:
 
 - For bringup and development, a Node test server implements a SOCK_STREAM UDS named socket.
-	This will *not* be used once bringup is going smoothly.
+	This will *not* be used once bringup is full-rust (or rather fully under `letsplay_runner_core`.)
 
 - A local SOCK_STREAM socket pair between letsplayd and the runner is used
 	for locally managed runners.
@@ -40,3 +40,18 @@ If a packet does not decode to a valid protobuf, we should sever the connection 
 For a local runner, we can just close() the socket and then kill the process.
 
 For non-local runners we can shutdown the stream and then the connection I think. The runner will then nicely exit.
+
+# Bringup flow
+
+(This assumes the runner server has started)
+
+- Runner client (in our example `letsplay_runner_retro`) starts
+- It sends a Hello ClientMessage to the server (letsplayd)
+	- letsplayd validates and makes sure that the emulator ID is not taken and the runner protocol version is compatible
+		- If this fails letsplayd severs connection
+
+- letsplayd sends configuration messages
+- Runner tells letsplayd that it can start
+- letsplayd tells runner to unsuspend
+- ...
+- Profit (the game runs)?

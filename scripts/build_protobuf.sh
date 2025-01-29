@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Builds a copy of protobuf from source.
 # Needed until a stable Protobuf version (not crate version!) supports the
 # Google Rust implementation of protobuf.
 
@@ -9,6 +10,9 @@
 pushd ~/source/protobuf
 
 set -e
+
+# check out the right tag.
+git checkout rust-prerelease-4.30.0-beta1
 
 # reconfigure
 [[ ! -d "build" ]] && {

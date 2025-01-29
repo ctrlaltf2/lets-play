@@ -1,8 +1,7 @@
-
-/// Abstraction over a lower level I/O channel used for
-/// runner clients.
-pub trait ClientTransport {
-
-	
-
-}
+//
+// Transport<R, W>
+// where
+//	R: AsyncRead + ...
+//  W: AsyncWrte + ...
+//
+// or tokio framed stuff, idk.
