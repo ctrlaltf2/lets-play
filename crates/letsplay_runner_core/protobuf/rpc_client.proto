@@ -67,9 +67,6 @@ message ServerMessage {
 	// Reset the currently running game game 
 	message Reset {}
 
-	// Initialize the game
-	message Initalize {}
-
 	// Controls the runner's suspend flag.
 	//
 	// Setting this flag to true tells the runner to (temporarily) inhibit the
@@ -83,18 +80,6 @@ message ServerMessage {
 	// a certain period of time.
 	message SetSuspend {
 		bool suspend = 1;
-	}
-
-	// FIXME: I'm not feeling hot about this. For local runners,
-	// we already would have the information needed to set properties,
-	// and for remote runners, we could simply re-use that.
-	//
-	// In other words, this will probably be removed.
-
-	message SetProperty {
-		// The key to set. This is optionally namespaced per-runner type.
-		string key = 1;
-		string value = 2;
 	}
 
 	// Inserts (plugs in) a input device. This typically occurs only at the start of a game
@@ -128,11 +113,9 @@ message ServerMessage {
 		// Control
 		Shutdown shutdown = 1;
 		Reset reset = 2;
-		Initalize initalize = 3;
 
 		// Configuration
 		SetSuspend set_suspend = 4;
-		SetProperty set_property = 5;
 
 		// Input
 		PlugInputDevice plug_input_device = 6;
