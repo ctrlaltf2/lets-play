@@ -4,7 +4,10 @@ use super::GraphicsContexts;
 use std::time::Instant;
 
 /// A game that should be run by the runner core.
-/// A runner implementation implements this trait.
+/// 
+/// # Implementation notes
+/// `letsplay_runner_core` spawns off another OS thread to run implementations of this trait on.
+/// Note that games only run on that thread, nothing else.
 pub trait Game {
 	/// Do any initalization tasks. Graphics contexts are provided
 	fn init(&mut self, graphics_contexts: &GraphicsContexts, encoder_control: &Control);
@@ -20,7 +23,7 @@ pub trait Game {
 
 	// We'll need input + video frame stuff too
 
-	/// Runs a single frame of the game. Should not sleep, [Game::wait_for_next_frame]
+	/// Runs a single frame of the game. Should not sleep, since [Game::wait_for_next_frame]
 	/// will sleep until the next frame (if required).
 	fn run_frame(&mut self);
 
