@@ -9,9 +9,8 @@ use anyhow::Result;
 
 use letsplay_core::{sleep, Size, Surface};
 use letsplay_retro_frontend::{
-	frontend::{Frontend, FrontendInterface, HwGlInitData},
 	input_devices::{InputDevice, RetroPad},
-	sys,
+	sys, Frontend, FrontendInterface, HwGlInitData,
 };
 
 use minifb::Key;

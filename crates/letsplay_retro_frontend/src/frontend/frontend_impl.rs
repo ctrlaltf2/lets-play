@@ -1,8 +1,8 @@
 use super::CoreVariable;
 use crate::input_devices::InputDevice;
-use letsplay_libretro_sys::*;
 use crate::result::{Error, Result};
 use ffi::CString;
+use letsplay_libretro_sys::*;
 use libloading::Library;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -25,6 +25,11 @@ struct CoreSettingsFile {
 }
 
 /// A libretro frontend.
+/// # Notes
+///
+/// Only one frontend can be created at once in a application. No exceptions;
+/// [Frontend::new] checks to make sure you uphold this and **will** panic if you don't.
+/// This is not seen as a bug in our code, but rather libretro's underlying API design.
 pub struct Frontend {
 	/// The current core's libretro functions.
 	pub(crate) core_api: Option<CoreAPI>,
@@ -38,7 +43,6 @@ pub struct Frontend {
 	pub(crate) sys_info: Option<SystemInfo>,
 
 	/// The core's requested pixel format.
-	/// TODO: HW accel. (or just not care)
 	pub(crate) pixel_format: PixelFormat,
 
 	/// Converted pixel buffer. We store it here so we don't keep allocating over and over.
@@ -75,7 +79,13 @@ impl Frontend {
 	/// Creates a new frontend instance.
 	///
 	/// # Notes
-	/// The returned [Box] *must* be held until this frontend is no longer used.
+	///
+	/// As mentioned before, only one frontend can be created at once in a application.
+	/// 
+	/// The provided [FrontendInterface] implementation *must* last at least as long as the
+	/// frontend itself.
+	/// 
+	/// The returned [Box] *must* be held until the frontend is no longer used.
 	pub fn new(interface: *mut dyn FrontendInterface) -> Box<Self> {
 		let mut boxed = Box::new(Self {
 			core_api: None,
@@ -109,13 +119,14 @@ impl Frontend {
 
 		// Assign to the global frontend pointer
 		unsafe {
-			assert!(FRONTEND.is_null(), "Cannot have multiple frontends.");
+			assert!(FRONTEND.is_null(), "Cannot have multiple frontends in a single process. This is not a bug in letsplay_retro_frontend.");
 			FRONTEND = &mut *boxed as *mut Frontend;
 		}
 
 		boxed
 	}
 
+	/// Returns whether or not the frontend has a core loaded.
 	pub fn core_loaded(&self) -> bool {
 		// Ideally this logic could be simplified but just to make sure..
 		self.core_library.is_some() && self.core_api.is_some()
@@ -160,8 +171,7 @@ impl Frontend {
 		// must always point to valid constant data. If it doesn't then other frontends
 		// would probably blow up too.
 		let path = unsafe {
-			#[cfg(debug_assertions)]
-			assert!(
+			debug_assert!(
 				!system_info.library_name.is_null(),
 				"Core library name is somehow null"
 			);

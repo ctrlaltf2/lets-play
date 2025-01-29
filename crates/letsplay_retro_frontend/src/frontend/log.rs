@@ -6,11 +6,10 @@ use tracing::*;
 #[no_mangle]
 /// This recieves log messages from our C++ helper code, and pulls them out into Tracing messages.
 pub extern "C" fn letsplay_retro_frontend_log(level: LogLevel, buf: *const ffi::c_char) {
-	// SAFETY: This pointer should never be null since it comes from the address of a C++ stack variable.
-	// we really only should get UTF-8 errors here in the case a core spits out something invalid.
+	// SAFETY: The [buf] pointer comes from the address of a C++ stack variable, so if it is null we have other problems to worry about.
+	// We really only should get UTF-8 errors here in the case a core spits out something invalid.
 	unsafe {
-		#[cfg(debug_assertions)]
-		assert!(!buf.is_null(), "This pointer should NEVER be null");
+		debug_assert!(!buf.is_null(), "This pointer should NEVER be null");
 
 		match ffi::CStr::from_ptr(buf).to_str() {
 			Ok(message) => match level {
@@ -45,4 +44,7 @@ extern "C" {
 	fn letsplay_retro_frontend_libretro_log(level: LogLevel, fmt: *const ffi::c_char);
 }
 
-pub static LOG_INTERFACE: LogCallback = LogCallback { log: letsplay_retro_frontend_libretro_log };
+/// Log interface to provide to cores.
+pub(crate) static LOG_INTERFACE: LogCallback = LogCallback {
+	log: letsplay_retro_frontend_libretro_log,
+};

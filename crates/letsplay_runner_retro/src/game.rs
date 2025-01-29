@@ -8,8 +8,7 @@ use client::GraphicsContexts;
 use letsplay_core::sleep;
 use letsplay_gpu::{self as gpu, GlFramebuffer};
 use letsplay_retro_frontend::{
-	frontend::{Frontend, FrontendInterface, HwGlInitData},
-	input_devices::AnyDevice,
+	input_devices::AnyDevice, Frontend, FrontendInterface, HwGlInitData,
 };
 use letsplay_runner_core::*;
 

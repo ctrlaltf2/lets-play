@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 
+/// A single core variable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CoreVariable {
 	/// Description of variable
@@ -62,6 +63,13 @@ impl CoreVariable {
 		}
 		self.c_value.as_ref().unwrap()
 	}
+
+	// TODO: We store all the choices, so set_value *REALLY* should just be
+	// set_value(&mut self, index: usize), to avoid the possibility of giving
+	// a core invalid values at all.
+	//
+	// (this does *not* limit API users; core variables are by design gated to a set
+	// of possible choices. we can probably add get_choices(&self) -> &Vec<String> which lets you see them)
 
 	/// Sets a new value
 	pub fn set_value(&mut self, value: &String) {
