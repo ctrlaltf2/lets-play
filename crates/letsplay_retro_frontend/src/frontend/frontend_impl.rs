@@ -1,10 +1,9 @@
+use super::CoreVariable;
 use crate::input_devices::InputDevice;
-use crate::libretro_callbacks;
-use crate::libretro_core_variable::CoreVariable;
+use crate::libretro_sys_new::*;
 use crate::result::{Error, Result};
 use ffi::CString;
 use libloading::Library;
-use libretro_sys::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi;
@@ -14,42 +13,9 @@ use std::{fs, mem::MaybeUninit};
 
 use tracing::{error, info};
 
-/// The currently running frontend.
-///
-/// # Safety
-/// Libretro itself is not thread safe, so we do not try and pretend that we are.
-/// Only one instance of Frontend can be active in an application.
-pub(crate) static mut FRONTEND: *mut Frontend = std::ptr::null_mut();
+use super::FrontendInterface;
 
-/// Initalization data for HW OpenGL cores.
-pub struct HwGlInitData {
-	/// A pointer to a function to allow cores to request OpenGL extension functions.
-	pub get_proc_address: *mut ffi::c_void,
-}
-
-/// Interface for the frontend to call to user code.
-pub trait FrontendInterface {
-	/// Called when video is updated.
-	fn video_update(&mut self, slice: &[u32], pitch: u32);
-
-	/// Called when video is updated and the core is using HW OpenGL rendering.
-	fn video_update_gl(&mut self);
-
-	/// Called when resize occurs.
-	fn video_resize(&mut self, width: u32, height: u32);
-
-	// TODO(lily): This should probably return the amount of consumed frames,
-	// as in some cases that *might* differ?
-	fn audio_sample(&mut self, slice: &[i16], size: usize);
-
-	/// Called to poll input
-	fn input_poll(&mut self);
-
-	/// Initalize hardware accelerated rendering using OpenGL.
-	/// If this returns [Option::None], then it is assumed that
-	/// OpenGL initalization has failed.
-	fn hw_gl_init(&mut self) -> Option<HwGlInitData>;
-}
+use super::callbacks::FRONTEND;
 
 /// Per-core settings
 #[derive(Serialize, Deserialize)]
@@ -58,6 +24,7 @@ struct CoreSettingsFile {
 	variables: HashMap<String, CoreVariable>,
 }
 
+/// A libretro frontend.
 pub struct Frontend {
 	/// The current core's libretro functions.
 	pub(crate) core_api: Option<CoreAPI>,
@@ -105,8 +72,10 @@ pub struct Frontend {
 }
 
 impl Frontend {
-	/// Creates a new boxed frontend instance. Note that the returned [Box]
-	/// must be held until this frontend is no longer used.
+	/// Creates a new frontend instance.
+	///
+	/// # Notes
+	/// The returned [Box] *must* be held until this frontend is no longer used.
 	pub fn new(interface: *mut dyn FrontendInterface) -> Box<Self> {
 		let mut boxed = Box::new(Self {
 			core_api: None,
@@ -250,6 +219,7 @@ impl Frontend {
 		info!("Saved settings to {path}");
 	}
 
+	/// Loads a libretro core into the frontend.
 	pub fn load_core<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if self.core_loaded() {
 			return Err(Error::CoreAlreadyLoaded);
@@ -321,7 +291,7 @@ impl Frontend {
 			// Set required libretro callbacks before calling libretro_init.
 			// Some cores expect some callbacks to be set before libretro_init is called,
 			// some cores don't. For maximum compatibility, pamper the cores which do.
-			(core_api_ref.retro_set_environment)(libretro_callbacks::environment_callback);
+			(core_api_ref.retro_set_environment)(super::callbacks::environment_callback);
 
 			// Initalize the libretro core. We do this first because
 			// there are a Few cores which initalize resources that later
@@ -329,13 +299,13 @@ impl Frontend {
 			(core_api_ref.retro_init)();
 
 			// Set more libretro callbacks now that we have initalized the core.
-			(core_api_ref.retro_set_video_refresh)(libretro_callbacks::video_refresh_callback);
-			(core_api_ref.retro_set_input_poll)(libretro_callbacks::input_poll_callback);
-			(core_api_ref.retro_set_input_state)(libretro_callbacks::input_state_callback);
+			(core_api_ref.retro_set_video_refresh)(super::callbacks::video_refresh_callback);
+			(core_api_ref.retro_set_input_poll)(super::callbacks::input_poll_callback);
+			(core_api_ref.retro_set_input_state)(super::callbacks::input_state_callback);
 			(core_api_ref.retro_set_audio_sample_batch)(
-				libretro_callbacks::audio_sample_batch_callback,
+				super::callbacks::audio_sample_batch_callback,
 			);
-			(core_api_ref.retro_set_audio_sample)(libretro_callbacks::audio_sample_callback);
+			(core_api_ref.retro_set_audio_sample)(super::callbacks::audio_sample_callback);
 
 			info!("Core {} loaded", path.as_ref().display());
 		}
@@ -343,7 +313,10 @@ impl Frontend {
 		Ok(())
 	}
 
+	/// Unloads a loaded core.
 	pub fn unload_core(&mut self) -> Result<()> {
+		// FIXME: Does this *really* need to be an error?
+		// I guess for sanity checking in debug builds we can keep it
 		if !self.core_loaded() {
 			return Err(Error::CoreNotLoaded);
 		}
@@ -381,6 +354,7 @@ impl Frontend {
 		Ok(())
 	}
 
+	/// Load game into the core.
 	pub fn load_game<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
 		if !self.core_loaded() {
 			return Err(Error::CoreNotLoaded);
@@ -429,6 +403,7 @@ impl Frontend {
 		}
 	}
 
+	/// Unload game from the core.
 	pub fn unload_game(&mut self) -> Result<()> {
 		if !self.core_loaded() {
 			return Err(Error::CoreNotLoaded);
@@ -499,6 +474,7 @@ impl Frontend {
 		self.gl_fbo_id = id;
 	}
 
+	/// Reset the emulated game.
 	pub fn reset(&mut self) {
 		let core_api = self.core_api.as_ref().unwrap();
 
@@ -507,6 +483,7 @@ impl Frontend {
 		}
 	}
 
+	/// Run a single frame of the emulated game.
 	pub fn run_frame(&mut self) {
 		let core_api = self.core_api.as_ref().unwrap();
 

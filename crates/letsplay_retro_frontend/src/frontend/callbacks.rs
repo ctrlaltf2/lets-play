@@ -1,12 +1,19 @@
 //! Callbacks for libretro
+use crate::libretro_sys_new::*;
 use crate::{frontend::*, libretro_log, util};
-use crate::{libretro_core_variable, libretro_sys_new::*};
 
 use std::ffi;
 
 use tracing::{debug, error};
 
 use letsplay_core::alloc::alloc_boxed_slice;
+
+/// The currently running frontend.
+///
+/// # Safety
+/// Libretro itself is not thread safe, so we do not try and pretend that we are.
+/// Only one instance of Frontend can be active in an application.
+pub(crate) static mut FRONTEND: *mut Frontend = std::ptr::null_mut();
 
 /// This function is used with HW OpenGL cores to transfer the current FBO's ID.
 unsafe extern "C" fn hw_gl_get_framebuffer() -> usize {
@@ -201,7 +208,7 @@ pub(crate) unsafe extern "C" fn environment_callback(
 				let key = std::ffi::CStr::from_ptr(var.key).to_str().unwrap();
 				let value = std::ffi::CStr::from_ptr(var.value).to_str().unwrap();
 
-				match libretro_core_variable::CoreVariable::parse(value) {
+				match CoreVariable::parse(value) {
 					Ok(value) => {
 						(*FRONTEND).variables.insert(key.to_string(), value);
 					}
