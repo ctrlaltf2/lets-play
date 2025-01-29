@@ -1,4 +1,5 @@
-//! Input devices
+//! Libretro input devices.
+
 pub mod retropad;
 pub use retropad::*;
 
@@ -11,9 +12,9 @@ pub use analog_retropad::*;
 mod any_device;
 pub use any_device::*;
 
-/// Trait/abstraction for implementing Libretro input devices.
+/// Trait that anything implementing a Libretro input device must implement.
 pub trait InputDevice {
-	/// Gets the device type. This should never EVER change, and simply return a constant.
+	/// Gets the device type. This is a constant, and should not change.
 	fn device_type(&self) -> u32;
 
 	/// Returns true if the input device is compatible with
