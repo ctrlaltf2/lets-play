@@ -1,6 +1,7 @@
 use super::ffmpeg;
 use super::hwframe::HwFrameContext;
 use anyhow::Context;
+#[cfg(feature = "nvidia")]
 use cudarc::driver::CudaDevice;
 use ffmpeg::error::EAGAIN;
 
@@ -76,6 +77,7 @@ impl VideoEncoder {
 	/// Creates a new NVIDIA NVENC H.264 encoder,
 	///  which encodes frames from GPU memory, via CUDA.
 	/// You are expected to handle uploading or otherwise working with a frame on the GPU.
+	#[cfg(feature = "nvidia")]
 	pub fn new_h264_nvenc_hwframe(
 		cuda_device: &CudaDevice,
 		size: Size,
