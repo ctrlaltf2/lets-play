@@ -6,20 +6,27 @@ use crate::shared::proto::{ClientMessage, ServerMessage};
 
 use futures_util::{SinkExt, StreamExt};
 
-// FIXME: DO NOT USE ANYHOW! DO NOT! SIMPLY DO NOT
+// FIXME(s): 
+//  - DO NOT USE ANYHOW! DO NOT! SIMPLY DO NOT
+//  - Instead of providing a static read_xxx helper
+//	  I wonder if it would be slightly more ergonomic to 
+//	  return a futures map() or whatever which parses
+//	  the message. It would allow us to handle hangup
+//	  a BIT easier, and tackle the first fixme too.
 
 /// The max frame size of a Let's Play RPC message; in this case 4 MB.
 /// This may be lowered or bumped up; do not directly depend on this being stable (for now).
 pub const MAX_FRAME_SIZE: usize = MB(4).in_bytes();
 
-struct Transport<RW>
+/// A Let's Play RPC transport.
+pub struct RpcTransport<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {
 	transport: Framed<RW, LengthDelimitedCodec>,
 }
 
-impl<RW> Transport<RW>
+impl<RW> RpcTransport<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {

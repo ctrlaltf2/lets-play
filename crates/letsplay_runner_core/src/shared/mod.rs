@@ -1,3 +1,4 @@
 pub mod proto;
-mod transport;
-// pub use transport::Transport;, probably
+mod rpc_transport;
+
+pub use rpc_transport::*;
