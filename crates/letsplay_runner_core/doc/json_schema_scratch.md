@@ -14,7 +14,8 @@ local runners would probably stuff this in
 
 ```json
 {
-	// Property stuff. This is processed by all runners but the keys are namespaced
+	// Property stuff. This is processed by all runners, but the keys are namespaced
+	// (except for properties that may be made generic)
 	"properties": {
 		"libretro.core": "/path/to/cores/swanstation_libretro.so",
 		"libretro.rom": "/path/to/my/definitely_legal/ps1_game.cue"
@@ -26,7 +27,7 @@ local runners would probably stuff this in
 	"metadata_override": {
 		"system": "Sony PlayStation",
 		"game": "My Totally Definitely Super Legal PS1 Game",
-		"hoster": "CombinedZPlayX"
+		"hoster": "CombinedZWorkX"
 	}
 }
 ```
