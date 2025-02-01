@@ -1,4 +1,4 @@
-use letsplay_core::si_unit::MBNew;
+use letsplay_core::si_unit::MB;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
@@ -10,7 +10,7 @@ use futures_util::{SinkExt, StreamExt};
 
 /// The max frame size of a Let's Play RPC message; in this case 4 MB.
 /// This may be lowered or bumped up; do not directly depend on this being stable (for now).
-pub const MAX_FRAME_SIZE: usize = MBNew(4).in_bytes();
+pub const MAX_FRAME_SIZE: usize = MB(4).in_bytes();
 
 struct Transport<RW>
 where

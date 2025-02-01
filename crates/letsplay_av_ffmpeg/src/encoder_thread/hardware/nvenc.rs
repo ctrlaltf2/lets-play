@@ -52,7 +52,7 @@ impl EncoderStateHW {
 			size.clone(),
 			60,
 			// FIXME: Make this configurable. PLEASE.
-			Mb::new(2).in_bytes(),
+			Mb(2).in_bytes(),
 		)?);
 
 		// replace packet
