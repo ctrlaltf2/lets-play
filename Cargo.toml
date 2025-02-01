@@ -29,26 +29,41 @@ edition = "2021"
 
 
 [workspace.dependencies]
+# Error handling
 anyhow = "1.0.86"
+thiserror = "2.0.11"
 
+# dynamic linking stuff
 libc = "0.2.155"
 libloading = "0.8.5"
 
+bytes = "1.9.0"
+
+# CLI parsing
 clap = { version = "4.5.6", features = ["cargo"] }
 
+# Async stuff
 tokio = { version = "1.37.0", features = [ "full" ] }
+tokio-util = { version = "0.7.13" }
+futures-util = "0.3.31"
+
+# Tracing
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-thiserror = "2.0.11"
 
+# OpenGL stuff
 gl = "0.14.0"
 gl_generator = "0.14.0"
 
-# protobuf
+# Protocol Buffers
 protobuf = { version = "4.30.0-beta1" }
 protobuf-codegen = { version = "4.30.0-beta1" }
 
-# NVIDIA
+# NVIDIA-specific dependencies
+#
+# FIXME: Bump cudarc to CUDA 12.2; we already rely on
+# at least SM60 (Pascal) minimum support, since
+# nvRTC will only gencode for SM60 onwards.
 cudarc = { version = "0.13.3", features = [ "cuda-11050" ] }
 
 [patch.crates-io]
