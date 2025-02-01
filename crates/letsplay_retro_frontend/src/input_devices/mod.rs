@@ -1,12 +1,12 @@
 //! Libretro input devices.
 
-pub mod retropad;
+mod retropad;
 pub use retropad::*;
 
-pub mod mouse;
+mod mouse;
 pub use mouse::*;
 
-pub mod analog_retropad;
+mod analog_retropad;
 pub use analog_retropad::*;
 
 mod any_device;
