@@ -18,9 +18,8 @@ impl Stick {
 }
 
 /// Implementation of the [InputDevice] trait for the
-/// Analog RetroPad. Currently, this is mostly a stub which calls
-/// into the RetroPad implementation w/out actually implementing
-/// any of the analog axes or addl. features.
+/// Analog RetroPad (essentially the RetroPad, but 
+/// with the dual analog sticks that it originally omits).
 pub struct AnalogRetroPad {
 	pad: RetroPad,
 	left_stick: Stick,
