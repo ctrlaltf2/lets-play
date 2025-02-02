@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use client::GraphicsContexts;
+use client::{ConfigurationState, GraphicsContexts};
 use letsplay_core::sleep;
 use letsplay_gpu::{self as gpu, GlFramebuffer};
 use letsplay_retro_frontend::{
@@ -82,6 +82,14 @@ impl client::Game for RetroGame {
 
 	fn reset(&mut self) {
 		self.get_frontend().reset();
+	}
+
+	fn get_configuration_state(&mut self) -> ConfigurationState {
+		if self.get_frontend().game_loaded() {
+			return ConfigurationState::ConfigurationComplete;
+		}
+
+		ConfigurationState::ConfigurationNeeded
 	}
 
 	fn set_property(&mut self, key: &str, value: &str) -> anyhow::Result<()> {

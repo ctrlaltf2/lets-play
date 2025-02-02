@@ -11,6 +11,8 @@ use tokio::sync::{
 	oneshot,
 };
 
+use crate::client::ConfigurationState;
+
 use super::{Game, GraphicsContexts};
 
 use letsplay_av_ffmpeg::encoder_thread;
@@ -59,56 +61,70 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 
 	game.init(&contexts, &video_encoder_control);
 
-	// TEMP CODE: This accepts a single tcp connection and broadcasts packets to it
-	// this is temporary as all hell
-	// yes I know sync io but its running on another thread anyways so its fine.
-	let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
-	let mut clients = Vec::new();
+	#[cfg(feature = "temp")]
+	{
+		// TEMP CODE: This accepts a single tcp connection and broadcasts NALU packets to it
+		// this is temporary as all hell
+		// yes I know sync io but its running on another thread anyways so its fine.
+		let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
+		let mut clients = Vec::new();
 
-	while clients.len() != 1 {
-		let client = server.accept().expect("baned");
-		clients.push(client.0);
-	}
-
-	tracing::info!("all clients accepted - unblocking and completing intialization");
-
-	// Helper thread
-	std::thread::spawn(move || loop {
-		let frame = packet_waiter.wait_for_packet();
-		for client in &mut clients {
-			let _ = client.write_all(frame.data().unwrap());
+		while clients.len() != 1 {
+			let client = server.accept().expect("baned");
+			clients.push(client.0);
 		}
-	});
+
+		tracing::info!("all clients accepted - unblocking and completing intialization");
+
+		// Helper thread
+		std::thread::spawn(move || loop {
+			let frame = packet_waiter.wait_for_packet();
+			for client in &mut clients {
+				let _ = client.write_all(frame.data().unwrap());
+			}
+		});
+	}
 
 	loop {
 		match rx.try_recv() {
-			Ok(message) => match message {
-				GameThreadMessage::Shutdown => break,
-				GameThreadMessage::Suspend { suspend, tx } => {
-					if suspended != suspend {
-						suspended = suspend
+			Ok(message) => {
+				match message {
+					GameThreadMessage::Shutdown => break,
+					GameThreadMessage::Suspend { suspend, tx } => {
+						if suspended != suspend {
+							// TODO: This is temporary, since we probably should instead shutdown or something
+							// since a unconfigured game indicates a JSON misconfiguration.
+							if suspend == false
+								&& game.get_configuration_state()
+									== ConfigurationState::ConfigurationNeeded
+							{
+								tracing::error!("Attempting to unsuspend a game that hasn't been fully configured!");
+								continue;
+							}
+							suspended = suspend
+						}
+
+						let _ = tx.send(());
 					}
 
-					let _ = tx.send(());
-				}
+					GameThreadMessage::Reset { tx } => {
+						game.reset();
+						let _ = tx.send(());
+					}
 
-				GameThreadMessage::Reset { tx } => {
-					game.reset();
-					let _ = tx.send(());
+					GameThreadMessage::SetProperty { key, value, tx } => {
+						// TODO: we should send the error result to the given tx
+						// so that we can propegate errors to the main thread
+						match game.set_property(&key, &value) {
+							Ok(_) => {}
+							Err(err) => {
+								tracing::error!("Error setting property {key} to {value}: {}", err);
+							}
+						};
+						let _ = tx.send(());
+					}
 				}
-
-				GameThreadMessage::SetProperty { key, value, tx } => {
-					// TODO: we should send the error result to the given tx
-					// so that we can propegate errors to the main thread
-					match game.set_property(&key, &value) {
-						Ok(_) => {}
-						Err(err) => {
-							tracing::error!("Error setting property {key} to {value}: {}", err);
-						}
-					};
-					let _ = tx.send(());
-				}
-			},
+			}
 
 			Err(TryRecvError::Empty) => {}
 			Err(TryRecvError::Disconnected) => break,
@@ -197,8 +213,8 @@ impl GameThread {
 		let _ = rx.await;
 	}
 
-	/// Shuts down the game thread.
-	pub async fn shutdown(self) {
+	/// Shuts down and waits for the game thread to exit.
+	pub fn shutdown(self) {
 		let _ = self.tx.send(GameThreadMessage::Shutdown);
 		self.join_handle.join().expect("Failed to join game thread");
 	}

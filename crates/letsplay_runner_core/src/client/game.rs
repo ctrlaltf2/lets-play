@@ -3,6 +3,13 @@ use letsplay_av_ffmpeg::encoder_thread::Control;
 use super::GraphicsContexts;
 use std::time::Instant;
 
+#[repr(u32)]
+#[derive(Eq, PartialEq, PartialOrd, Ord)]
+pub enum ConfigurationState {
+	ConfigurationNeeded,
+	ConfigurationComplete
+}
+
 /// A game that should be run by the runner core.
 /// 
 /// # Implementation notes
@@ -17,6 +24,9 @@ pub trait Game {
 	// Shutdown (clean up all resources)
 	// Not needed per se since we will just exit after shutdown,
 	// but cleaning up after ourselves isn't bad programming practice
+
+	/// Gets the configuration state of the game.
+	fn get_configuration_state(&mut self) -> ConfigurationState;
 
 	/// Set a named property. Failable.
 	fn set_property(&mut self, key: &str, value: &str) -> anyhow::Result<()>;

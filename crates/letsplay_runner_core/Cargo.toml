@@ -17,6 +17,7 @@ bytes.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["codec"] }
 futures-util = { workspace = true, features = [ "sink" ] }
+futures.workspace = true
 
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -47,3 +48,6 @@ client = [ ]
 
 # Build runner server code
 server = [ ]
+
+# bleh
+temp = []

@@ -17,11 +17,12 @@ use tracing_subscriber::FmtSubscriber;
 
 use thiserror::Error;
 
+// TODO: Use this
 #[derive(Error, Debug)]
 pub enum RunnerError {}
 
 /// The main Let's Play runners using the letsplay_runner_core crate utilize.
-pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
+pub async fn main(game: Box<dyn Game + Send>) -> anyhow::Result<()> {
 	let subscriber = FmtSubscriber::builder()
 		.with_max_level(Level::INFO)
 		.with_thread_names(true)
@@ -29,11 +30,11 @@ pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
 
 	tracing::subscriber::set_global_default(subscriber).unwrap();
 
-	let game_thread = GameThread::spawn(game);
+	// DOGFOOD: 
+	//	- Implement JSON configuration
+	//	- Implement RPC client (including both local and remote modes)
 
-	// just spin forever for now
-	//
-	// TODO: implement RPC client
+	let game_thread = GameThread::spawn(game);
 
 	// TEMP: Just for testing libretro runner bringup
 	game_thread
@@ -49,14 +50,15 @@ pub async fn main(game: Box<dyn Game + Send>) -> Result<(), RunnerError> {
 		)
 		.await;
 
+	// FIXME: Remove this when RPC client is implemented
+	// (this is temporary for bringup)
 	game_thread.set_suspend(false).await;
 
 	loop {
 		time::sleep(Duration::from_secs(1)).await;
 	}
 
-	// Once we exit the loop, we should shutdown the game thread
-	// and all our resources
+	game_thread.shutdown();
 
 	Ok(())
 }

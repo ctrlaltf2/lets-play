@@ -569,6 +569,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "cudarc",
+ "futures",
  "futures-util",
  "gl",
  "letsplay_av_ffmpeg",

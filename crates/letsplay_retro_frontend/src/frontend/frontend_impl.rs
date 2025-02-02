@@ -81,10 +81,10 @@ impl Frontend {
 	/// # Notes
 	///
 	/// As mentioned before, only one frontend can be created at once in a application.
-	/// 
+	///
 	/// The provided [FrontendInterface] implementation *must* last at least as long as the
 	/// frontend itself.
-	/// 
+	///
 	/// The returned [Box] *must* be held until the frontend is no longer used.
 	pub fn new(interface: *mut dyn FrontendInterface) -> Box<Self> {
 		let mut boxed = Box::new(Self {
@@ -130,6 +130,16 @@ impl Frontend {
 	pub fn core_loaded(&self) -> bool {
 		// Ideally this logic could be simplified but just to make sure..
 		self.core_library.is_some() && self.core_api.is_some()
+	}
+
+	pub fn game_loaded(&self) -> bool {
+		// It doesn't exactly make sense for a game to be considered
+		// loaded if we don't have a core.
+		if !self.core_loaded() {
+			return false;
+		}
+
+		self.game_loaded
 	}
 
 	/// Plugs in an input device to the specified port.
