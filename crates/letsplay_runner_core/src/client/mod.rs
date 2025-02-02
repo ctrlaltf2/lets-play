@@ -31,7 +31,6 @@ pub enum RunnerError {}
 struct RunnerMetadataOverride {
 	system: Option<String>,
 	game: Option<String>,
-	hoster: Option<String>
 }
 
 #[derive(Deserialize)]

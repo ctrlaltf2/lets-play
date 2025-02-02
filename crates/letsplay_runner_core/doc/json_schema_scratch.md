@@ -22,12 +22,10 @@ local runners would probably stuff this in
 	},
 
 	// Metadata overrides. Any specified metadata keys override
-	// whatever the runner suggests (except for "hoster", which the runner
-	// will simply not send unless it is overridden)
+	// whatever the runner suggests.
 	"metadata_override": {
 		"system": "Sony PlayStation",
 		"game": "My Totally Definitely Super Legal PS1 Game",
-		"hoster": "CombinedZWorkX"
 	}
 }
 ```
