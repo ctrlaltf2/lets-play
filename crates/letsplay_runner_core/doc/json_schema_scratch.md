@@ -16,7 +16,7 @@ local runners would probably stuff this in
 {
 	// Property stuff. This is processed by all runners, but the keys are namespaced
 	// (except for properties that may be made generic)
-	"properties": {
+	"game_properties": {
 		"libretro.core": "/path/to/cores/swanstation_libretro.so",
 		"libretro.rom": "/path/to/my/definitely_legal/ps1_game.cue"
 	},

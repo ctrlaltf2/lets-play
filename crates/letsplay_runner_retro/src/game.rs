@@ -61,6 +61,10 @@ impl RetroGame {
 }
 
 impl client::Game for RetroGame {
+	fn game_desc(&self) -> &'static str {
+		"Let's Play libretro Runner"
+	}
+
 	fn init(&mut self, graphics_contexts: &client::GraphicsContexts, encoder_control: &Control) {
 		// HACK: Make the EGL context current when we reach init().
 		//

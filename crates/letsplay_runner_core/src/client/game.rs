@@ -16,6 +16,10 @@ pub enum ConfigurationState {
 /// `letsplay_runner_core` spawns off another OS thread to run implementations of this trait on.
 /// Note that games only run on that thread, nothing else.
 pub trait Game {
+
+	/// Describes this game
+	fn game_desc(&self) -> &'static str;
+
 	/// Do any initalization tasks. Graphics contexts are provided
 	fn init(&mut self, graphics_contexts: &GraphicsContexts, encoder_control: &Control);
 

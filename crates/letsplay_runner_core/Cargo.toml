@@ -14,6 +14,8 @@ thiserror.workspace = true
 
 bytes.workspace = true
 
+clap.workspace = true
+
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["codec"] }
 futures-util = { workspace = true, features = [ "sink" ] }
@@ -24,6 +26,9 @@ tracing-subscriber.workspace = true
 
 protobuf.workspace = true
 
+serde.workspace = true
+serde_json.workspace = true
+
 # GPU
 letsplay_core.path = "../letsplay_core"
 letsplay_gpu.path = "../letsplay_gpu"
@@ -32,6 +37,8 @@ gl.workspace = true
 # AV stuff
 letsplay_av_ffmpeg = { path = "../letsplay_av_ffmpeg", default-features = false }
 cudarc = { workspace = true, optional = true }
+
+
 
 [build-dependencies]
 protobuf-codegen.workspace = true

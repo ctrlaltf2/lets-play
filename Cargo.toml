@@ -60,6 +60,11 @@ gl_generator = "0.14.0"
 protobuf = { version = "4.30.0-beta1" }
 protobuf-codegen = { version = "4.30.0-beta1" }
 
+# Serde
+serde = { version = "1.0.204", features = ["derive"] }
+serde_json = { version = "1.0.138" }
+toml = "0.8.19"
+
 # NVIDIA-specific dependencies
 #
 # FIXME: Bump cudarc to CUDA 12.2; we already rely on
