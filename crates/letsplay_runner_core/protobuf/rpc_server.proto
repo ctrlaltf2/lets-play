@@ -27,10 +27,6 @@ message ClientMessage {
 		string emu_id = 3;
 	}
 
-	// Sent when the game has been fully configured.
-	message GameReady {
-	}
-
 	// Provides a new video frame for a runner server 
 	// to broadcast to its connected clients.
 	message VideoFrame {
@@ -62,7 +58,6 @@ message ClientMessage {
 
 	oneof Oneof {
 		Hello hello = 1;
-		GameReady game_ready = 2;
 
 		VideoFrame video_frame = 5;
 		AudioFrame audio_frame = 6;
