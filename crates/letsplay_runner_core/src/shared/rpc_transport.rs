@@ -14,6 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 
 // FIXME(s):
 //  - DO NOT USE ANYHOW! DO NOT! SIMPLY DO NOT
+//		(Use thiserror instead probably)
 //  - Instead of providing a static read_xxx helper
 //	  I wonder if it would be slightly more ergonomic to
 //	  return a futures map() or whatever which parses
@@ -24,52 +25,26 @@ use futures_util::{SinkExt, StreamExt};
 /// This may be lowered or bumped up; do not directly depend on this being stable (for now).
 pub const MAX_FRAME_SIZE: usize = MB(4).in_bytes();
 
-/// A Let's Play RPC transport.
-pub struct RpcTransport<RW>
+pub struct RpcReadEnd<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {
 	read: SplitStream<Framed<RW, LengthDelimitedCodec>>,
-	write: SplitSink<Framed<RW, LengthDelimitedCodec>, Bytes>,
 }
 
-impl<RW> RpcTransport<RW>
+pub struct RpcWriteEnd<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {
-	pub fn from_stream(stream: RW) -> Self {
-		let framed = LengthDelimitedCodec::builder()
-			.length_field_type::<u32>()
-			.max_frame_length(MAX_FRAME_SIZE)
-			.new_framed(stream);
+	write: SplitSink<Framed<RW, LengthDelimitedCodec>, Bytes>,
+}
 
-		let (write, read) = framed.split();
-		Self { read, write }
-	}
-
-	/* this MIGHT be better but doesnt compile
-	pub async fn sink_server_messages(&self) -> impl Stream<Item = anyhow::Result<ServerMessage>> {
-		self.read.map(|res| {
-			let bytes = res?;
-			Ok(ServerMessage::parse(&bytes[..])?)
-		})
-	}
-	*/
-
-	/// Writes a single protobuf message.
-	pub async fn write_message<T: Message>(
-		&mut self,
-		message: &T,
-	) -> anyhow::Result<()> {
-		let bytes = Bytes::from(message.serialize()?);
-		self.write.send(bytes).await?;
-		Ok(())
-	}
-
+impl<RW> RpcReadEnd<RW>
+where
+	RW: AsyncReadExt + AsyncWriteExt + Unpin,
+{
 	/// Read a protobuf message.
-	pub async fn read_message<T: Message>(
-		&mut self
-	) -> anyhow::Result<T> {
+	pub async fn read_message<T: Message>(&mut self) -> anyhow::Result<T> {
 		if let Some(framed) = self.read.next().await {
 			let bytes = framed?;
 			Ok(T::parse(&bytes[..])?)
@@ -77,4 +52,30 @@ where
 			Err(anyhow::anyhow!("End of stream"))
 		}
 	}
+}
+
+impl<RW> RpcWriteEnd<RW>
+where
+	RW: AsyncReadExt + AsyncWriteExt + Unpin,
+{
+	/// Writes a single protobuf message.
+	pub async fn write_message<T: Message>(&mut self, message: &T) -> anyhow::Result<()> {
+		let bytes = Bytes::from(message.serialize()?);
+		self.write.send(bytes).await?;
+		Ok(())
+	}
+}
+
+/// Creates split read/write ends for Let's Play RPC.
+pub fn from_stream<RW: AsyncReadExt + AsyncWriteExt + Unpin>(
+	stream: RW,
+) -> (RpcWriteEnd<RW>, RpcReadEnd<RW>) {
+	let framed = LengthDelimitedCodec::builder()
+		.length_field_type::<u32>()
+		.max_frame_length(MAX_FRAME_SIZE)
+		.new_framed(stream);
+
+	let (write, read) = framed.split();
+
+	(RpcWriteEnd { write }, RpcReadEnd { read })
 }

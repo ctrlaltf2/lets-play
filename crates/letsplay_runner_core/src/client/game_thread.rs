@@ -38,12 +38,15 @@ enum GameThreadMessage {
 	},
 }
 
-fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>) {
+fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>,
+	
+
+) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
 	// better (and properly handle states or whatever) we should probably just like... Do so?
-	let mut suspended = true;
+	let mut game_currently_suspended = true;
 
 	let contexts = GraphicsContexts::create(0);
 
@@ -86,12 +89,12 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 	}
 
 	loop {
-		match rx.try_recv() {
+		match message_rx.try_recv() {
 			Ok(message) => {
 				match message {
 					GameThreadMessage::Shutdown => break,
 					GameThreadMessage::Suspend { suspend, tx } => {
-						if suspended != suspend {
+						if game_currently_suspended != suspend {
 							// TODO: This is temporary, since we probably should instead shutdown or something
 							// since a unconfigured game indicates a JSON misconfiguration.
 							if suspend == false
@@ -101,7 +104,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 								tracing::error!("Attempting to unsuspend a game that hasn't been fully configured!");
 								continue;
 							}
-							suspended = suspend
+							game_currently_suspended = suspend
 						}
 
 						let _ = tx.send(());
@@ -133,7 +136,7 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 		// If the runner is currently suspended, do not call the run function,
 		// and instead just wait. We will start running again when the RPC layer
 		// tells us to leave suspension.
-		if suspended {
+		if game_currently_suspended {
 			thread::sleep(Duration::from_millis(100));
 			continue;
 		}
@@ -162,7 +165,8 @@ fn main(mut rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Ga
 		game.wait_for_next_frame(now);
 	}
 
-	// Cancel and join the video thread (the main thread will wait for us to send our end message before terminating)
+	// Shut down the encoder thread.
+	video_encoder_control.shutdown();
 }
 
 /// Handle to a spawned game thread
