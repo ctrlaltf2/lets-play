@@ -4,6 +4,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
+use letsplay_core::si_unit::Mb;
 // This is used by async code, so we have to use
 // Tokio's channels.
 use tokio::sync::{
@@ -38,10 +39,7 @@ enum GameThreadMessage {
 	},
 }
 
-fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>,
-	
-
-) {
+fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
@@ -58,6 +56,9 @@ fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Bo
 				&contexts.cuda_interop_context.clone(),
 				&contexts.egl_device_context.clone(),
 				false,
+				// TODO: Provide configuration in runner json
+				// for now, moving the hardcoding to here is good enough
+				Mb(0.25),
 			)
 		}
 	};

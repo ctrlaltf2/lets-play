@@ -23,7 +23,7 @@ use futures_util::{SinkExt, StreamExt};
 
 /// The max frame size of a Let's Play RPC message; in this case 4 MB.
 /// This may be lowered or bumped up; do not directly depend on this being stable (for now).
-pub const MAX_FRAME_SIZE: usize = MB(4).in_bytes();
+pub const MAX_FRAME_SIZE: usize = MB(4.0).in_bytes();
 
 pub struct RpcReadEnd<RW>
 where

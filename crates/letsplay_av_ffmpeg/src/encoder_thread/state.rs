@@ -17,7 +17,6 @@ pub struct EncoderSharedState {
 }
 
 impl EncoderSharedState {
-
 	/// Creates this struct
 	pub fn new() -> Self {
 		Self {
@@ -29,13 +28,17 @@ impl EncoderSharedState {
 
 	#[cfg(feature = "nvidia")]
 	/// Initalizes a NVENC encoder
-	pub fn init_nvenc(&mut self, cuda_device: &Arc<CudaDevice>, size: Size) -> anyhow::Result<()> {
+	pub fn init_nvenc(
+		&mut self,
+		cuda_device: &Arc<CudaDevice>,
+		size: Size,
+		max_bitrate: Mb,
+	) -> anyhow::Result<()> {
 		self.encoder = Some(VideoEncoder::new_h264_nvenc_hwframe(
 			&cuda_device,
 			size.clone(),
 			60,
-			// FIXME: Make this configurable. PLEASE.
-			Mb(2).in_bytes(),
+			max_bitrate.in_bytes(),
 		)?);
 
 		// replace packet
@@ -52,7 +55,7 @@ impl EncoderSharedState {
 
 	/// Sends a frame. The frame must be in the correct format
 	/// (for hardware encoding, this is assumed to be RGBX; for x264, this is YUV).
-	/// 
+	///
 	/// pts is the PTS of the frame
 	/// force_keyframe will force a IDR frame if true, otherwise we assume a P frame
 	pub fn send_frame(&mut self, pts: u64, force_keyframe: bool) -> Option<Packet> {

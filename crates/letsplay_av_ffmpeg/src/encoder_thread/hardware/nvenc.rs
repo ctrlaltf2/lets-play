@@ -15,6 +15,7 @@ use cudarc::{
 	},
 	nvrtc::CompileOptions,
 };
+use letsplay_core::si_unit::Mb;
 use letsplay_gpu::egl_helpers::DeviceContext;
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -85,6 +86,8 @@ fn main(
 	cuda_device: &Arc<CudaDevice>,
 	cuda_resource: &Arc<Mutex<GraphicsResource>>,
 	gl_context: &Arc<Mutex<DeviceContext>>,
+
+	max_bitrate: Mb,
 ) -> anyhow::Result<()> {
 	let mut frame_number = 0u64;
 	let mut force_keyframe = false;
@@ -149,7 +152,7 @@ fn main(
 						.expect("Failed to allocate flip backbuffer");
 
 					encoder
-						.init_nvenc(cuda_device, resolution.clone())
+						.init_nvenc(cuda_device, resolution.clone(), max_bitrate.clone())
 						.expect("Encoder initalization failed");
 
 					tracing::info!(
@@ -347,6 +350,8 @@ pub fn spawn(
 	gl_context: &Arc<Mutex<DeviceContext>>,
 
 	rgba_to_bgra_kernel: bool,
+
+	max_bitrate: Mb,
 ) -> (Control, PacketWaiter) {
 	let processed = Arc::new(Mutex::new(false));
 	let processed_cv = Arc::new(Condvar::new());
@@ -387,6 +392,7 @@ pub fn spawn(
 				&dev_clone,
 				&rsrc_clone,
 				&gl_clone,
+				max_bitrate,
 			) {
 				Ok(_) => {}
 				Err(err) => {

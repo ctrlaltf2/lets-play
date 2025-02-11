@@ -6,7 +6,8 @@ macro_rules! implement_si_unit {
 		#[doc="The "]
 		#[doc=$unit_name]
 		#[doc=" SI unit."]
-		pub struct $name(pub usize);
+		#[derive(Clone, PartialEq)]
+		pub struct $name(pub f32);
 
 		impl $name {
 			// At some point figure out how to get plurals to work.
@@ -15,17 +16,17 @@ macro_rules! implement_si_unit {
 			#[doc=$unit_name]
 			#[doc="to bytes."]
 			pub const fn in_bytes(&$s) -> usize {
-				$calc
+				($calc) as usize
 			}
 		}
 	};
 }
 
-implement_si_unit!(Kb, "kilobit", self, self.0 * 125);
-implement_si_unit!(Mb, "megabit", self, (self.0 / 8) * 1000000);
+implement_si_unit!(Kb, "kilobit", self, self.0 * 125.);
+implement_si_unit!(Mb, "megabit", self, (self.0 / 8.) * 1000000.);
 
-implement_si_unit!(KiB, "kibibyte", self, self.0 * 1024);
-implement_si_unit!(KB, "kilobyte", self, self.0 * 1000);
+implement_si_unit!(KiB, "kibibyte", self, self.0 * 1024.);
+implement_si_unit!(KB, "kilobyte", self, self.0 * 1000.);
 
-implement_si_unit!(MB, "megabyte", self, self.0 * (1000 * 1000));
-implement_si_unit!(MiB, "mebibyte", self, self.0 * (1024 * 1024));
+implement_si_unit!(MB, "megabyte", self, self.0 * (1000. * 1000.));
+implement_si_unit!(MiB, "mebibyte", self, self.0 * (1024. * 1024.));

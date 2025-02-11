@@ -27,11 +27,11 @@ impl VideoEncoder {
 	pub fn new_h264_software(
 		size: Size,
 		max_framerate: u32,
-		bitrate: usize,
+		max_bitrate: usize,
 	) -> anyhow::Result<Self> {
 		// Create the libx264 context
 		let (encoder, mut video_encoder_context) =
-			create_context_and_set_common_parameters("libx264", &size, max_framerate, bitrate)?;
+			create_context_and_set_common_parameters("libx264", &size, max_framerate, max_bitrate)?;
 
 		video_encoder_context.set_format(ffmpeg::format::Pixel::YUV420P);
 
@@ -82,7 +82,7 @@ impl VideoEncoder {
 		cuda_device: &CudaDevice,
 		size: Size,
 		max_framerate: u32,
-		bitrate: usize,
+		max_bitrate: usize,
 	) -> anyhow::Result<Self> {
 		let cuda_device_context = super::hwdevice::DeviceContextBuilder::new(
 			ffmpeg::sys::AVHWDeviceType::AV_HWDEVICE_TYPE_CUDA,
@@ -100,7 +100,7 @@ impl VideoEncoder {
 			.with_context(|| "while trying to create CUDA frame context")?;
 
 		let (encoder, mut video_encoder_context) =
-			create_context_and_set_common_parameters("h264_nvenc", &size, max_framerate, bitrate)
+			create_context_and_set_common_parameters("h264_nvenc", &size, max_framerate, max_bitrate)
 				.with_context(|| "while trying to create encoder")?;
 
 		video_encoder_context.set_format(ffmpeg::format::Pixel::CUDA);
