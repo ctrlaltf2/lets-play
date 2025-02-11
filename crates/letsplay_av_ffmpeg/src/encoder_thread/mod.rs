@@ -1,6 +1,8 @@
 //! Encoder thread implementations.
 pub mod hardware;
 
+mod state;
+
 // FIXME: (Re-)implement software sad path, as well as
 // CUDA-less hardware encoding. (Maybe use OpenCL? Oh god)
 // For CUDA-less hardware encoding I think we can use

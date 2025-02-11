@@ -83,7 +83,7 @@ fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Bo
 		std::thread::spawn(move || loop {
 			let frame = packet_waiter.wait_for_packet();
 			for client in &mut clients {
-				let _ = client.write_all(frame.data().unwrap());
+				let _ = client.write_all(frame.packet.data().unwrap());
 			}
 		});
 	}
