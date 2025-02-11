@@ -41,12 +41,33 @@ pub struct Control {
 	processed_cv: Arc<Condvar>,
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub enum PacketType {
+	Idr,
+	Prev
+}
+
+#[derive(Clone)]
+pub struct Packet {
+	pub packet_type: PacketType,
+	pub packet: ffmpeg::Packet
+}
+
+impl Packet {
+	pub(crate) fn empty() -> Self {
+		Self {
+			packet_type: PacketType::Idr,
+			packet: ffmpeg::Packet::empty()
+		}
+	}
+}
+
 /// Allows waiting for the video encoder thread
 /// to produce packets.
 #[derive(Clone)]
 pub struct PacketWaiter {
 	packet_updated_cv: Arc<Condvar>,
-	packet: Arc<Mutex<ffmpeg::Packet>>,
+	packet: Arc<Mutex<Packet>>,
 }
 
 // FIXME for these impls:
@@ -54,7 +75,7 @@ pub struct PacketWaiter {
 
 impl PacketWaiter {
 	/// Wait for a packet without timeout.
-	pub fn wait_for_packet(&self) -> MutexGuard<'_, ffmpeg::Packet> {
+	pub fn wait_for_packet(&self) -> MutexGuard<'_, Packet> {
 		let lk = self.packet.lock().expect("failed to lock packet");
 		let waited_lk = self
 			.packet_updated_cv
@@ -67,7 +88,7 @@ impl PacketWaiter {
 	pub fn wait_for_packet_timeout(
 		&self,
 		timeout: Duration,
-	) -> Option<MutexGuard<'_, ffmpeg::Packet>> {
+	) -> Option<MutexGuard<'_, Packet>> {
 		let lk = self.packet.lock().expect("failed to lock packet");
 		let wait_result = self
 			.packet_updated_cv

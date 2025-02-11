@@ -125,7 +125,7 @@ impl VideoEncoder {
 		dict.set("rc", "vbr");
 		dict.set("qp", "35");
 
-		//dict.set("forced-idr", "1");
+		dict.set("forced-idr", "1");
 
 		dict.set("delay", "0");
 		dict.set("zerolatency", "1");

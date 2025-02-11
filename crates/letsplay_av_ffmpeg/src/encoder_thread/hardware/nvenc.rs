@@ -17,7 +17,11 @@ use cudarc::{
 use letsplay_gpu::egl_helpers::DeviceContext;
 use std::sync::{Arc, Condvar, Mutex};
 
-use crate::{cuda_gl::safe::GraphicsResource, ffmpeg};
+use crate::{
+	cuda_gl::safe::GraphicsResource,
+	encoder_thread::{PacketType, Packet},
+	ffmpeg,
+};
 use crate::{encoder_thread::PacketWaiter, VideoEncoder};
 
 use letsplay_core::si_unit::Mb;
@@ -67,11 +71,11 @@ impl EncoderStateHW {
 		&mut self.frame
 	}
 
-	fn send_frame(&mut self, pts: u64, force_keyframe: bool) -> Option<ffmpeg::Packet> {
+	fn send_frame(&mut self, pts: u64, force_keyframe: bool) -> Option<Packet> {
 		let frame = &mut self.frame;
 		let encoder = self.encoder.as_mut().unwrap();
 
-		// set frame metadata
+		// set frame type data
 		unsafe {
 			if force_keyframe {
 				(*frame.as_mut_ptr()).pict_type = ffmpeg::sys::AVPictureType::AV_PICTURE_TYPE_I;
@@ -96,7 +100,15 @@ impl EncoderStateHW {
 		// So this just clones a pointer. I probably could have just said that.
 		unsafe {
 			if !self.packet.is_empty() {
-				return Some(self.packet.clone());
+				return Some(Packet {
+					packet_type: if force_keyframe {
+						PacketType::Idr
+					} else {
+						PacketType::Prev
+					},
+
+					packet: self.packet.clone(),
+				});
 			}
 		}
 
@@ -158,7 +170,7 @@ fn main(
 	processed: Arc<Mutex<bool>>,
 
 	packet_update: Arc<Condvar>,
-	packet: Arc<Mutex<ffmpeg::Packet>>,
+	packet: Arc<Mutex<Packet>>,
 
 	rgba_to_bgra_kernel: bool,
 
@@ -351,7 +363,7 @@ fn main(
 
 					if let Some(mut pkt) = encoder.send_frame(frame_number as u64, force_keyframe) {
 						// A bit less clear than ::empty(), but it's "Safe"
-						if let Some(_) = pkt.data() {
+						if let Some(_) = pkt.packet.data() {
 							{
 								// Swap the packet and notify a waiting thread that we produced a packet
 								let mut locked_packet =
@@ -436,7 +448,7 @@ pub fn spawn(
 
 	// packetwaiter
 	let pkt_update_cv = Arc::new(Condvar::new());
-	let pkt = Arc::new(Mutex::new(ffmpeg::Packet::empty()));
+	let pkt = Arc::new(Mutex::new(Packet::empty()));
 
 	// clones for the thread
 

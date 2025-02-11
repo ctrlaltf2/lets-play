@@ -22,7 +22,7 @@ pub(crate) fn create_context_and_set_common_parameters(
 	codec: &str,
 	size: &Size,
 	max_framerate: u32,
-	bitrate: usize,
+	max_bitrate: usize,
 ) -> anyhow::Result<(ffmpeg::Codec, ffmpeg::encoder::video::Video)> {
 	let encoder = match ffmpeg::encoder::find_by_name(codec) {
 		Some(c) => c,
@@ -38,7 +38,7 @@ pub(crate) fn create_context_and_set_common_parameters(
 	// This probably would be a good idea to keep configurable.
 	//video_encoder_context.set_bit_rate(bitrate / 2);
 	video_encoder_context.set_bit_rate(0);
-	video_encoder_context.set_max_bit_rate(bitrate);
+	video_encoder_context.set_max_bit_rate(max_bitrate);
 
 	// qp TODO:
 	video_encoder_context.set_qmin(30);
