@@ -10,7 +10,7 @@ pub use graphics_contexts::*;
 use std::{collections::HashMap, time::Duration};
 
 use game_thread::GameThread;
-use tokio::time;
+use tokio::{sync::oneshot, time};
 
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -61,7 +61,7 @@ pub async fn main(game: Box<dyn Game + Send>) -> anyhow::Result<()> {
 	let config_path = matches.get_one::<String>("config").unwrap();
 
 	if !std::fs::exists(config_path)? {
-		tracing::error!("give a good config file next time");
+		eprintln!("Configuration file {} does not exist.", config_path);
 		std::process::exit(1);
 	}
 
@@ -78,13 +78,44 @@ pub async fn main(game: Box<dyn Game + Send>) -> anyhow::Result<()> {
 	// DOGFOOD:
 	//	- Implement RPC client (including both local and remote modes)
 
-	let game_thread = GameThread::spawn(game);
+	let (tx, rx) = oneshot::channel();
+
+	let game_thread = GameThread::spawn(game, tx);
+
+	// Nab the video packet waiter
+	let packet_waiter = rx.await?;
 
 	// Set properties
 	// Make this not suck later.
 	for (key, value) in config.game_properties.iter() {
 		game_thread.set_property(key.clone(), value.clone()).await;
 	}
+
+	{
+		// TEMP CODE: This accepts a single tcp connection and broadcasts NALU packets to it.
+		// I think the general structure of waiting on another thread will *probably* stay
+		let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
+		let mut clients = Vec::new();
+
+		// or however many this temp code should broadcast/fan out to
+		while clients.len() != 1 {
+			let client = server.accept().expect("baned");
+			clients.push(client.0);
+		}
+
+		tracing::info!("all clients accepted - unblocking and completing intialization");
+
+		// Helper thread
+		std::thread::spawn(move || loop {
+			let frame = packet_waiter.wait_for_packet();
+			for client in &mut clients {
+				use std::io::Write;
+				let _ = client.write_all(frame.packet.data().unwrap());
+			}
+		});
+	}
+
+
 
 	// FIXME: Remove this when RPC client is implemented
 	// (this is temporary for bringup)

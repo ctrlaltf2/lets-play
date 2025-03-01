@@ -33,6 +33,7 @@ pub(crate) fn create_context_and_set_common_parameters(
 
 	video_encoder_context.set_width(size.width);
 	video_encoder_context.set_height(size.height);
+
 	video_encoder_context.set_frame_rate(Some(ffmpeg::Rational(1, max_framerate as i32)));
 
 	// This probably would be a good idea to keep configurable.
@@ -41,15 +42,17 @@ pub(crate) fn create_context_and_set_common_parameters(
 	video_encoder_context.set_max_bit_rate(max_bitrate);
 
 	// qp TODO:
-	video_encoder_context.set_qmin(30);
+	video_encoder_context.set_qmin(35);
 	video_encoder_context.set_qmax(28);
 
 	video_encoder_context.set_time_base(ffmpeg::Rational(1, max_framerate as i32).invert());
 	video_encoder_context.set_format(ffmpeg::format::Pixel::YUV420P);
 
 	// The GOP here is setup to balance keyframe retransmission with bandwidth.
-	//video_encoder_context.set_gop((max_framerate * 4) as u32);
-	video_encoder_context.set_gop(i32::MAX as u32);
+	// For 60 FPS content, we will pick a GOP rate of 120.
+	video_encoder_context.set_gop((max_framerate * 2) as u32);
+
+	//video_encoder_context.set_gop(i32::MAX as u32);
 	video_encoder_context.set_max_b_frames(0);
 
 	unsafe {

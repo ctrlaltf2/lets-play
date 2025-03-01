@@ -16,7 +16,7 @@ use crate::client::ConfigurationState;
 
 use super::{Game, GraphicsContexts};
 
-use letsplay_av_ffmpeg::encoder_thread;
+use letsplay_av_ffmpeg::encoder_thread::{self, PacketWaiter};
 
 enum GameThreadMessage {
 	/// Shut down the game thread.
@@ -39,7 +39,11 @@ enum GameThreadMessage {
 	},
 }
 
-fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Box<dyn Game>) {
+fn main(
+	mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>,
+	video_packet_waiter_tx: oneshot::Sender<PacketWaiter>,
+	mut game: Box<dyn Game>,
+) {
 	// true if the loop is suspended.
 	// Games start suspended, and should be unsuspended when they are fully configured.
 	// FIXME: This should probably be a enum? I mean, it's fine, but if we really wanted this to be
@@ -58,36 +62,19 @@ fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Bo
 				false,
 				// TODO: Provide configuration in runner json
 				// for now, moving the hardcoding to here is good enough
-				Mb(0.25),
+				Mb(2.0),
 			)
 		}
 	};
 
-	game.init(&contexts, &video_encoder_control);
-
-	#[cfg(feature = "temp")]
-	{
-		// TEMP CODE: This accepts a single tcp connection and broadcasts NALU packets to it
-		// this is temporary as all hell
-		// yes I know sync io but its running on another thread anyways so its fine.
-		let server = std::net::TcpListener::bind("0.0.0.0:6040").expect("rrr");
-		let mut clients = Vec::new();
-
-		while clients.len() != 1 {
-			let client = server.accept().expect("baned");
-			clients.push(client.0);
-		}
-
-		tracing::info!("all clients accepted - unblocking and completing intialization");
-
-		// Helper thread
-		std::thread::spawn(move || loop {
-			let frame = packet_waiter.wait_for_packet();
-			for client in &mut clients {
-				let _ = client.write_all(frame.packet.data().unwrap());
-			}
-		});
+	// if this fails and returns the packet waiter, then we are probably completely screwed anyways,
+	// since the client main should never hang up until after it has gotten this
+	match video_packet_waiter_tx.send(packet_waiter) {
+		Ok(_) => {}
+		Err(_) => panic!("Calling thread did not recieve the packet waiter; we probably died"),
 	}
+
+	game.init(&contexts, &video_encoder_control);
 
 	loop {
 		match message_rx.try_recv() {
@@ -105,7 +92,14 @@ fn main(mut message_rx: mpsc::UnboundedReceiver<GameThreadMessage>, mut game: Bo
 								tracing::error!("Attempting to unsuspend a game that hasn't been fully configured!");
 								continue;
 							}
-							game_currently_suspended = suspend
+
+							// Force the next frame output to be an IDR frame when leaving suspend.
+							if game_currently_suspended == true {
+								video_encoder_control
+									.send_command(encoder_thread::EncoderCommand::ForceKeyframe);
+							}
+
+							game_currently_suspended = suspend;
 						}
 
 						let _ = tx.send(());
@@ -178,14 +172,17 @@ pub struct GameThread {
 
 impl GameThread {
 	/// Spawns the game thread.
-	pub fn spawn(game: Box<dyn Game + Send>) -> GameThread {
+	pub fn spawn(
+		game: Box<dyn Game + Send>,
+		video_packet_waiter_tx: oneshot::Sender<PacketWaiter>,
+	) -> GameThread {
 		let (tx, rx) = mpsc::unbounded_channel();
 
 		// Spawn the game thread
 		let join_handle = thread::Builder::new()
 			.name("letsplay_runner_game".into())
 			.spawn(move || {
-				main(rx, game);
+				main(rx, video_packet_waiter_tx, game);
 			})
 			.expect("Failed to spawn game thread");
 

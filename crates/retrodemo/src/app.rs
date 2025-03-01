@@ -142,7 +142,12 @@ impl App {
 	/// The main loop. Should probably be abstracted a bit better.
 	pub fn main_loop(&mut self) {
 		let av_info = self.get_frontend().get_av_info().expect("???");
-		let step_duration = Duration::from_secs_f64(1.0 / av_info.timing.fps);
+		let step_duration : Duration = match av_info.timing.fps {
+			// This handles cores which do not provide a proper system_av_info struct
+			// (.fps is nil), and just defaults to NTSC 59.94hz update rate.
+			0. => Duration::from_secs_f64(1.0 / 59.94),
+			other => Duration::from_secs_f64(1.0 / other)
+		};
 
 		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
 			let now = Instant::now();

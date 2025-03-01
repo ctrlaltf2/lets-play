@@ -123,7 +123,7 @@ impl VideoEncoder {
 
 		// TODO:
 		dict.set("rc", "vbr");
-		dict.set("qp", "35");
+		//dict.set("qp", "35");
 
 		dict.set("forced-idr", "1");
 

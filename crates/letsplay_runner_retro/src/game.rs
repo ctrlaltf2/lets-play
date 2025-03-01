@@ -106,7 +106,15 @@ impl client::Game for RetroGame {
 				tracing::info!("Loaded core \"{}\"", value);
 
 				let av_info = self.get_frontend().get_av_info().expect("???");
-				self.frame_duration = Duration::from_secs_f64(1.0 / av_info.timing.fps);
+				self.frame_duration = match av_info.timing.fps {
+					// Some cores are stupid and do not provide a proper system_av_info struct
+					// (.fps is 0) when initally loaded.
+					//
+					// Just default to NTSC 59.94hz update rate.
+					// FIXME: Implement ENVIRONMENT_SET_SYSTEM_AV_INFO
+					0. => Duration::from_secs_f64(1.0 / 59.94),
+					other => Duration::from_secs_f64(1.0 / other)
+				};
 
 				Ok(())
 			}
