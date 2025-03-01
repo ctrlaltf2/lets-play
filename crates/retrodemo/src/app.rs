@@ -10,7 +10,7 @@ use anyhow::Result;
 use letsplay_core::{sleep, Size, Surface};
 use letsplay_retro_frontend::{
 	input_devices::{InputDevice, RetroPad},
-	sys, Frontend, FrontendInterface, HwGlInitData,
+	sys::{self, SystemAvInfo}, Frontend, FrontendInterface, HwGlInitData,
 };
 
 use minifb::Key;
@@ -47,6 +47,8 @@ pub struct App {
 
 	frontend: Option<Box<Frontend>>,
 
+	frame_duration: Duration,
+
 	pad: RetroPad,
 
 	// EGL state
@@ -64,6 +66,8 @@ impl App {
 		let mut boxed = Box::new(Self {
 			window: AppWindow::new(),
 			frontend: None,
+
+			frame_duration: Duration::new(0, 0),
 			pad: RetroPad::new(),
 
 			egl_context: None,
@@ -139,19 +143,24 @@ impl App {
 		}
 	}
 
+	// FIXME: Provide this in the frontend API.
+	fn frame_duration_from_libretro(av: &SystemAvInfo) -> Duration {
+		match av.timing.fps {
+			// For cores which are stupid. I hate compatibility hacks
+			// I hate compatibility hacks
+			0. => Duration::from_secs_f64(1.0 / 59.94),
+			other => Duration::from_secs_f64(1.0 / other),
+		}
+	}
+
 	/// The main loop. Should probably be abstracted a bit better.
 	pub fn main_loop(&mut self) {
 		let av_info = self.get_frontend().get_av_info().expect("???");
-		let step_duration : Duration = match av_info.timing.fps {
-			// This handles cores which do not provide a proper system_av_info struct
-			// (.fps is nil), and just defaults to NTSC 59.94hz update rate.
-			0. => Duration::from_secs_f64(1.0 / 59.94),
-			other => Duration::from_secs_f64(1.0 / other)
-		};
+		self.frame_duration = Self::frame_duration_from_libretro(&av_info);
 
 		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
 			let now = Instant::now();
-			let next = now.checked_add(step_duration).expect("?????");
+			let next = now.checked_add(self.frame_duration).expect("?????");
 			self.get_frontend().run_frame();
 
 			// Wait until the next emulation step
@@ -196,6 +205,11 @@ impl FrontendInterface for App {
 		}
 
 		self.window.update_buffer(slice, dimensions.0, true);
+	}
+
+	fn av_info_set(&mut self, av: &SystemAvInfo) {
+		tracing::info!("AV info set at runtime to {}fps", av.timing.fps);
+		self.frame_duration = Self::frame_duration_from_libretro(av);
 	}
 
 	fn audio_sample(&mut self, _slice: &[i16], _size: usize) {}

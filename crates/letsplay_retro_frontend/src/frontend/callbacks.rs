@@ -77,6 +77,13 @@ pub(crate) unsafe extern "C" fn environment_callback(
 			return true;
 		}
 
+		ENVIRONMENT_SET_SYSTEM_AV_INFO => {
+			let ptr = data as *const SystemAvInfo;
+			(*FRONTEND).av_info = Some((*ptr).clone());
+			(*(*FRONTEND).interface).av_info_set(&*ptr);
+			return true;
+		}
+
 		ENVIRONMENT_GET_CAN_DUPE => {
 			*(data as *mut bool) = true;
 			return true;

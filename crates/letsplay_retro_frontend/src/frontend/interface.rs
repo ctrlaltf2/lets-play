@@ -1,5 +1,7 @@
 use std::ffi;
 
+use letsplay_libretro_sys::SystemAvInfo;
+
 /// Initalization data for HW OpenGL cores.
 pub struct HwGlInitData {
 	/// A pointer to a function that can be used to request OpenGL extension functions.
@@ -17,6 +19,9 @@ pub trait FrontendInterface {
 
 	/// Called when resize occurs.
 	fn video_resize(&mut self, width: u32, height: u32);
+
+	/// Called when the core (re)sets the system AV info.
+	fn av_info_set(&mut self, av: &SystemAvInfo);
 
 	// TODO(lily): This should probably return the amount of consumed frames,
 	// as in some cases that *might* differ?

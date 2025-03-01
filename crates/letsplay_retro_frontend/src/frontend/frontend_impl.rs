@@ -447,11 +447,9 @@ impl Frontend {
 			return Err(Error::CoreNotLoaded);
 		}
 
-		if let Some(av) = self.av_info.as_ref() {
-			Ok(av.clone())
-		} else {
-			// Get AV info
-			// Like core API, we have to MaybeUninit again.
+		// Get AV info
+		// Like core API, we have to MaybeUninit again.
+		if self.av_info.is_none() {
 			let mut av_info: MaybeUninit<SystemAvInfo> = MaybeUninit::uninit();
 			unsafe {
 				let core_api = self.core_api.as_ref().unwrap();
@@ -459,9 +457,9 @@ impl Frontend {
 
 				self.av_info = Some(av_info.assume_init());
 			}
-
-			Ok(self.av_info.as_ref().unwrap().clone())
 		}
+
+		Ok(self.av_info.as_ref().unwrap().clone())
 	}
 
 	pub fn get_system_info(&mut self) -> Result<SystemInfo> {

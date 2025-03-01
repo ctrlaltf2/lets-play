@@ -8,7 +8,7 @@ use client::{ConfigurationState, GraphicsContexts};
 use letsplay_core::sleep;
 use letsplay_gpu::{self as gpu, GlFramebuffer};
 use letsplay_retro_frontend::{
-	input_devices::AnyDevice, Frontend, FrontendInterface, HwGlInitData,
+	input_devices::AnyDevice, sys::SystemAvInfo, Frontend, FrontendInterface, HwGlInitData,
 };
 use letsplay_runner_core::*;
 
@@ -58,6 +58,15 @@ impl RetroGame {
 	fn get_frontend(&mut self) -> &mut Frontend {
 		self.frontend.as_mut().unwrap()
 	}
+
+	fn frame_duration_from_libretro(av: &SystemAvInfo) -> Duration {
+		match av.timing.fps {
+			// For cores which are stupid. I hate compatibility hacks
+			// I hate compatibility hacks
+			0. => Duration::from_secs_f64(1.0 / 59.94),
+			other => Duration::from_secs_f64(1.0 / other),
+		}
+	}
 }
 
 impl client::Game for RetroGame {
@@ -103,18 +112,20 @@ impl client::Game for RetroGame {
 					.load_core(value)
 					.with_context(|| format!("While trying to load core {}", value))?;
 
-				tracing::info!("Loaded core \"{}\"", value);
+				// Set the inital frame duration, if the core is nice enough to give it to us.
+				match self.get_frontend().get_av_info() {
+					Ok(av_info) => {
+						self.frame_duration = Self::frame_duration_from_libretro(&av_info);
+					}
+					Err(e) => {
+						tracing::error!(
+							"Error while attempting to set initial frame duration: {:?}",
+							e
+						);
+					}
+				}
 
-				let av_info = self.get_frontend().get_av_info().expect("???");
-				self.frame_duration = match av_info.timing.fps {
-					// Some cores are stupid and do not provide a proper system_av_info struct
-					// (.fps is 0) when initally loaded.
-					//
-					// Just default to NTSC 59.94hz update rate.
-					// FIXME: Implement ENVIRONMENT_SET_SYSTEM_AV_INFO
-					0. => Duration::from_secs_f64(1.0 / 59.94),
-					other => Duration::from_secs_f64(1.0 / other)
-				};
+				tracing::info!("Loaded core \"{}\"", value);
 
 				Ok(())
 			}
@@ -188,6 +199,10 @@ impl FrontendInterface for RetroGame {
 	}
 
 	fn video_update_gl(&mut self) {}
+
+	fn av_info_set(&mut self, av: &SystemAvInfo) {
+		self.frame_duration = Self::frame_duration_from_libretro(av);
+	}
 
 	fn audio_sample(&mut self, _slice: &[i16], _size: usize) {}
 
