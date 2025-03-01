@@ -19,7 +19,7 @@ using LibRetroLogLevel = std::uint32_t;
 /// A very simple string pool implemented using a linked list as a very bad freelist.
 struct StringPool {
 	/// The max amount of strings that can be in the string pool's freelist.
-	constexpr static auto kMaxStringPoolSize = 8;
+	constexpr static auto kMaxStringPoolSize = 32;
 
 	/// A pooled string.
 	struct PooledString {
@@ -44,6 +44,7 @@ struct StringPool {
 		friend StringPool;
 		PooledString* freeListNext;
 		std::size_t length;
+		bool inUse;
 	};
 
 	StringPool() = default;
@@ -55,28 +56,34 @@ struct StringPool {
 	}
 
 	/// Either gets a string from the string pool with a suitable capacity,
-	/// or if no string was found with a suitable capacity, allocates one.
+	/// or if no string was found with a suitable capacity that is not in use, allocates one.
 	///
-	/// May return nullptr if allocating a string (if this function had to allocate) fails.
+	/// This function is also permitted to allocate a string if it cannot find 
+	/// a string that's not in use in the freelist, even if it would have found 
+	/// a string with a suitable capacity.
+	///
+	/// May return nullptr if allocating a string (if this function had to allocate) failed.
 	/// 
 	/// The return value of this function MUST be provided to [StringPool::ReturnString] when 
 	/// the string is no longer in active use.
-	PooledString* GetString(std::size_t wantedCapacity) {
+	///
+	PooledString* GetString(std::size_t wantedLength) {
 		PooledString* pIter = freeListHead;
 		while(pIter) {
-			// We were able to find a pooled string which
-			// has a suitable capacity. Simply return that string
-			if(pIter->length >= wantedCapacity) {
-				STRINGPOOL_DEBUG_PRINTF("Found string in freelist with suitable capacity %lu!!!\n", pIter->capacity);
+			// We were able to find a pooled string which has a suitable capacity & is not in use. 
+			// Simply return that string. (Happy path)
+			if(pIter->length >= wantedLength && !pIter->inUse) {
+				STRINGPOOL_DEBUG_PRINTF("Found unused string in freelist with suitable length for user request (user request %lu, actual length %lu)\n", wantedLength, pIter->length);
+				pIter->inUse = true;
 				return pIter;
 			}
 			pIter = pIter->freeListNext;
 		}
 
-		STRINGPOOL_DEBUG_PRINTF("Could not find string for capacity %lu, allocating\n", wantedCapacity);
+		STRINGPOOL_DEBUG_PRINTF("Could not find string for user requested length %lu, allocating a new one\n", wantedLength);
 
-		// Give up and allocate a new string not on the freelist.
-		return AllocateString(wantedCapacity);
+		// Give up and allocate a new string not on the freelist. (sad path)
+		return AllocateString(wantedLength);
 	}
 
 	/// "Returns" a string from the string pool. If the string is not in the freelist,
@@ -104,6 +111,10 @@ struct StringPool {
 			}
 		}
 
+		// Mark the string as free.
+		if(pPooledString->inUse)
+			pPooledString->inUse = false;
+
 		// The string is already in the pool's freelist,
 		// so we do not need to re-add it.
 		if(foundInList)
@@ -112,6 +123,8 @@ struct StringPool {
 		STRINGPOOL_DEBUG_PRINTF("Current freelist size: %lu\n", PoolSize());
 
 		// Make sure the pool doesn't get so large that we start to be more of a memory leak.
+		// FIXME: This doesn't consider strings which are in use. To make this fully safe for re-entrant usage
+		// we probably should like.. do that.
 		if(PoolSize() >= kMaxStringPoolSize) {
 			STRINGPOOL_DEBUG_PRINTF("Clearing freelist, it is too large.\n");
 			Clear();
@@ -174,6 +187,8 @@ struct StringPool {
 private:
 
 	PooledString* AllocateString(std::size_t length) {
+		// A string is allocated with the header (the PooledString structure) at the start,
+		// then the string data (plus an additional character for the ~~C Mistake~~ NUL terminator)
 		auto pAlloced = calloc((length + 1 * sizeof(char)) + sizeof(PooledString), 1);
 		if(pAlloced == nullptr)
 			return nullptr;
@@ -182,10 +197,10 @@ private:
 		// but placement new works just fine, and accomplishes the same goal.
 		auto pString = new (pAlloced) PooledString;
 
-		// Initialize the pooled string
+		// Initialize the pooled string structure.
 		pString->length = length;
 		pString->freeListNext = nullptr;
-		//pString->pString = reinterpret_cast<char*>(pAlloced) + sizeof(PooledString);
+		pString->inUse = false;
 		return pString;
 	}
 
