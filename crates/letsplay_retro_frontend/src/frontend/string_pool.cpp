@@ -20,7 +20,7 @@ namespace letsplay {
 
 		/// The max amount of strings in reserve that can be in the string pool's freelist before
 		/// we perform garbage colllection to free some memory.
-		constexpr static auto kMaxStringPoolSize = 8;
+		constexpr static auto kStringPoolGCSize = 8;
 
 	} // namespace
 
@@ -82,10 +82,8 @@ namespace letsplay {
 
 		STRINGPOOL_DPRINTF("Current freelist size: %lu", PoolSize());
 
-		// Make sure the pool doesn't get so large that we start to be more of a memory leak.
-		// FIXME: This doesn't consider strings which are in use. To make this fully safe for re-entrant usage
-		// we probably should like.. do that.
-		if(PoolSize() >= kMaxStringPoolSize) {
+		// Perform garbage collection
+		if(FreelistSize() >= kStringPoolGCSize) {
 			STRINGPOOL_DPRINTF("Garbage collecting freelist, it is too large.");
 			GarbageCollect();
 		}
@@ -133,7 +131,7 @@ namespace letsplay {
 		}
 	}
 
-	std::size_t StringPool::PoolSize() {
+	std::size_t StringPool::FreelistSize() {
 		// It is empty.
 		if(freeListHead == nullptr)
 			return 0;

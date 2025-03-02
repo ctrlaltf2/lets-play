@@ -48,31 +48,44 @@ namespace letsplay {
 		/// May return nullptr if allocating a string (if this function had to allocate) failed.
 		///
 		/// The return value of this function MUST be provided to [StringPool::ReturnString] when
-		/// the string is no longer in active use.
-		///
+		/// the string is no longer in active use. The pool will manage memory and free when necessary,
+		/// or when it is destroyed itself.
 		PooledString* GetString(std::size_t wantedLength);
 
 		/// "Returns" a string from the string pool. If the string is not in the freelist,
 		/// it is added to the freelist, otherwise nothing happens. Additionally, if the
-		/// freelist is considered too large, this function will automatically perform 
+		/// freelist is considered too large, this function will automatically perform
 		/// garbage collection/compaction of strings which are not in use.
 		void ReturnString(PooledString* pPooledString);
 
-		/// Clears the pool's freelist.
+		/// Clears the pool's freelist, freeing all memory used immediately.
+		/// This function should only be used if none of the strings are in use;
+		/// this function does not check for you.
+		///
+		/// Note that in normal usage you do not need to call this function;
+		/// the destructor will automatically call this and clear when the program exits.
 		void Clear();
 
 		/// Collects "garbage" unused strings. Only strings which
 		/// are currently in use (and thus should not be removed/freed)
 		/// will be kept in the pool's freelist.
+		///
+		/// You do not need to call this on your own, but it is provided
+		/// as a public API in the case it may end up being useful.
 		void GarbageCollect();
 
 	   private:
 		/// Returns the size of the pool's freelist.
-		std::size_t PoolSize();
+		std::size_t FreelistSize();
 
+		/// Removes a string from the freelist. Returns the unlinked
+		/// string so it can be freed with [StringPool::FreeString()].
 		PooledString* RemoveString(PooledString* str);
 
+		/// Allocates a unlinked PooledString structure, with the given string length.
 		static PooledString* AllocateString(std::size_t length);
+
+		/// Frees a unlinked PooledString structure.
 		static void FreeString(PooledString* pPooled);
 
 		PooledString* freeListHead;
