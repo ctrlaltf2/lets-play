@@ -6,8 +6,8 @@ use tracing::*;
 #[no_mangle]
 /// This recieves log messages from our C++ helper code, and pulls them out into Tracing messages.
 pub extern "C" fn letsplay_retro_frontend_log(level: LogLevel, buf: *const ffi::c_char) {
-	// SAFETY: The [buf] pointer comes from the address of a C++ stack variable, so if it is null we have other problems to worry about.
-	// We really only should get UTF-8 errors here in the case a core spits out something invalid.
+	// SAFETY: The [buf] pointer is null-checked in the C++ helper code, and the helper
+	// will never call us if the pointer is null.
 	unsafe {
 		debug_assert!(!buf.is_null(), "This pointer should NEVER be null");
 
