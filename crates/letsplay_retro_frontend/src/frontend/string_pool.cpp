@@ -18,8 +18,8 @@ namespace letsplay {
 
 	namespace {
 
-		/// The max amount of strings that can be in the string pool's freelist before
-		/// we release all strings in it.
+		/// The max amount of strings in reserve that can be in the string pool's freelist before
+		/// we perform garbage colllection to free some memory.
 		constexpr static auto kMaxStringPoolSize = 8;
 
 	} // namespace
@@ -86,45 +86,51 @@ namespace letsplay {
 		// FIXME: This doesn't consider strings which are in use. To make this fully safe for re-entrant usage
 		// we probably should like.. do that.
 		if(PoolSize() >= kMaxStringPoolSize) {
-			STRINGPOOL_DPRINTF("Clearing freelist, it is too large.");
-			Clear();
+			STRINGPOOL_DPRINTF("Garbage collecting freelist, it is too large.");
+			GarbageCollect();
 		}
 
-		if(freeListHead == nullptr) {
-			STRINGPOOL_DPRINTF("First freelist node");
+		// Insert into the free list.
+		pPooledString->freeListPrev = freeListTail;
+		if(freeListTail)
+			freeListTail->freeListNext = pPooledString;
+		else
 			freeListHead = pPooledString;
-		} else {
-			STRINGPOOL_DPRINTF("Not the first freelist node");
 
-			// Walk the freelist for a node which has a null next pointer.
-			// We will insert there.
-			PooledString* pInsertIter = freeListHead;
-			while(true) {
-				if(pInsertIter->freeListNext == nullptr)
-					break;
-
-				STRINGPOOL_DPRINTF("DEBUG: node %p, next %p", pInsertIter, pInsertIter->freeListNext);
-				pInsertIter = pInsertIter->freeListNext;
-			}
-
-			pInsertIter->freeListNext = pPooledString;
-		}
+		freeListTail = pPooledString;
 	}
 
 	void StringPool::Clear() {
-		PooledString* pIter = freeListHead;
-		while(pIter) {
-			// Need to store the possible next (or lack thereof)
-			// since we are freeing the pooled string immediately.
-			//
-			// Bad, but it uses 16 bytes of stack space at the most,
-			// compared to needing a list of pointers to free or something.
-			auto next = pIter->freeListNext;
-			FreeString(pIter);
-			pIter = next;
+		// Clear all strings.
+		while(freeListHead) {
+			if(auto* ptr = RemoveString(freeListTail); ptr != nullptr) {
+				STRINGPOOL_DPRINTF("Clear(): Freeing removed string %p", ptr);
+				FreeString(ptr);
+			}
 		}
+	}
 
-		freeListHead = nullptr;
+	void StringPool::GarbageCollect() {
+		if(!freeListHead)
+			return;
+
+		PooledString* pIter = freeListTail;
+
+		while(pIter) {
+			auto next = pIter->freeListPrev;
+
+			// String is in use, so move on to the next possible string.
+			if(pIter->inUse) {
+				pIter = next;
+				continue;
+			} else {
+				STRINGPOOL_DPRINTF("Found unused string with length %lu we can remove from freelist: %p", pIter->length, pIter);
+				// Remove string from the list.
+				if(auto* ptr = RemoveString(pIter); ptr != nullptr)
+					FreeString(ptr);
+				pIter = next;
+			}
+		}
 	}
 
 	std::size_t StringPool::PoolSize() {
@@ -140,6 +146,26 @@ namespace letsplay {
 		}
 
 		return i;
+	}
+
+	StringPool::PooledString* StringPool::RemoveString(PooledString* str) {
+		if(!str)
+			return nullptr;
+
+		if(str->freeListPrev != nullptr)
+			str->freeListPrev->freeListNext = str->freeListNext;
+		if(str->freeListNext != nullptr)
+			str->freeListNext->freeListPrev = str->freeListPrev;
+
+		if(str == freeListHead)
+			freeListHead = str->freeListNext;
+
+		if(str == freeListTail)
+			freeListTail = str->freeListPrev;
+
+		str->freeListNext = nullptr;
+		str->freeListPrev = nullptr;
+		return str;
 	}
 
 	/*static*/ StringPool::PooledString* StringPool::AllocateString(std::size_t length) {

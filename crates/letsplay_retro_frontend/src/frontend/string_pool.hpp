@@ -5,10 +5,8 @@
 
 namespace letsplay {
 
-	/// A very simple string pool implemented using a linked list as a very bad freelist.
+	/// A very simple string pool implemented using a doubly linked list as a freelist.
 	struct StringPool {
-		
-
 		/// A pooled string.
 		struct PooledString {
 			PooledString() = default;
@@ -26,7 +24,10 @@ namespace letsplay {
 
 		   protected:
 			friend StringPool;
+
+			PooledString* freeListPrev;
 			PooledString* freeListNext;
+
 			std::size_t length;
 			bool inUse;
 		};
@@ -52,21 +53,30 @@ namespace letsplay {
 		PooledString* GetString(std::size_t wantedLength);
 
 		/// "Returns" a string from the string pool. If the string is not in the freelist,
-		/// it is added to the freelist, otherwise nothing happens.
+		/// it is added to the freelist, otherwise nothing happens. Additionally, if the
+		/// freelist is considered too large, this function will automatically perform 
+		/// garbage collection/compaction of strings which are not in use.
 		void ReturnString(PooledString* pPooledString);
 
 		/// Clears the pool's freelist.
 		void Clear();
 
+		/// Collects "garbage" unused strings. Only strings which
+		/// are currently in use (and thus should not be removed/freed)
+		/// will be kept in the pool's freelist.
+		void GarbageCollect();
+
+	   private:
 		/// Returns the size of the pool's freelist.
 		std::size_t PoolSize();
 
-	   private:
-		static PooledString* AllocateString(std::size_t length);
+		PooledString* RemoveString(PooledString* str);
 
+		static PooledString* AllocateString(std::size_t length);
 		static void FreeString(PooledString* pPooled);
 
 		PooledString* freeListHead;
+		PooledString* freeListTail;
 	};
 
 } // namespace letsplay
