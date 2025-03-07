@@ -7,50 +7,55 @@
 
 using LibRetroLogLevel = std::uint32_t;
 
-letsplay::StringPool TheLoggerStringPool;
+namespace {
+	/// The libretro logger's string pool. Used to hold strings on the heap
+	/// without leaking them, but still allowing re-use of previously allocated strings.
+	letsplay::StringPool TheLoggerStringPool;
+} // namespace
 
 extern "C" {
 
-/// This function is defined in Rust and recieves our formatted log messages.
+/// This function is defined in Rust and actually outputs the log messages.
 void letsplay_retro_frontend_log(LibRetroLogLevel level, const char* buf);
 
-/// This helper function is given to Rust code to implement the libretro logging
-/// (because it's a C-varadic function; that requires nightly/unstable Rust)
+/// This helper function is given to libretro cores in the log interface to call.
 ///
-/// By implementing it in C++, we can dodge all that and keep using stable rustc.
+/// We do all the formatting here, since we can't use C-varadics with our MSRV, and then
+/// pass the formatted string to Rust code.
 void letsplay_retro_frontend_libretro_log(LibRetroLogLevel level, const char* format, ...) {
 	va_list val;
+	std::int32_t formatLength = 0;
 
-	// First query how long the formatted string would be.
+	// By passing nullptr to vsnprintf, it will return the exact buffer size needed
+	// to hold the output string.
 	va_start(val, format);
-	auto formatLength = std::vsnprintf(nullptr, 0, format, val);
+	formatLength = std::vsnprintf(nullptr, 0, format, val);
 	if(formatLength == -1)
 		return;
 	va_end(val);
 
 	// Try and find (possibly allocating) a string on the string pool with that length.
-	// If allocating a string fails, give up entirely.
+	// If allocating a string fails, we simply give up.
 	auto* pString = TheLoggerStringPool.GetString(formatLength);
 	if(pString == nullptr)
 		return;
 
-	auto ptr = pString->GetPointer();
-
+	// We got a string. Let's format into it.
+	auto pStringMemory = pString->GetPointer();
+	
 	va_start(val, format);
-	// Format the string
-	std::vsnprintf(ptr, formatLength, format, val);
+	std::vsnprintf(pStringMemory, formatLength, format, val);
 	va_end(val);
 
 	// Remove the last newline and replace it with a null terminator, since
 	// Tracing will write a newline on its own.
-	if(ptr[formatLength - 1] == '\n')
-		ptr[formatLength - 1] = '\0';
+	if(pStringMemory[formatLength - 1] == '\n')
+		pStringMemory[formatLength - 1] = '\0';
 
-	// Call the Rust-side reciever.
-	letsplay_retro_frontend_log(level, ptr);
+	// Call the Rust-side reciever function which will log the message.
+	letsplay_retro_frontend_log(level, pStringMemory);
 
-	// Return the string back to the pool, adding it to the list of
-	// now freed strings that we can re-use.
+	// Return the string back to the pool.
 	TheLoggerStringPool.ReturnString(pString);
 }
 }
