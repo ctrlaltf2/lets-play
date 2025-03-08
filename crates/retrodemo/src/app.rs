@@ -159,6 +159,10 @@ impl App {
 		self.frame_duration = Self::frame_duration_from_libretro(&av_info);
 
 		while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+			if self.window.is_key_down(Key::F1) {
+				self.get_frontend().reset();
+			}
+
 			let now = Instant::now();
 			let next = now.checked_add(self.frame_duration).expect("?????");
 			self.get_frontend().run_frame();
