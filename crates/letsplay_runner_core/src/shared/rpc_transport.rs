@@ -1,4 +1,7 @@
+use std::io::BufReader;
+
 use bytes::{Bytes, BytesMut};
+use capnp::{message::ReaderOptions, traits::{FromPointerBuilder, FromPointerReader}};
 use futures::{
 	stream::{SplitSink, SplitStream},
 	Stream,
@@ -7,7 +10,10 @@ use letsplay_core::si_unit::MB;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use crate::shared::proto::{ClientMessage, ServerMessage};
+use crate::{rpc_client_capnp::server_message, rpc_server_capnp::client_message};
+
+// We use the Cap'n Proto packed encoding to squeeze precious bytes.
+use capnp::serialize_packed;
 
 use futures_util::{SinkExt, StreamExt};
 
@@ -42,11 +48,15 @@ impl<RW> RpcReadEnd<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {
-	/// Read a protobuf message.
-	pub async fn read_message<T: Message>(&mut self) -> anyhow::Result<T> {
+	/// Read a capnp message.
+	pub async fn read_message(
+		&mut self,
+		options: ReaderOptions,
+	) -> anyhow::Result<capnp::message::Reader<capnp::serialize::OwnedSegments>> {
 		if let Some(framed) = self.read.next().await {
 			let bytes = framed?;
-			Ok(T::parse(&bytes[..])?)
+			let reader = serialize_packed::read_message(BufReader::new(&bytes[..]), options)?;
+			Ok(reader)
 		} else {
 			Err(anyhow::anyhow!("End of stream"))
 		}
@@ -57,10 +67,13 @@ impl<RW> RpcWriteEnd<RW>
 where
 	RW: AsyncReadExt + AsyncWriteExt + Unpin,
 {
-	/// Writes a single protobuf message.
-	pub async fn write_message<T: Message>(&mut self, message: &T) -> anyhow::Result<()> {
-		let bytes = Bytes::from(message.serialize()?);
-		self.write.send(bytes).await?;
+	/// Writes a single capnp message.
+	pub async fn write_message<A: capnp::message::Allocator>(&mut self, message: &capnp::message::Builder<A>) -> anyhow::Result<()> {
+		use bytes::BufMut;
+		let output = BytesMut::new();
+		let mut writer = output.writer();
+		serialize_packed::write_message(&mut writer, message)?;
+		self.write.send(Bytes::from(writer.into_inner())).await?;
 		Ok(())
 	}
 }

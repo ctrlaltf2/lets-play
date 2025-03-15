@@ -5,6 +5,18 @@ pub mod shared;
 
 pub use tokio as tokio;
 
+// These names, and the `crate::`
+// path are hardcoded in the generator :(
+
+pub(crate) mod rpc_client_capnp {
+    include!(concat!(env!("OUT_DIR"), "/rpc/rpc_client_capnp.rs"));
+}
+
+pub(crate) mod rpc_server_capnp {
+    include!(concat!(env!("OUT_DIR"), "/rpc/rpc_server_capnp.rs"));
+}
+
+
 #[macro_export]
 #[cfg(feature = "client")]
 /// Creates the boilerplate main() used for runner clients.

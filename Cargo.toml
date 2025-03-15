@@ -56,7 +56,9 @@ tracing-subscriber = "0.3.18"
 gl = "0.14.0"
 gl_generator = "0.14.0"
 
-# TODO: Cap'n Proto
+# Cap'n Proto
+capnp = "0.20.6"
+capnpc = "0.20.1"
 
 # Serde
 serde = { version = "1.0.204", features = ["derive"] }

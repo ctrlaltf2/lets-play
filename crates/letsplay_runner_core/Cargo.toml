@@ -24,7 +24,7 @@ futures.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
-#protobuf.workspace = true
+capnp.workspace = true
 
 serde.workspace = true
 serde_json.workspace = true
@@ -41,7 +41,7 @@ cudarc = { workspace = true, optional = true }
 
 
 [build-dependencies]
-#protobuf-codegen.workspace = true
+capnpc.workspace = true
 
 [features]
 # Default to compiling in all possible HW support
