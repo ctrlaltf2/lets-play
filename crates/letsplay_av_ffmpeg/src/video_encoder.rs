@@ -50,6 +50,8 @@ impl VideoEncoder {
 		video_encoder_context.set_threading(ffmpeg::threading::Config {
 			kind: ffmpeg::threading::Type::Slice,
 			count: threads,
+			#[cfg(feature = "ancient-ffmpeg")]
+			safe: true,
 		});
 
 		// Set libx264 applicable dictionary options

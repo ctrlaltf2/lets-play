@@ -45,7 +45,7 @@ cudarc = { workspace = true, optional = true }
 
 [features]
 # Default to compiling in all possible HW support
-default = [ "av-nvidia" ]
+default = [ "av-nvidia", "letsplay_av_ffmpeg/ancient-ffmpeg" ]
 
 # Enable NVIDIA support 
 av-nvidia = [ "letsplay_av_ffmpeg/nvidia", "dep:cudarc" ]

@@ -66,7 +66,10 @@ impl EncoderSharedState {
 		unsafe {
 			if force_keyframe {
 				(*frame.as_mut_ptr()).pict_type = ffmpeg::sys::AVPictureType::AV_PICTURE_TYPE_I;
-				(*frame.as_mut_ptr()).flags = ffmpeg::sys::AV_FRAME_FLAG_KEY;
+				#[cfg(not(feature = "ancient-ffmpeg"))]
+				{
+					(*frame.as_mut_ptr()).flags = ffmpeg::sys::AV_FRAME_FLAG_KEY;
+				}
 				(*frame.as_mut_ptr()).key_frame = 1;
 			} else {
 				(*frame.as_mut_ptr()).pict_type = ffmpeg::sys::AVPictureType::AV_PICTURE_TYPE_P;

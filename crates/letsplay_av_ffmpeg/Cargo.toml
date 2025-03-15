@@ -28,5 +28,8 @@ tracing.workspace = true
 # Nvidia hardware-specific support
 nvidia = [ "dep:cudarc", "dep:libloading" ]
 
+# Used for ancient ffmpeg compatibility
+ancient-ffmpeg = []
+
 # Benchmarking.
 benchmark = []
