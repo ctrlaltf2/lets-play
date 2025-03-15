@@ -4,7 +4,6 @@ use futures::{
 	Stream,
 };
 use letsplay_core::si_unit::MB;
-use protobuf::{Message, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 

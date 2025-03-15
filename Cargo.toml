@@ -56,9 +56,7 @@ tracing-subscriber = "0.3.18"
 gl = "0.14.0"
 gl_generator = "0.14.0"
 
-# Protocol Buffers
-protobuf = { version = "4.30.0-beta1" }
-protobuf-codegen = { version = "4.30.0-beta1" }
+# TODO: Cap'n Proto
 
 # Serde
 serde = { version = "1.0.204", features = ["derive"] }

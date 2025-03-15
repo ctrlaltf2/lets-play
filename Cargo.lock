@@ -576,8 +576,6 @@ dependencies = [
  "letsplay_av_ffmpeg",
  "letsplay_core",
  "letsplay_gpu",
- "protobuf",
- "protobuf-codegen",
  "serde",
  "serde_json",
  "thiserror",
@@ -839,12 +837,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "paste"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
-
-[[package]]
 name = "pin-project-lite"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -869,25 +861,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "protobuf"
-version = "4.30.0-beta1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a44a7f19c26d932f9c298b51d0074cedbd54b3775accf16c8bb0b7fa6649606"
-dependencies = [
- "cc",
- "paste",
-]
-
-[[package]]
-name = "protobuf-codegen"
-version = "4.30.0-beta1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c149cbd24e0238c71e9fb5acb2aad737026f62010c3b7529ac2b0b9b789e6013"
-dependencies = [
- "cc",
 ]
 
 [[package]]
