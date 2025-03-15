@@ -1,14 +1,20 @@
+use std::{fmt::Display, path::Path};
+
 use capnpc;
 
-fn main() {
-	// Compile RPC defs
+fn compile_capnp<P: AsRef<Path> + Display>(path: P) {
+	// Compile shared defs
 	capnpc::CompilerCommand::new()
-		.file("rpc/rpc_server.capnp")
+		.file("proto/shared/input.capnp")
 		.run()
-		.expect("compiling rpc server");
+		.expect(&format!("compiling {} failed", path));
+}
 
-	capnpc::CompilerCommand::new()
-		.file("rpc/rpc_client.capnp")
-		.run()
-		.expect("compiling rpc client");
+fn main() {
+	// Compile shared defs
+	compile_capnp("proto/shared/input.capnp");
+
+	// Compile RPC defs
+	compile_capnp("proto/shared/rpc_client.capnp");
+	compile_capnp("proto/shared/rpc_server.capnp");
 }

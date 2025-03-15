@@ -8,12 +8,16 @@ pub use tokio as tokio;
 // These names, and the `crate::`
 // path are hardcoded in the generator :(
 
+pub(crate) mod input_capnp {
+    include!(concat!(env!("OUT_DIR"), "/proto/shared/input_capnp.rs"));
+}
+
 pub(crate) mod rpc_client_capnp {
-    include!(concat!(env!("OUT_DIR"), "/rpc/rpc_client_capnp.rs"));
+    include!(concat!(env!("OUT_DIR"), "/proto/runner/rpc_client_capnp.rs"));
 }
 
 pub(crate) mod rpc_server_capnp {
-    include!(concat!(env!("OUT_DIR"), "/rpc/rpc_server_capnp.rs"));
+    include!(concat!(env!("OUT_DIR"), "/proto/runner/rpc_server_capnp.rs"));
 }
 
 
