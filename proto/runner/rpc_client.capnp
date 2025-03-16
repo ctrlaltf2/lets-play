@@ -28,13 +28,16 @@ struct ServerMessage {
 
             input :union {
                 # Input union. If the union sent is the wrong type
-                # for the device at that index, the message will be ignored.
+                # for the device at that index, the input will be ignored.
 
                 joyInput @0 :Input.JoyInput;
                 # Joystick input.
 
-                kbMouseInput @1 :Input.KBMouseInput;
-                # Keyboard & mouse input update.
+                analogJoyInput @1 :Input.AnalogJoyInput;
+                # Analog joystick input.
+
+                kbMouseInput @2 :Input.KBMouseInput;
+                # Keyboard & mouse input.
             }
         }
 
@@ -44,13 +47,15 @@ struct ServerMessage {
         event :union {
             plugIn @1 :Input.DeviceType;
             # Plug in the device with the given device type into the 
-            # given device index (if it is valid).
+            # given device index (if it is valid). 
+            #
+            # Will also unplug the previous device if a device was plugged in.
 
             unplug @2 :Void;
-            # Unplug the device from the given device index (if it is valid)
+            # Unplug the device from the given device index (if it is valid).
 
             update @3: Update;
-            # Update the given device.
+            # Update the given device with new input data.
         }
 
     }

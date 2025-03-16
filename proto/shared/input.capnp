@@ -16,7 +16,14 @@ enum DeviceType {
 }
 
 struct JoyInput {
-    # A input for a Joystick.
+    # Input structure for regular joystick.
+    
+    buttons @0 :UInt32;
+    # Joystick button inputs.
+}
+
+struct AnalogJoyInput {
+    # A input for a analog joystick.
 
     struct Stick {
         # A analog stick input.
