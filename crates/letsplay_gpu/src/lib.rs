@@ -47,7 +47,7 @@ pub mod egl_helpers {
 		// If it does your video drivers are more than likely broken beyond repair.
 		unsafe {
 			let extensions_ptr = QueryString(display, EXTENSIONS as i32);
-			assert!(!extensions_ptr.is_null());
+			debug_assert!(!extensions_ptr.is_null());
 
 			let extensions_str = std::ffi::CStr::from_ptr(extensions_ptr)
 				.to_str()

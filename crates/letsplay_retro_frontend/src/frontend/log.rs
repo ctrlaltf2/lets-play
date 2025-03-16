@@ -7,10 +7,8 @@ use tracing::*;
 /// This recieves log messages from our C++ helper code, and pulls them out into Tracing messages.
 pub extern "C" fn letsplay_retro_frontend_log(level: LogLevel, buf: *const ffi::c_char) {
 	// SAFETY: The [buf] pointer is null-checked in the C++ helper code, and the helper
-	// will never call us if the pointer is null.
+	// will never call into Rust if the pointer happens to be null.
 	unsafe {
-		debug_assert!(!buf.is_null(), "This pointer should NEVER be null");
-
 		match ffi::CStr::from_ptr(buf).to_str() {
 			Ok(message) => match level {
 				LogLevel::Debug => {

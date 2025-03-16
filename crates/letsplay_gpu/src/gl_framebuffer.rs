@@ -137,7 +137,7 @@ impl GlFramebuffer {
 	pub fn read_pixels(&self, buffer: &mut [u32], width: u32, height: u32) {
 		let _guard = self.bind();
 
-		assert_eq!(
+		debug_assert_eq!(
 			buffer.len(),
 			(width * height) as usize,
 			"Provided buffer cannot hold the framebuffer"

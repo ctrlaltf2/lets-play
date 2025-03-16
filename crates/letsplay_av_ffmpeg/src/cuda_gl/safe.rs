@@ -31,11 +31,6 @@ impl MappedGraphicsResource {
     }
 
     pub fn get_mapped_array(&mut self) -> Result<cuda_sys::CUarray, cuda_result::DriverError> {
-        assert!(
-            !self.resource.is_null(),
-            "do not call GraphicsResource::get_mapped_array if no resource is actually registered"
-        );
-
         let mut array: cuda_sys::CUarray = std::ptr::null_mut();
 
         unsafe {
@@ -50,11 +45,6 @@ impl MappedGraphicsResource {
     pub fn get_device_pointer(
         &mut self,
     ) -> Result<cuda_sys::CUdeviceptr, cuda_result::DriverError> {
-        assert!(
-            !self.resource.is_null(),
-            "do not call GraphicsResource::get_mapped_array if no resource is actually registered"
-        );
-
         let mut array: cuda_sys::CUdeviceptr = 0;
         let mut size: usize = 0;
 
@@ -94,6 +84,8 @@ impl GraphicsResource {
 
     /// Maps this resource.
     pub fn map(&mut self) -> Result<MappedGraphicsResource, cuda_result::DriverError> {
+        assert!(self.is_registered(), "Must register a resource before calling GraphicsResource::map()");
+
         let mut res = MappedGraphicsResource::new(self.resource);
         res.map()?;
 
@@ -106,7 +98,7 @@ impl GraphicsResource {
         texture_kind: gl::types::GLuint,
     ) -> Result<(), cuda_result::DriverError> {
         // better to be safe than leak memory? idk.
-        if !self.resource.is_null() {
+        if self.is_registered() {
             self.unregister()?;
         }
 
@@ -124,10 +116,10 @@ impl GraphicsResource {
     }
 
     pub fn unregister(&mut self) -> Result<(), cuda_result::DriverError> {
-        assert!(
-            !self.resource.is_null(),
-            "do not call if no resource is actually registered"
-        );
+        // Don't need to unregister if nothing's actually registered
+        if !self.is_registered() {
+            return Ok(());
+        }
 
         unsafe {
             cuda_sys::lib()
