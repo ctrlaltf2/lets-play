@@ -42,7 +42,7 @@ pub trait Game {
 	fn run_frame(&mut self);
 
 	/// Wait for the next frame/emulation tick. The start must
-	/// be a Instant provided that was initalized before the game
+	/// be a Instant provided that was initalized to Instant::now() before the game
 	/// was ran for the frame.
 	fn wait_for_next_frame(&mut self, start: Instant);
 }
