@@ -36,26 +36,23 @@ void letsplay_retro_frontend_libretro_log(LibRetroLogLevel level, const char* fo
 
 	// Try and find (possibly allocating) a string on the string pool with that length.
 	// If allocating a string fails, we simply give up.
-	auto* pString = TheLoggerStringPool.GetString(formatLength);
-	if(pString == nullptr)
+	auto pooledString = TheLoggerStringPool.GetString(formatLength);
+	if(!pooledString.has_value())
 		return;
 
 	// We got a string. Let's format into it.
-	auto pStringMemory = pString->GetPointer();
+	auto pooledStringMemory = static_cast<letsplay::StringPool::PooledString&>(*pooledString).GetPointer();
 	
 	va_start(val, format);
-	std::vsnprintf(pStringMemory, formatLength, format, val);
+	std::vsnprintf(pooledStringMemory, formatLength, format, val);
 	va_end(val);
 
 	// Remove the last newline and replace it with a null terminator, since
 	// Tracing will write a newline on its own.
-	if(pStringMemory[formatLength - 1] == '\n')
-		pStringMemory[formatLength - 1] = '\0';
+	if(pooledStringMemory[formatLength - 1] == '\n')
+		pooledStringMemory[formatLength - 1] = '\0';
 
 	// Call the Rust-side reciever function which will log the message.
-	letsplay_retro_frontend_log(level, pStringMemory);
-
-	// Return the string back to the pool.
-	TheLoggerStringPool.ReturnString(pString);
+	letsplay_retro_frontend_log(level, pooledStringMemory);
 }
 }

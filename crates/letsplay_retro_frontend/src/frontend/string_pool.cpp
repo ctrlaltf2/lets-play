@@ -9,7 +9,7 @@
 
 #if STRINGPOOL_DEBUG
 	#include <cstdio>
-	#define STRINGPOOL_DPRINTF(fmt, ...) printf("stringpool debug: " fmt "\n", ##__VA_ARGS__)
+	#define STRINGPOOL_DPRINTF(fmt, ...) printf("letsplay::StringPool Debug: " fmt "\n", ##__VA_ARGS__)
 #else
 	#define STRINGPOOL_DPRINTF(fmt, ...)
 #endif
@@ -28,7 +28,18 @@ namespace letsplay {
 		Clear();
 	}
 
-	StringPool::PooledString* StringPool::GetString(std::size_t wantedLength) {
+	std::optional<StringPool::PoolGuard> StringPool::GetString(std::size_t wantedLength) {
+		STRINGPOOL_DPRINTF("Entering StringPool::GetString(wantedLength: %lu)", wantedLength);
+		auto* pString = GetStringUnsafe(wantedLength);
+		if(pString == nullptr)
+			return std::nullopt;
+
+		return PoolGuard(this, pString);
+	}
+
+	StringPool::PooledString* StringPool::GetStringUnsafe(std::size_t wantedLength) {
+		STRINGPOOL_DPRINTF("Entering StringPool::GetStringUnsafe(wantedLength: %lu)", wantedLength);
+
 		PooledString* pIter = freeListHead;
 		while(pIter) {
 			// We were able to find a pooled string which has a suitable capacity & is not in use.
@@ -48,11 +59,13 @@ namespace letsplay {
 		return AllocateString(wantedLength);
 	}
 
-	void StringPool::ReturnString(PooledString* pPooledString) {
+	void StringPool::ReturnStringUnsafe(PooledString* pPooledString) {
 		if(pPooledString == nullptr)
 			return;
 
 		bool foundInList = false;
+
+		STRINGPOOL_DPRINTF("Entering StringPool::ReturnStringUnsafe(pPooledString: %p)", pPooledString);
 
 		if(freeListHead != nullptr) {
 			PooledString* pFindIter = freeListHead;
@@ -80,7 +93,7 @@ namespace letsplay {
 		if(foundInList)
 			return;
 
-		STRINGPOOL_DPRINTF("Current freelist size: %lu", PoolSize());
+		STRINGPOOL_DPRINTF("Current freelist size: %lu", FreelistSize());
 
 		// Perform garbage collection
 		if(FreelistSize() >= kStringPoolGCSize) {
@@ -173,12 +186,14 @@ namespace letsplay {
 		if(pAlloced == nullptr)
 			return nullptr;
 
-		// The "hip" way of doing this is e.g: std::start_lifetime_as,
+		// I'm aware the "hip" C++(20|23) way of doing this is e.g: std::start_lifetime_as,
 		// but placement new works just fine, and accomplishes the same goal.
 		auto pString = new(pAlloced) PooledString;
 
-		// Initialize the pooled string structure.
+		// Initialize the pooled string structure explicitly.
+		// (TODO: Shouldn't this be done in the constructor? It'd make this a bit less haphazard)
 		pString->length = length;
+		pString->freeListPrev = nullptr;
 		pString->freeListNext = nullptr;
 		pString->inUse = false;
 		return pString;

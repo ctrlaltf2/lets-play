@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <string_view>
+#include <optional>
 
 namespace letsplay {
 
@@ -22,7 +23,7 @@ namespace letsplay {
 
 			constexpr std::size_t GetLength() const { return length; }
 
-		   protected:
+		protected:
 			friend StringPool;
 
 			PooledString* freeListPrev;
@@ -32,12 +33,39 @@ namespace letsplay {
 			bool inUse;
 		};
 
+		/// A scoped guard class which will automatically return the string
+		/// back into the pool on exit of scope.
+		struct PoolGuard {
+			operator PooledString& () {
+				return *pString;
+			}
+
+			~PoolGuard() {
+				pPool->ReturnStringUnsafe(pString);
+			}
+
+		protected:
+			friend StringPool;
+			PoolGuard(StringPool* pPool, PooledString* pString)
+				: pPool(pPool), pString(pString) {
+
+				}
+		private:
+			StringPool* pPool;
+			PooledString* pString;
+		};
+
 		StringPool() = default;
 		StringPool(const StringPool&) = delete;
 		StringPool(StringPool&&) = delete;
 
 		~StringPool();
 
+		/// Gets a string from the string pool with a suitable capacity,
+		/// or allocated.
+		std::optional<PoolGuard> GetString(std::size_t wantedLength);
+
+	protected: // These APIs are unsafe and only meant for internal usage anyways
 		/// Either gets a string from the string pool with a suitable capacity,
 		/// or if no string was found with a suitable capacity that is not in use, allocates one.
 		///
@@ -47,34 +75,37 @@ namespace letsplay {
 		///
 		/// May return nullptr if allocating a string (if this function had to allocate) failed.
 		///
-		/// The return value of this function MUST be provided to [StringPool::ReturnString] when
-		/// the string is no longer in active use. The pool will manage memory and free when necessary,
-		/// or when it is destroyed itself.
-		PooledString* GetString(std::size_t wantedLength);
+		/// The return value of this function MUST be provided to [StringPool::ReturnStringUnsafe] when
+		/// the string is no longer in active use. The pool will manage memory and free when it
+		/// deems it necessary to do so, or (unequivocally) when it is destroyed itself.
+		PooledString* GetStringUnsafe(std::size_t wantedLength);
 
 		/// "Returns" a string from the string pool. If the string is not in the freelist,
 		/// it is added to the freelist, otherwise nothing happens. Additionally, if the
 		/// freelist is considered too large, this function will automatically perform
 		/// garbage collection/compaction of strings which are not in use.
-		void ReturnString(PooledString* pPooledString);
+		void ReturnStringUnsafe(PooledString* pPooledString);
 
 		/// Clears the pool's freelist, freeing all memory used immediately.
 		/// This function should only be used if none of the strings are in use;
 		/// this function does not check for you.
 		///
 		/// Note that in normal usage you do not need to call this function;
-		/// the destructor will automatically call this and clear when the program exits.
+		/// the destructor will automatically call this and clear whatever is in the freelist
+		/// when the program exits.
 		void Clear();
+
+	public:
 
 		/// Collects "garbage" unused strings. Only strings which
 		/// are currently in use (and thus should not be removed/freed)
-		/// will be kept in the pool's freelist.
+		/// will be kept in the pool's freelist; the rest will be freed.
 		///
 		/// You do not need to call this on your own, but it is provided
 		/// as a public API in the case it may end up being useful.
 		void GarbageCollect();
 
-	   private:
+	private:
 		/// Returns the size of the pool's freelist.
 		std::size_t FreelistSize();
 
@@ -88,8 +119,8 @@ namespace letsplay {
 		/// Frees a unlinked PooledString structure.
 		static void FreeString(PooledString* pPooled);
 
-		PooledString* freeListHead;
-		PooledString* freeListTail;
+		PooledString* freeListHead{nullptr};
+		PooledString* freeListTail{nullptr};
 	};
 
 } // namespace letsplay
