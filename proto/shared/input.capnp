@@ -22,18 +22,18 @@ struct JoyInput {
         # A analog stick input.
         #
         # Note that all fields here pack their floats.
-        # The packing looks like looks like:
+        # The packing looks like:
         #
-        # encode(x: f32) = (u16)(x * 65535.0f),
-        # encode(x: u16) = (x / 65535.0f)
+        # encode(x: f32) -> u16 = (u16)(x * 65535.0f),
+        # decode(x: u16) -> f32 = (x / 65535.0f)
         #
         # This is probably *very* extra, but the less bytes the better.
 
         x @0 :UInt16;
-        # The X axis of the joystick.
+        # The X axis of the joystick, encoded using the previously mentioned encoding.
 
         y @1 :UInt16;
-        # The Y axis of the joystick.
+        # The Y axis of the joystick, encoded using the previously mentioned encoding.
     }
 
     buttons @0 :UInt32;
