@@ -11,6 +11,9 @@ jobs:
             - name: Install EGL development libraries
               run: sudo apt install libegl1-mesa-dev
 
+            - name: Install ffmpeg development libraries
+              run: sudo apt install libavformat-dev libavcodec-dev libavfilter-dev libavdevice-dev libavutil-dev libswscale-dev
+
             - name: Install Rust stable toolchain
               uses: dtolnay/rust-toolchain@stable
 
